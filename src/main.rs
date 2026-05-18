@@ -1,5 +1,6 @@
 mod app;
 mod commands;
+mod errors;
 
 use std::process::ExitCode;
 
