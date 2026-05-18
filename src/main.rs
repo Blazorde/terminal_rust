@@ -1,5 +1,8 @@
-mod modules;
+mod app;
+mod commands;
 
-fn main() {
-    //code
+use std::process::ExitCode;
+
+fn main() -> ExitCode {
+    app::run()
 }
