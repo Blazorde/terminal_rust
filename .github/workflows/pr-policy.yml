@@ -17,20 +17,32 @@ permissions:
 
 jobs:
   validate-pr-route:
-    name: Validate PR base and source branch
+    name: Required PR policy gate
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout trusted policy files
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+
       - name: Enforce branch flow
         shell: bash
         env:
           BASE_BRANCH: ${{ github.base_ref }}
           HEAD_BRANCH: ${{ github.head_ref }}
+          ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
 
           echo "Base branch: ${BASE_BRANCH}"
           echo "Head branch: ${HEAD_BRANCH}"
+          echo "Actor: ${ACTOR}"
+
+          if grep -Eiq "^[[:space:]]*${ACTOR}[[:space:]]*$" .github/bypass-owners.txt; then
+            echo "Actor ${ACTOR} is listed in .github/bypass-owners.txt; PR policy gate is bypassed."
+            exit 0
+          fi
 
           allowed_work_branch_regex='^(feat|fix|chore|refractor|hotfix)/[a-z0-9][a-z0-9._-]*$'
 
