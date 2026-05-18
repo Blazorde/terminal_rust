@@ -6,7 +6,7 @@ description = "Mini shell Rust for developers on macOS, Linux, and Windows. A si
 readme = "README.md"
 license = "MIT"
 repository = "https://github.com/TON_USER/terminal_rust"
-keywords = ["shell", "terminal", "rust", "cli"]
+keywords = ["shell", "terminal", "rust", "multiplatform", "git"]
 categories = ["command-line-utilities"]
 
 [dependencies]
