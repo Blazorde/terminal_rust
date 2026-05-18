@@ -61,4 +61,20 @@ mod tests {
             Err("missing closing quote".to_string())
         );
     }
+
+    #[test]
+    fn parse_makes_path() {
+        assert_eq!(
+            parse_input(r#"mkdir "new folder""#),
+            Ok(vec!["mkdir".into(), "new folder".into()])
+        )
+    }
+
+    #[test]
+    fn parse_make_file() {
+        assert_eq!(
+            parse_input(r#"touch "new_file.txt""#),
+            Ok(vec!["touch".into(), "new_file.txt".into()])
+        )
+    }
 }

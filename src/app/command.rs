@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::app::help;
-use crate::commands::{cd, ls, mkdir, pwd};
+use crate::commands::{cd, ls, mkdir, pwd, touch};
 use crate::errors::command::CommandError;
 
 #[derive(Default)]
@@ -28,6 +28,7 @@ pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
         },
         Ok(Command::Ls(args)) => map_result(ls::ls(args), |error| format!("ls: {error}")),
         Ok(Command::Mkdir(target)) => map_result(mkdir::mkdir(target), |error| error.to_string()),
+        Ok(Command::Touch(target)) => map_result(touch::touch(target), |error| error.to_string()),
         Ok(Command::Help) => {
             help::print_help();
             CommandResult::Continue
@@ -52,6 +53,7 @@ enum Command<'a> {
     Cd(Option<&'a str>),
     Ls(&'a [String]),
     Mkdir(Option<&'a str>),
+    Touch(Option<&'a str>),
     Help,
     Exit,
 }
@@ -66,6 +68,8 @@ impl<'a> Command<'a> {
             Some("ls") => Ok(Self::Ls(&args[1..])),
             Some("mkdir") if args.len() <= 2 => Ok(Self::Mkdir(args.get(1).map(String::as_str))),
             Some("mkdir") => Err(CommandError::TooManyArguments { command: "mkdir" }),
+            Some("touch") if args.len() <= 2 => Ok(Self::Touch(args.get(1).map(String::as_str))),
+            Some("touch") => Err(CommandError::TooManyArguments { command: "touch" }),
             Some("help") => Ok(Self::Help),
             Some("exit") | Some("quit") => Ok(Self::Exit),
             Some(command) => Err(CommandError::UnknownCommand(command.to_string())),

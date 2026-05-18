@@ -74,6 +74,29 @@ Configure these in GitHub:
 Repository -> Settings -> Rules -> Rulesets
 ```
 
+The workflow files can fail invalid changes, but they cannot mark themselves as required and they cannot decide who is allowed to bypass. Required checks and bypass permissions must be configured in GitHub Rulesets.
+
+Repository owner allowed to bypass:
+
+```text
+Blazorde
+```
+
+Bypass owners are listed in:
+
+```text
+.github/bypass-owners.txt
+```
+
+Put one GitHub username per line. Example:
+
+```text
+Blazorde
+AnotherMaintainer
+```
+
+The policy workflows read this file for policy-gate bypasses. GitHub Rulesets do not automatically read repository files, so you must also add the same users manually as bypass actors in GitHub Rulesets.
+
 ### Ruleset for `main`
 
 Recommended settings:
@@ -82,13 +105,12 @@ Recommended settings:
 - Require pull request before merging
 - Require status checks to pass
 - Required checks:
-  - `PR policy / Validate PR base and source branch`
-  - `CI / Rust checks (ubuntu-latest)`
-  - `CI / Rust checks (windows-latest)`
+  - `PR policy / Required PR policy gate`
+  - `CI / Required CI gate`
 - Block force pushes
 - Block deletions
 - Require linear history if desired
-- Restrict bypass permissions to the repository owner only
+- Restrict bypass permissions to the users listed in `.github/bypass-owners.txt`
 - Do not allow direct pushes
 
 ### Ruleset for `develop`
@@ -99,12 +121,11 @@ Recommended settings:
 - Require pull request before merging
 - Require status checks to pass
 - Required checks:
-  - `PR policy / Validate PR base and source branch`
-  - `CI / Rust checks (ubuntu-latest)`
-  - `CI / Rust checks (windows-latest)`
+  - `PR policy / Required PR policy gate`
+  - `CI / Required CI gate`
 - Block force pushes
 - Block deletions
-- Restrict bypass permissions to the repository owner only
+- Restrict bypass permissions to the users listed in `.github/bypass-owners.txt`
 - Do not allow direct pushes
 
 ### Ruleset for branch names
@@ -152,6 +173,15 @@ cargo test
 
 ## Bypass policy
 
-Only the repository owner should be allowed to bypass required checks.
+Only users listed in `.github/bypass-owners.txt` should be allowed to bypass required checks.
 
-This cannot be safely enforced by a workflow file alone. Configure it in GitHub Rulesets by limiting bypass actors to the owner account only.
+This cannot be safely enforced by a workflow file alone. Configure it in GitHub Rulesets by limiting bypass actors to the same users listed in `.github/bypass-owners.txt`.
+
+If GitHub asks for required status check names, use:
+
+```text
+CI / Required CI gate
+PR policy / Required PR policy gate
+```
+
+The CI gate depends on every Rust matrix job. If Ubuntu or Windows fails, the gate fails too.
