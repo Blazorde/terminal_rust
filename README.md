@@ -8,6 +8,7 @@ Mini shell Rust inspire de Bash/Oh My Posh pour Windows et macOS.
 - `cd [path]`: change de dossier
 - `cd -`: revient au dossier precedent
 - `ls`: liste les fichiers et dossiers
+- `mkdir [directory]`: cree un dossier
 - `help`: affiche l'aide
 - `exit`: ferme le shell
 
