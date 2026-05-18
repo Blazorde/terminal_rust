@@ -1,3 +1,5 @@
+mod modules;
+
 fn main() {
-    //code here
+    //code
 }
