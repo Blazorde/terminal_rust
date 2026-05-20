@@ -1,147 +1,256 @@
-# terminal_rust
+# Terminal Rust
 
-Mini shell Rust inspire de Bash/Oh My Posh pour Windows et macOS.
+Terminal Rust est un mini shell écrit en Rust. Le projet sert à apprendre comment construire un terminal proprement: parsing des commandes, autocomplétion, gestion d'erreurs, commandes internes, tests et workflows GitHub.
 
-## Commandes disponibles terminales classiques:
+Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but est de construire progressivement un shell fiable, lisible, maintenable et proche des bonnes pratiques Rust.
 
-- `pwd`: affiche le dossier courant
-- `cd [path]`: change de dossier
-- `cd -`: revient au dossier precedent
-- `ls`: liste les fichiers et dossiers
-- `mkdir [directory]`: cree un dossier
-- `touch [file]`: cree un fichier
-- `rm [file/directory]`: supprime un fichier ou dossier
-- `cp [source] [destination]`: copie un fichier ou dossier
-- `mv [source] [destination]`: deplace ou renomme un fichier ou dossier
-- `cat [file]`: affiche le contenu d'un fichier
-- `echo [text]`: affiche du texte
-- `clear`: nettoie l'ecran
-- `history`: affiche l'historique des commandes
-- `export [VAR=value]`: definit une variable d'environnement
-- `env`: affiche les variables d'environnement
-- `alias [name='command']`: cree un alias pour une commande
-- `unalias [name]`: supprime un alias
-- `help [command]`: affiche l'aide pour une commande specifique
-- `help`: affiche l'aide
-- `exit`: ferme le shell
+## Sommaire
 
-## Commandes de gestion de processus:
-- `ps`: affiche les processus en cours
-- `kill [pid]`: termine un processus par son ID
-- `killall [name]`: termine tous les processus portant un nom specifique
-- `bg [job]`: met un processus en arriere-plan
-- `fg [job]`: ramene un processus en avant-plan
-- `jobs`: affiche les processus en arriere-plan
-- `wait [pid]`: attend la fin d'un processus
-- `nohup [command] &`: lance une commande en arriere-plan sans interruption
-- `disown [job]`: detache un processus de la session courante
-- `pstree`: affiche les processus sous forme d'arbre
-- `top`: affiche les processus en temps reel
-- `htop`: affiche les processus en temps reel avec une interface interactive
-- `pgrep [pattern]`: recherche les processus correspondant a un motif
-- `pkill [pattern]`: termine les processus correspondant a un motif
-- `strace [command]`: trace les system calls d'une commande
-- `lsof`: affiche les fichiers ouverts par les processus
-- `netstat`: affiche les connexions reseau et les ports ouverts
-- `ss`: affiche les connexions reseau et les ports ouverts de maniere plus rapide que netstat
-- `tcpdump`: capture et analyse le trafic reseau
-- `iftop`: affiche l'utilisation du reseau en temps reel
-- `iotop`: affiche l'utilisation du disque en temps reel
-- `vmstat`: affiche les statistiques du systeme en temps reel
-- `free`: affiche l'utilisation de la memoire
-- `df`: affiche l'utilisation du disque
-- `du`: affiche l'utilisation du disque pour les fichiers et dossiers
-- `uptime`: affiche le temps de fonctionnement du systeme
-- `dmesg`: affiche les messages du noyau
-- `lscpu`: affiche les informations sur le processeur
-- `lsblk`: affiche les informations sur les disques et partitions
-- `lsusb`: affiche les informations sur les périphériques USB
-- `lspci`: affiche les informations sur les périphériques PCI
-- `uname -a`: affiche les informations sur le systeme d'exploitation
-- `whoami`: affiche le nom de l'utilisateur courant
-- `id`: affiche les informations sur l'utilisateur courant
-- `groups`: affiche les groupes de l'utilisateur courant
-- `chmod [permissions] [file/directory]`: change les permissions d'un fichier ou dossier
-- `chown [owner] [file/directory]`: change le propriétaire d'un fichier ou dossier
-- `chgrp [group] [file/directory]`: change le groupe d'un fichier ou dossier
-- `ln -s [target] [link]`: crée un lien symbolique vers un fichier ou dossier
-- `readlink [link]`: affiche la cible d'un lien symbolique
-- `stat [file/directory]`: affiche les informations détaillées sur un fichier ou dossier
-- `file [file]`: affiche le type d'un fichier
-- `basename [path]`: affiche le nom de fichier d'un chemin
-- `dirname [path]`: affiche le chemin du dossier d'un chemin
-- `which [command]`: affiche le chemin d'une commande
-- `whereis [command]`: affiche les chemins d'une commande et de ses fichiers associés
-- `locate [pattern]`: recherche des fichiers correspondant à un motif dans une base de données pré-indexée
-- `updatedb`: met à jour la base de données utilisée par locate
-- `alias [name='command']`: crée un alias pour une commande
-- `unalias [name]`: supprime un alias
-- `history`: affiche l'historique des commandes
-- `!!`: répète la dernière commande
-- `!n`: répète la nième commande de l'historique
-- `!string`: répète la dernière commande commençant par "string"
+- [Fonctionnalités](#fonctionnalités)
+- [Installation](#installation)
+- [Lancement](#lancement)
+- [Commandes disponibles](#commandes-disponibles)
+- [Options de `ls`](#options-de-ls)
+- [Options de `rm`](#options-de-rm)
+- [Architecture](#architecture)
+- [Gestion des erreurs](#gestion-des-erreurs)
+- [Développement](#développement)
+- [Tests et qualité](#tests-et-qualité)
+- [Workflows GitHub](#workflows-github)
+- [Roadmap](#roadmap)
+- [Licence](#licence)
 
-## Commande de gestion de paquets:
-- `apt [command]`: gestionnaire de paquets pour les distributions basées sur Debian
-- `yum [command]`: gestionnaire de paquets pour les distributions basées sur Red
-- `dnf [command]`: gestionnaire de paquets pour les distributions basées sur Red Hat
-- `pacman [command]`: gestionnaire de paquets pour les distributions basées sur Arch Linux
-- `brew [command]`: gestionnaire de paquets pour macOS
-- `chocolatey [command]`: gestionnaire de paquets pour Windows
-- `cargo [command]`: gestionnaire de paquets pour Rust
-- `pip [command]`: gestionnaire de paquets pour Python
-- `npm [command]`: gestionnaire de paquets pour Node.js
-- `gem [command]`: gestionnaire de paquets pour Ruby
-- `composer [command]`: gestionnaire de paquets pour PHP
-- `go [command]`: gestionnaire de paquets pour Go
-- `dotnet [command]`: gestionnaire de paquets pour .NET
-- `nuget [command]`: gestionnaire de paquets pour .NET
-- `cargo [command]`: gestionnaire de paquets pour Rust
+## Fonctionnalités
 
-## Commande git:
-- `git init`: initialise un nouveau dépôt Git
-- `git clone [repository]`: clone un dépôt Git existant
-- `git add [file]`: ajoute un fichier à l'index pour le prochain commit
-- `git commit -m "[message]"`: crée un nouveau commit avec les changements ajoutés
-- `git push`: pousse les commits locaux vers le dépôt distant
-- `git pull`: récupère les changements du dépôt distant et les fusionne avec la branche locale
-- `git status`: affiche l'état des fichiers dans le dépôt
-- `git log`: affiche l'historique des commits
-- `git branch`: affiche les branches du dépôt
-- `git checkout [branch]`: change de branche
-- `git merge [branch]`: fusionne une branche dans la branche courante
-- `git rebase [branch]`: applique les commits de la branche courante sur une autre branche
-- `git stash`: sauvegarde les changements non commités pour les appliquer plus tard
-- `git stash pop`: applique les changements sauvegardés et les supprime de la liste
-- `git stash list`: affiche la liste des changements sauvegardés
-- `git stash drop [stash]`: supprime un changement sauvegardé de la liste
-- `git remote add [name] [url]`: ajoute un dépôt distant
-- `git remote remove [name]`: supprime un dépôt distant
-- `git remote -v`: affiche les dépôts distants et leurs URL
-- `git tag [name]`: crée une nouvelle étiquette pour un commit
-- `git diff`: affiche les différences entre les fichiers modifiés et les fichiers dans l'index
-- `git diff --staged`: affiche les différences entre les fichiers ajoutés à l'index et les fichiers dans le dernier commit
-- `git reset [file]`: retire un fichier de l'index
-- `git reset --hard`: réinitialise la branche courante à l'état du dernier commit, en supprimant tous les changements non commités
-- `git revert [commit]`: crée un nouveau commit qui annule les changements d'un commit précédent
-- `git cherry-pick [commit]`: applique les changements d'un commit spécifique à la branche courante
-- `git bisect`: utilise une recherche binaire pour trouver le commit qui a introduit un bug
-- `git blame [file]`: affiche les auteurs des lignes d'un fichier
-- `git show [commit]`: affiche les détails d'un commit spécifique
-- `git archive [branch] | tar -x`: crée une archive de la branche spécifiée et l'extrait dans le répertoire courant
-- `git clean -f`: supprime les fichiers non suivis du répertoire de travail
+- Shell interactif avec historique et autocomplétion grâce à `rustyline`.
+- Commandes internes séparées par modules.
+- Gestion d'erreurs dédiée par commande.
+- Parsing des arguments avec support des guillemets.
+- Commande `ls` avec plusieurs options proches de Linux.
+- Commande `rm` avec options et confirmation sur les suppressions dangereuses.
+- Tests unitaires sur les comportements importants.
+- GitHub Actions pour vérifier le formatage, la compilation, Clippy et les tests.
 
-## Details techniques:
-- Pour toutes les commandes, les arguments sont séparés par des espaces. Les arguments entre guillemets sont traités comme une seule unité.
-- Le shell supporte les redirections de sortie (`>`, `>>`) et d'entrée (`<`), ainsi que les pipes (`|`) pour chaîner les commandes.
-- Les variables d'environnement peuvent être utilisées dans les commandes en les préfixant avec `$`,
-- et les alias peuvent être créés pour les commandes courantes pour les rendre plus rapides à taper.
-- Le shell supporte également les commandes de gestion de processus pour permettre aux utilisateurs de gérer les processus en cours d'exécution, ainsi que les commandes de gestion de paquets pour faciliter l'installation et la gestion des logiciels.
-- Enfin, le shell intègre des commandes git pour permettre aux utilisateurs de gérer leurs dépôts git directement depuis le terminal.
+## Installation
 
-## Developpement
+Prérequis:
 
-Commandes utiles:
+- Rust installé avec `rustup`
+- Cargo disponible dans le terminal
+
+Vérifier l'installation:
+
+```bash
+rustc --version
+cargo --version
+```
+
+Cloner le projet:
+
+```bash
+git clone https://github.com/TON_USER/terminal_rust.git
+cd terminal_rust
+```
+
+Installer ou compiler:
+
+```bash
+cargo build
+```
+
+## Lancement
+
+Lancer le shell en mode développement:
+
+```bash
+cargo run
+```
+
+Compiler puis lancer le binaire:
+
+```bash
+cargo build --release
+./target/release/terminal_rust
+```
+
+Sur Windows, le binaire release se trouve ici:
+
+```powershell
+.\target\release\terminal_rust.exe
+```
+
+## Commandes disponibles
+
+| Commande | Description |
+| --- | --- |
+| `pwd` | Affiche le dossier courant |
+| `cd [path]` | Change de dossier |
+| `cd -` | Revient au dossier précédent |
+| `ls [options] [path...]` | Liste les fichiers et dossiers |
+| `mkdir [directory]` | Crée un dossier |
+| `touch [file]` | Crée un fichier vide ou garde le fichier existant |
+| `rm [options] [path...]` | Supprime des fichiers ou dossiers selon les options |
+| `help` | Affiche l'aide |
+| `exit` | Ferme le shell |
+| `quit` | Ferme le shell |
+
+Exemples:
+
+```bash
+pwd
+cd src
+cd -
+ls -la
+mkdir test
+touch test/file.txt
+rm -i test/file.txt
+rm -r test
+exit
+```
+
+## Options de `ls`
+
+La commande `ls` accepte plusieurs options courtes combinables:
+
+| Option | Description |
+| --- | --- |
+| `-1` | Affiche un élément par ligne |
+| `-a` | Affiche aussi les fichiers cachés |
+| `-A` | Affiche presque tous les fichiers cachés |
+| `-d` | Affiche le dossier lui-même au lieu de son contenu |
+| `-F` | Ajoute un indicateur selon le type de fichier |
+| `-h` | Affiche les tailles sous forme lisible |
+| `-l` | Affichage long |
+| `-p` | Ajoute `/` après les dossiers |
+| `-R` | Parcours récursif |
+| `-r` | Inverse l'ordre de tri |
+| `-S` | Trie par taille |
+| `-t` | Trie par date de modification |
+
+Exemples:
+
+```bash
+ls
+ls -la
+ls -lh src
+ls -R .
+ls -S
+ls -t
+```
+
+## Options de `rm`
+
+La commande `rm` est volontairement prudente. Si elle détecte une suppression récursive dangereuse, elle demande une confirmation.
+
+| Option | Version longue | Description |
+| --- | --- | --- |
+| `-d` | `--dir` | Supprime un dossier vide |
+| `-f` | `--force` | Ignore les chemins inexistants |
+| `-i` | `--interactive` | Demande confirmation avant suppression |
+| `-r` | `--recursive` | Supprime récursivement un dossier |
+| `-R` | `--recursive` | Alias de `-r` |
+| `-v` | `--verbose` | Affiche les chemins supprimés |
+| `--` | | Arrête le parsing des options |
+
+Exemples:
+
+```bash
+rm file.txt
+rm file1.txt file2.txt
+rm -i file.txt
+rm -f missing.txt
+rm -d empty_folder
+rm -r folder
+rm -rf folder
+rm -- -file-starting-with-dash
+```
+
+Comportement de sécurité:
+
+- `rm folder` refuse de supprimer un dossier sans option.
+- `rm -d folder` supprime uniquement un dossier vide.
+- `rm -r folder` demande confirmation avant suppression récursive.
+- `rm -rf folder` demande aussi confirmation dans ce projet, même si Linux classique ne le fait pas toujours.
+
+## Architecture
+
+Le code est organisé pour éviter les gros fichiers difficiles à maintenir.
+
+```text
+src/
+  main.rs
+  app/
+    command.rs
+    completion.rs
+    help.rs
+    parser.rs
+    prompt.rs
+    runner.rs
+  commands/
+    cd.rs
+    mkdir.rs
+    pwd.rs
+    rm.rs
+    touch.rs
+    ls/
+      display.rs
+      fs.rs
+      item.rs
+      options.rs
+      sort.rs
+  errors/
+    cd.rs
+    command.rs
+    ls.rs
+    mkdir.rs
+    rm.rs
+    touch.rs
+```
+
+Rôle des dossiers principaux:
+
+| Dossier | Rôle |
+| --- | --- |
+| `app/` | Boucle du shell, parsing, autocomplétion, dispatch des commandes |
+| `commands/` | Logique métier des commandes |
+| `commands/ls/` | Sous-modules dédiés à `ls`, car la commande est plus complexe |
+| `errors/` | Types d'erreurs séparés par commande |
+
+Le fichier `src/app/command.rs` utilise une table de commandes. Cela évite un énorme `match` qui grossit à chaque nouvelle commande.
+
+## Gestion des erreurs
+
+Chaque commande importante possède son type d'erreur dédié:
+
+```text
+CdError
+LsError
+MkdirError
+RmError
+TouchError
+```
+
+Cette approche permet:
+
+- des messages d'erreur clairs;
+- des tests précis;
+- une séparation propre entre la logique métier et l'affichage;
+- une meilleure maintenance quand les commandes deviennent plus complètes.
+
+Exemple simplifié:
+
+```rust
+pub enum RmError {
+    MissingTarget,
+    NotFound(PathBuf),
+    IsDirectory(PathBuf),
+    DeleteFailed { path: PathBuf, source: io::Error },
+}
+```
+
+## Développement
+
+Commandes utiles pendant le développement:
 
 ```bash
 cargo fmt
@@ -150,20 +259,83 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 ```
 
-## Branches et workflows
+Ajouter une nouvelle commande:
 
-Le projet utilise une politique stricte:
+1. Créer `src/commands/ma_commande.rs`.
+2. Créer `src/errors/ma_commande.rs` si la commande peut échouer.
+3. Exporter les modules dans `src/commands/mod.rs` et `src/errors/mod.rs`.
+4. Ajouter la commande dans la table de `src/app/command.rs`.
+5. Ajouter l'aide dans `src/app/help.rs`.
+6. Ajouter l'autocomplétion dans `src/app/completion.rs`.
+7. Ajouter des tests sur les comportements importants.
 
-- `main` accepte uniquement les PR venant de `develop`
-- `develop` accepte uniquement les PR venant de branches:
+## Tests et qualité
+
+Avant d'ouvrir une pull request:
+
+```bash
+cargo fmt --all -- --check
+cargo check --all-targets --all-features
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+```
+
+Les tests couvrent notamment:
+
+- le parsing des arguments;
+- l'autocomplétion des commandes;
+- `cd`;
+- `ls`;
+- `mkdir`;
+- `touch`;
+- `rm`.
+
+## Workflows GitHub
+
+Le projet utilise une politique stricte de branches et de pull requests.
+
+Branches principales:
+
+- `main` accepte uniquement les pull requests venant de `develop`.
+- `develop` accepte uniquement les pull requests venant de branches nommées:
   - `feat/*`
   - `fix/*`
   - `chore/*`
   - `refractor/*`
   - `hotfix/*`
-- les checks requis sont `CI / Required CI gate` et `PR policy / Required PR policy gate`
-- les comptes autorises a bypass sont listes dans `.github/bypass-owners.txt`
 
-La documentation complete est ici:
+Checks attendus:
 
-[docs/workflows/README.md](docs/workflows/README.md)
+- `CI / Required CI gate`
+- `PR policy / Required PR policy gate`
+
+Les comptes autorisés à bypass sont listés ici:
+
+```text
+.github/bypass-owners.txt
+```
+
+Documentation complète:
+
+[Lire la documentation des workflows](docs/workflows/README.md)
+
+## Roadmap
+
+Idées de commandes ou fonctionnalités à ajouter plus tard:
+
+- `cp`
+- `mv`
+- `cat`
+- `echo`
+- `clear`
+- `history`
+- variables d'environnement
+- alias
+- redirections
+- pipes
+- meilleure gestion des permissions
+- interface terminal graphique dédiée
+
+## Licence
+
+Ce projet est sous licence MIT.

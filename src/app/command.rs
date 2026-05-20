@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::app::help;
-use crate::commands::{cd, ls, mkdir, pwd, touch};
+use crate::commands::{cd, ls, mkdir, pwd, rm, touch};
 use crate::errors::command::CommandError;
 
 #[derive(Default)]
@@ -16,26 +16,134 @@ pub enum CommandResult {
     Error(String),
 }
 
+type CommandHandler = fn(&[String], &mut ShellState) -> CommandResult;
+
+struct CommandSpec {
+    name: &'static str,
+    max_args: Option<usize>,
+    handler: CommandHandler,
+}
+
+const COMMANDS: &[CommandSpec] = &[
+    CommandSpec {
+        name: "pwd",
+        max_args: Some(0),
+        handler: run_pwd,
+    },
+    CommandSpec {
+        name: "cd",
+        max_args: Some(1),
+        handler: run_cd,
+    },
+    CommandSpec {
+        name: "ls",
+        max_args: None,
+        handler: run_ls,
+    },
+    CommandSpec {
+        name: "mkdir",
+        max_args: Some(1),
+        handler: run_mkdir,
+    },
+    CommandSpec {
+        name: "touch",
+        max_args: Some(1),
+        handler: run_touch,
+    },
+    CommandSpec {
+        name: "rm",
+        max_args: None,
+        handler: run_rm,
+    },
+    CommandSpec {
+        name: "help",
+        max_args: Some(0),
+        handler: run_help,
+    },
+    CommandSpec {
+        name: "exit",
+        max_args: Some(0),
+        handler: run_exit,
+    },
+];
+
 pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
-    match Command::from_args(args) {
-        Ok(Command::Pwd) => map_result(pwd::pwd(), |error| format!("pwd: {error}")),
-        Ok(Command::Cd(target)) => match cd::cd(target, state.previous_dir.as_deref()) {
-            Ok(previous_dir) => {
-                state.previous_dir = Some(previous_dir);
-                CommandResult::Continue
-            }
-            Err(error) => CommandResult::Error(error.to_string()),
-        },
-        Ok(Command::Ls(args)) => map_result(ls::ls(args), |error| format!("ls: {error}")),
-        Ok(Command::Mkdir(target)) => map_result(mkdir::mkdir(target), |error| error.to_string()),
-        Ok(Command::Touch(target)) => map_result(touch::touch(target), |error| error.to_string()),
-        Ok(Command::Help) => {
-            help::print_help();
+    let Some(command_name) = args.first().map(String::as_str) else {
+        return run_help(&[], state);
+    };
+
+    let Some(command) = find_command(command_name) else {
+        return CommandResult::Error(
+            CommandError::UnknownCommand(command_name.to_string()).to_string(),
+        );
+    };
+
+    let command_args = &args[1..];
+    if let Err(error) = validate_arg_count(command, command_args.len()) {
+        return CommandResult::Error(error.to_string());
+    }
+
+    (command.handler)(command_args, state)
+}
+
+fn find_command(name: &str) -> Option<&'static CommandSpec> {
+    COMMANDS.iter().find(|command| command.name == name)
+}
+
+fn validate_arg_count(command: &CommandSpec, arg_count: usize) -> Result<(), CommandError> {
+    if command
+        .max_args
+        .is_some_and(|max_args| arg_count > max_args)
+    {
+        return Err(CommandError::TooManyArguments {
+            command: command.name,
+        });
+    }
+
+    Ok(())
+}
+
+fn optional_arg(args: &[String]) -> Option<&str> {
+    args.first().map(String::as_str)
+}
+
+fn run_pwd(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_result(pwd::pwd(), |error| format!("pwd: {error}"))
+}
+
+fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
+    match cd::cd(optional_arg(args), state.previous_dir.as_deref()) {
+        Ok(previous_dir) => {
+            state.previous_dir = Some(previous_dir);
             CommandResult::Continue
         }
-        Ok(Command::Exit) => CommandResult::Exit,
         Err(error) => CommandResult::Error(error.to_string()),
     }
+}
+
+fn run_ls(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_result(ls::ls(args), |error| format!("ls: {error}"))
+}
+
+fn run_mkdir(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_result(mkdir::mkdir(optional_arg(args)), |error| error.to_string())
+}
+
+fn run_touch(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_result(touch::touch(optional_arg(args)), |error| error.to_string())
+}
+
+fn run_rm(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_result(rm::rm(args), |error| error.to_string())
+}
+
+fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    help::print_help();
+    CommandResult::Continue
+}
+
+fn run_exit(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    CommandResult::Exit
 }
 
 fn map_result<T, E, F>(result: Result<T, E>, format_error: F) -> CommandResult
@@ -45,35 +153,5 @@ where
     match result {
         Ok(_) => CommandResult::Continue,
         Err(error) => CommandResult::Error(format_error(error)),
-    }
-}
-
-enum Command<'a> {
-    Pwd,
-    Cd(Option<&'a str>),
-    Ls(&'a [String]),
-    Mkdir(Option<&'a str>),
-    Touch(Option<&'a str>),
-    Help,
-    Exit,
-}
-
-impl<'a> Command<'a> {
-    fn from_args(args: &'a [String]) -> Result<Self, CommandError> {
-        match args.first().map(String::as_str) {
-            Some("pwd") if args.len() == 1 => Ok(Self::Pwd),
-            Some("pwd") => Err(CommandError::TooManyArguments { command: "pwd" }),
-            Some("cd") if args.len() <= 2 => Ok(Self::Cd(args.get(1).map(String::as_str))),
-            Some("cd") => Err(CommandError::TooManyArguments { command: "cd" }),
-            Some("ls") => Ok(Self::Ls(&args[1..])),
-            Some("mkdir") if args.len() <= 2 => Ok(Self::Mkdir(args.get(1).map(String::as_str))),
-            Some("mkdir") => Err(CommandError::TooManyArguments { command: "mkdir" }),
-            Some("touch") if args.len() <= 2 => Ok(Self::Touch(args.get(1).map(String::as_str))),
-            Some("touch") => Err(CommandError::TooManyArguments { command: "touch" }),
-            Some("help") => Ok(Self::Help),
-            Some("exit") | Some("quit") => Ok(Self::Exit),
-            Some(command) => Err(CommandError::UnknownCommand(command.to_string())),
-            None => Ok(Self::Help),
-        }
     }
 }
