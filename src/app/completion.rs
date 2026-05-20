@@ -4,7 +4,9 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Context, Helper};
 
-const COMMAND_NAMES: &[&str] = &["cd", "pwd", "ls", "mkdir", "touch", "help", "exit", "quit"];
+const COMMAND_NAMES: &[&str] = &[
+    "cd", "pwd", "ls", "mkdir", "touch", "rm", "help", "exit", "quit",
+];
 
 pub struct ShellHelper {
     filename_completer: FilenameCompleter,
