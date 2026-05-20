@@ -1,0 +1,66 @@
+name: PR policy
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - ready_for_review
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  validate-pr-route:
+    name: Required PR policy gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout trusted policy files
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+
+      - name: Enforce branch flow
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+
+          echo "Base branch: ${BASE_BRANCH}"
+          echo "Head branch: ${HEAD_BRANCH}"
+          echo "Actor: ${ACTOR}"
+
+          if grep -Eiq "^[[:space:]]*${ACTOR}[[:space:]]*$" .github/bypass-owners.txt; then
+            echo "Actor ${ACTOR} is listed in .github/bypass-owners.txt; PR policy gate is bypassed."
+            exit 0
+          fi
+
+          allowed_work_branch_regex='^(feat|fix|chore|refractor|hotfix)/[a-z0-9][a-z0-9._-]*$'
+
+          if [[ "${BASE_BRANCH}" == "main" ]]; then
+            if [[ "${HEAD_BRANCH}" != "develop" ]]; then
+              echo "::error::main only accepts pull requests from develop."
+              exit 1
+            fi
+            exit 0
+          fi
+
+          if [[ "${BASE_BRANCH}" == "develop" ]]; then
+            if [[ ! "${HEAD_BRANCH}" =~ ${allowed_work_branch_regex} ]]; then
+              echo "::error::develop only accepts PRs from feat/*, fix/*, chore/*, refractor/*, or hotfix/* branches."
+              exit 1
+            fi
+            exit 0
+          fi
+
+          echo "::error::Pull requests are only allowed into main or develop."
+          exit 1
