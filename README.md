@@ -1,0 +1,342 @@
+# Terminal Rust
+
+Terminal Rust est un mini shell écrit en Rust. Le projet sert à apprendre comment construire un terminal proprement: parsing des commandes, autocomplétion, gestion d'erreurs, commandes internes, tests et workflows GitHub.
+
+Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but est de construire progressivement un shell fiable, lisible, maintenable et proche des bonnes pratiques Rust.
+
+## Sommaire
+
+- [Fonctionnalités](#fonctionnalités)
+- [Installation](#installation)
+- [Lancement](#lancement)
+- [Commandes disponibles](#commandes-disponibles)
+- [Options de `ls`](#options-de-ls)
+- [Options de `rm`](#options-de-rm)
+- [Architecture](#architecture)
+- [Gestion des erreurs](#gestion-des-erreurs)
+- [Développement](#développement)
+- [Tests et qualité](#tests-et-qualité)
+- [Workflows GitHub](#workflows-github)
+- [Roadmap](#roadmap)
+- [Licence](#licence)
+
+## Fonctionnalités
+
+- Shell interactif avec historique et autocomplétion grâce à `rustyline`.
+- Commandes internes séparées par modules.
+- Gestion d'erreurs dédiée par commande.
+- Parsing des arguments avec support des guillemets.
+- Commande `ls` avec plusieurs options proches de Linux.
+- Commande `rm` avec options et confirmation sur les suppressions dangereuses.
+- Tests unitaires sur les comportements importants.
+- GitHub Actions pour vérifier le formatage, la compilation, Clippy et les tests.
+
+## Installation
+
+Prérequis:
+
+- Rust installé avec `rustup`
+- Cargo disponible dans le terminal
+
+Vérifier l'installation:
+
+```bash
+rustc --version
+cargo --version
+```
+
+Cloner le projet:
+
+```bash
+git clone https://github.com/TON_USER/terminal_rust.git
+cd terminal_rust
+```
+
+Installer ou compiler:
+
+```bash
+cargo build
+```
+
+## Lancement
+
+Lancer le shell en mode développement:
+
+```bash
+cargo run
+```
+
+Compiler puis lancer le binaire:
+
+```bash
+cargo build --release
+./target/release/terminal_rust
+```
+
+Sur Windows, le binaire release se trouve ici:
+
+```powershell
+.\target\release\terminal_rust.exe
+```
+
+## Commandes disponibles
+
+| Commande | Description |
+| --- | --- |
+| `pwd` | Affiche le dossier courant |
+| `cd [path]` | Change de dossier |
+| `cd -` | Revient au dossier précédent |
+| `ls [options] [path...]` | Liste les fichiers et dossiers |
+| `mkdir [directory]` | Crée un dossier |
+| `touch [file]` | Crée un fichier vide ou garde le fichier existant |
+| `cat [file]` | Affiche le contenu d'un fichier |
+| `rm [options] [path...]` | Supprime des fichiers ou dossiers selon les options |
+| `help` | Affiche l'aide |
+| `exit` | Ferme le shell |
+| `quit` | Ferme le shell |
+
+Exemples:
+
+```bash
+pwd
+cd src
+cd -
+ls -la
+mkdir test
+touch test/file.txt
+cat test/file.txt
+rm -i test/file.txt
+rm -r test
+exit
+```
+
+## Options de `ls`
+
+La commande `ls` accepte plusieurs options courtes combinables:
+
+| Option | Description |
+| --- | --- |
+| `-1` | Affiche un élément par ligne |
+| `-a` | Affiche aussi les fichiers cachés |
+| `-A` | Affiche presque tous les fichiers cachés |
+| `-d` | Affiche le dossier lui-même au lieu de son contenu |
+| `-F` | Ajoute un indicateur selon le type de fichier |
+| `-h` | Affiche les tailles sous forme lisible |
+| `-l` | Affichage long |
+| `-p` | Ajoute `/` après les dossiers |
+| `-R` | Parcours récursif |
+| `-r` | Inverse l'ordre de tri |
+| `-S` | Trie par taille |
+| `-t` | Trie par date de modification |
+
+Exemples:
+
+```bash
+ls
+ls -la
+ls -lh src
+ls -R .
+ls -S
+ls -t
+```
+
+## Options de `rm`
+
+La commande `rm` est volontairement prudente. Si elle détecte une suppression récursive dangereuse, elle demande une confirmation.
+
+| Option | Version longue | Description |
+| --- | --- | --- |
+| `-d` | `--dir` | Supprime un dossier vide |
+| `-f` | `--force` | Ignore les chemins inexistants |
+| `-i` | `--interactive` | Demande confirmation avant suppression |
+| `-r` | `--recursive` | Supprime récursivement un dossier |
+| `-R` | `--recursive` | Alias de `-r` |
+| `-v` | `--verbose` | Affiche les chemins supprimés |
+| `--` | | Arrête le parsing des options |
+
+Exemples:
+
+```bash
+rm file.txt
+rm file1.txt file2.txt
+rm -i file.txt
+rm -f missing.txt
+rm -d empty_folder
+rm -r folder
+rm -rf folder
+rm -- -file-starting-with-dash
+```
+
+Comportement de sécurité:
+
+- `rm folder` refuse de supprimer un dossier sans option.
+- `rm -d folder` supprime uniquement un dossier vide.
+- `rm -r folder` demande confirmation avant suppression récursive.
+- `rm -rf folder` demande aussi confirmation dans ce projet, même si Linux classique ne le fait pas toujours.
+
+## Architecture
+
+Le code est organisé pour éviter les gros fichiers difficiles à maintenir.
+
+```text
+src/
+  main.rs
+  app/
+    command.rs
+    completion.rs
+    help.rs
+    parser.rs
+    prompt.rs
+    runner.rs
+  commands/
+    cd.rs
+    mkdir.rs
+    pwd.rs
+    rm.rs
+    touch.rs
+    ls/
+      display.rs
+      fs.rs
+      item.rs
+      options.rs
+      sort.rs
+  errors/
+    cd.rs
+    command.rs
+    ls.rs
+    mkdir.rs
+    rm.rs
+    touch.rs
+```
+
+Rôle des dossiers principaux:
+
+| Dossier | Rôle |
+| --- | --- |
+| `app/` | Boucle du shell, parsing, autocomplétion, dispatch des commandes |
+| `commands/` | Logique métier des commandes |
+| `commands/ls/` | Sous-modules dédiés à `ls`, car la commande est plus complexe |
+| `errors/` | Types d'erreurs séparés par commande |
+
+Le fichier `src/app/command.rs` utilise une table de commandes. Cela évite un énorme `match` qui grossit à chaque nouvelle commande.
+
+## Gestion des erreurs
+
+Chaque commande importante possède son type d'erreur dédié:
+
+```text
+CdError
+LsError
+MkdirError
+RmError
+TouchError
+```
+
+Cette approche permet:
+
+- des messages d'erreur clairs;
+- des tests précis;
+- une séparation propre entre la logique métier et l'affichage;
+- une meilleure maintenance quand les commandes deviennent plus complètes.
+
+Exemple simplifié:
+
+```rust
+pub enum RmError {
+    MissingTarget,
+    NotFound(PathBuf),
+    IsDirectory(PathBuf),
+    DeleteFailed { path: PathBuf, source: io::Error },
+}
+```
+
+## Développement
+
+Commandes utiles pendant le développement:
+
+```bash
+cargo fmt
+cargo check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
+```
+
+Ajouter une nouvelle commande:
+
+1. Créer `src/commands/ma_commande.rs`.
+2. Créer `src/errors/ma_commande.rs` si la commande peut échouer.
+3. Exporter les modules dans `src/commands/mod.rs` et `src/errors/mod.rs`.
+4. Ajouter la commande dans la table de `src/app/command.rs`.
+5. Ajouter l'aide dans `src/app/help.rs`.
+6. Ajouter l'autocomplétion dans `src/app/completion.rs`.
+7. Ajouter des tests sur les comportements importants.
+
+## Tests et qualité
+
+Avant d'ouvrir une pull request:
+
+```bash
+cargo fmt --all -- --check
+cargo check --all-targets --all-features
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+```
+
+Les tests couvrent notamment:
+
+- le parsing des arguments;
+- l'autocomplétion des commandes;
+- `cd`;
+- `ls`;
+- `mkdir`;
+- `touch`;
+- `rm`.
+
+## Workflows GitHub
+
+Le projet utilise une politique stricte de branches et de pull requests.
+
+Branches principales:
+
+- `main` accepte uniquement les pull requests venant de `develop`.
+- `develop` accepte uniquement les pull requests venant de branches nommées:
+  - `feat/*`
+  - `fix/*`
+  - `chore/*`
+  - `refractor/*`
+  - `hotfix/*`
+
+Checks attendus:
+
+- `CI / Required CI gate`
+- `PR policy / Required PR policy gate`
+
+Les comptes autorisés à bypass sont listés ici:
+
+```text
+.github/bypass-owners.txt
+```
+
+Documentation complète:
+
+[Lire la documentation des workflows](docs/workflows/README.md)
+
+## Roadmap
+
+Idées de commandes ou fonctionnalités à ajouter plus tard:
+
+- `cp`
+- `mv`
+- `echo`
+- `clear`
+- `history`
+- variables d'environnement
+- alias
+- redirections
+- pipes
+- meilleure gestion des permissions
+- interface terminal graphique dédiée
+
+## Licence
+
+Ce projet est sous licence MIT.

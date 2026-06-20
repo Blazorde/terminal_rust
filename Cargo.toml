@@ -1,0 +1,13 @@
+[package]
+name = "terminal_rust"
+version = "0.0.4"
+edition = "2024"
+description = "Mini shell Rust for developers on macOS, Linux, and Windows. A simple command-line interface for executing commands and managing files."
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/TON_USER/terminal_rust"
+keywords = ["shell", "terminal", "rust", "multiplatform", "git"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+rustyline = "18.0.0"
