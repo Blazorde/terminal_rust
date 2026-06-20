@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
 use crate::app::help;
-use crate::commands::{cd, ls, mkdir, pwd, rm, touch};
+use crate::commands::{cat, cd, ls, mkdir, pwd, rm, touch};
 use crate::errors::command::CommandError;
+use crate::render;
 
 #[derive(Default)]
 pub struct ShellState {
@@ -51,6 +52,11 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_touch,
     },
     CommandSpec {
+        name: "cat",
+        max_args: Some(1),
+        handler: run_cat,
+    },
+    CommandSpec {
         name: "rm",
         max_args: None,
         handler: run_rm,
@@ -65,7 +71,16 @@ const COMMANDS: &[CommandSpec] = &[
         max_args: Some(0),
         handler: run_exit,
     },
+    CommandSpec {
+        name: "quit",
+        max_args: Some(0),
+        handler: run_exit,
+    },
 ];
+
+pub fn command_names() -> impl Iterator<Item = &'static str> {
+    COMMANDS.iter().map(|command| command.name)
+}
 
 pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
     let Some(command_name) = args.first().map(String::as_str) else {
@@ -108,7 +123,7 @@ fn optional_arg(args: &[String]) -> Option<&str> {
 }
 
 fn run_pwd(_args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_result(pwd::pwd(), |error| format!("pwd: {error}"))
+    map_prefixed_error("pwd", pwd::pwd())
 }
 
 fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
@@ -122,24 +137,30 @@ fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
 }
 
 fn run_ls(args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_result(ls::ls(args), |error| format!("ls: {error}"))
+    map_prefixed_error("ls", ls::ls(args))
 }
 
 fn run_mkdir(args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_result(mkdir::mkdir(optional_arg(args)), |error| error.to_string())
+    map_display_error(mkdir::mkdir(optional_arg(args)))
 }
 
 fn run_touch(args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_result(touch::touch(optional_arg(args)), |error| error.to_string())
+    map_display_error(touch::touch(optional_arg(args)))
+}
+
+fn run_cat(args: &[String], _state: &mut ShellState) -> CommandResult {
+    match cat::cat(optional_arg(args)) {
+        Ok(content) => map_result(render::stdout(content), |error| format!("cat: {error}")),
+        Err(error) => CommandResult::Error(error.to_string()),
+    }
 }
 
 fn run_rm(args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_result(rm::rm(args), |error| error.to_string())
+    map_display_error(rm::rm(args))
 }
 
 fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
-    help::print_help();
-    CommandResult::Continue
+    map_result(help::print_help(), |error| format!("help: {error}"))
 }
 
 fn run_exit(_args: &[String], _state: &mut ShellState) -> CommandResult {
@@ -154,4 +175,18 @@ where
         Ok(_) => CommandResult::Continue,
         Err(error) => CommandResult::Error(format_error(error)),
     }
+}
+
+fn map_display_error<T, E>(result: Result<T, E>) -> CommandResult
+where
+    E: std::fmt::Display,
+{
+    map_result(result, |error| error.to_string())
+}
+
+fn map_prefixed_error<T, E>(prefix: &str, result: Result<T, E>) -> CommandResult
+where
+    E: std::fmt::Display,
+{
+    map_result(result, |error| format!("{prefix}: {error}"))
 }

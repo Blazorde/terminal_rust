@@ -1,14 +1,10 @@
 use std::fs::OpenOptions;
-use std::path::PathBuf;
 
 use crate::errors::touch::TouchError;
+use crate::utils::path::required_path;
 
 pub fn touch(target: Option<&str>) -> Result<(), TouchError> {
-    let path = target
-        .map(str::trim)
-        .filter(|target| !target.is_empty())
-        .map(PathBuf::from)
-        .ok_or(TouchError::MissingFileName)?;
+    let path = required_path(target, TouchError::MissingFileName)?;
 
     if path.is_dir() {
         return Err(TouchError::TargetIsDirectory(path));
@@ -26,22 +22,12 @@ pub fn touch(target: Option<&str>) -> Result<(), TouchError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
+    use crate::utils::path::temp_path;
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn test_path(name: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time should be after Unix epoch")
-            .as_nanos();
-
-        env::temp_dir().join(format!("terminal-rust-touch-{name}-{unique}"))
-    }
 
     #[test]
     fn touch_creates_file() {
-        let path = test_path("create");
+        let path = temp_path("touch", "create");
 
         touch(Some(path.to_str().expect("test path should be UTF-8")))
             .expect("touch should create file");
@@ -53,7 +39,7 @@ mod tests {
 
     #[test]
     fn touch_keeps_existing_file_content() {
-        let path = test_path("existing");
+        let path = temp_path("touch", "existing");
         fs::write(&path, "hello").expect("test file should be written");
 
         touch(Some(path.to_str().expect("test path should be UTF-8")))
@@ -69,7 +55,7 @@ mod tests {
 
     #[test]
     fn touch_rejects_directory() {
-        let path = test_path("directory");
+        let path = temp_path("touch", "directory");
         fs::create_dir(&path).expect("test directory should be created");
 
         let error = touch(Some(path.to_str().expect("test path should be UTF-8")))
