@@ -89,6 +89,7 @@ Sur Windows, le binaire release se trouve ici:
 | `ls [options] [path...]` | Liste les fichiers et dossiers |
 | `mkdir [directory]` | Crée un dossier |
 | `touch [file]` | Crée un fichier vide ou garde le fichier existant |
+| `cat [file]` | Affiche le contenu d'un fichier |
 | `rm [options] [path...]` | Supprime des fichiers ou dossiers selon les options |
 | `help` | Affiche l'aide |
 | `exit` | Ferme le shell |
@@ -103,6 +104,7 @@ cd -
 ls -la
 mkdir test
 touch test/file.txt
+cat test/file.txt
 rm -i test/file.txt
 rm -r test
 exit
@@ -325,7 +327,6 @@ Idées de commandes ou fonctionnalités à ajouter plus tard:
 
 - `cp`
 - `mv`
-- `cat`
 - `echo`
 - `clear`
 - `history`

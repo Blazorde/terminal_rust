@@ -1,10 +1,18 @@
-pub fn print_help() {
-    println!("Available commands:");
-    println!("  pwd                  print current directory");
-    println!("  cd [path]            change current directory");
-    println!("  ls [-1aAdFhlpRrSt] [path...]");
-    println!("  mkdir [directory]    create a new directory");
-    println!("  touch [file]         create an empty file");
-    println!("  rm [-dfirRv] [path...]");
-    println!("  exit                 close the terminal");
+use std::io;
+
+use crate::render;
+
+pub fn print_help() -> io::Result<()> {
+    render::stdout_lines(&[
+        "Available commands:",
+        "  pwd                  print current directory",
+        "  cd [path]            change current directory",
+        "  ls [-1aAdFhlpRrSt] [path...]",
+        "  mkdir [directory]    create a new directory",
+        "  touch [file]         create an empty file",
+        "  cat [file]           print file content",
+        "  rm [-dfirRv] [path...]",
+        "  exit                 close the terminal",
+        "  quit                 close the terminal",
+    ])
 }

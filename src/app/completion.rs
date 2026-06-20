@@ -4,9 +4,7 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Context, Helper};
 
-const COMMAND_NAMES: &[&str] = &[
-    "cd", "pwd", "ls", "mkdir", "touch", "rm", "help", "exit", "quit",
-];
+use crate::app::command;
 
 pub struct ShellHelper {
     filename_completer: FilenameCompleter,
@@ -45,11 +43,10 @@ impl Completer for ShellHelper {
 }
 
 fn command_completions(prefix: &str) -> Vec<Pair> {
-    COMMAND_NAMES
-        .iter()
+    command::command_names()
         .filter(|command| command.starts_with(prefix))
         .map(|command| Pair {
-            display: (*command).to_string(),
+            display: command.to_string(),
             replacement: format!("{command} "),
         })
         .collect()
