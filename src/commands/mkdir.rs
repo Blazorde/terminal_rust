@@ -1,14 +1,11 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::errors::mkdir::MkdirError;
+use crate::utils::path::required_path;
 
 pub fn mkdir(target: Option<&str>) -> Result<(), MkdirError> {
-    let path = target
-        .map(str::trim)
-        .filter(|target| !target.is_empty())
-        .map(PathBuf::from)
-        .ok_or(MkdirError::MissingDirectoryName)?;
+    let path = required_path(target, MkdirError::MissingDirectoryName)?;
 
     create_directory(&path)
 }
@@ -27,21 +24,11 @@ fn create_directory(path: &Path) -> Result<(), MkdirError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn test_dir(name: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time should be after Unix epoch")
-            .as_nanos();
-
-        env::temp_dir().join(format!("terminal-rust-{name}-{unique}"))
-    }
+    use crate::utils::path::temp_path;
 
     #[test]
     fn mkdir_creates_directory() {
-        let path = test_dir("create");
+        let path = temp_path("mkdir", "create");
 
         mkdir(Some(path.to_str().expect("test path should be UTF-8")))
             .expect("mkdir should create directory");
@@ -53,7 +40,7 @@ mod tests {
 
     #[test]
     fn mkdir_rejects_existing_directory() {
-        let path = test_dir("exists");
+        let path = temp_path("mkdir", "exists");
         fs::create_dir(&path).expect("test directory should be created");
 
         let error = mkdir(Some(path.to_str().expect("test path should be UTF-8")))

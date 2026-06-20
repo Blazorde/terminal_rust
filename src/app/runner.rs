@@ -10,6 +10,7 @@ use crate::app::command::{self, CommandResult, ShellState};
 use crate::app::completion::ShellHelper;
 use crate::app::parser::parse_input;
 use crate::app::prompt::{print_prompt, prompt};
+use crate::render;
 
 pub fn run() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -27,7 +28,7 @@ fn run_once(args: &[String]) -> ExitCode {
     match command::execute(args, &mut state) {
         CommandResult::Continue | CommandResult::Exit => ExitCode::SUCCESS,
         CommandResult::Error(error) => {
-            eprintln!("{error}");
+            let _ = render::stderr_line(error);
             ExitCode::FAILURE
         }
     }
@@ -48,7 +49,7 @@ fn run_interactive_editor() -> ExitCode {
     let mut editor = match Editor::<ShellHelper, DefaultHistory>::with_config(config) {
         Ok(editor) => editor,
         Err(error) => {
-            eprintln!("terminal: {error}");
+            let _ = render::stderr_line(format_args!("terminal: {error}"));
             return ExitCode::FAILURE;
         }
     };
@@ -60,7 +61,7 @@ fn run_interactive_editor() -> ExitCode {
         let prompt = match prompt() {
             Ok(prompt) => prompt,
             Err(error) => {
-                eprintln!("prompt: {error}");
+                let _ = render::stderr_line(format_args!("prompt: {error}"));
                 return ExitCode::FAILURE;
             }
         };
@@ -76,11 +77,11 @@ fn run_interactive_editor() -> ExitCode {
                 }
             }
             Err(ReadlineError::Interrupted) => {
-                println!("^C");
+                let _ = render::stdout_line("^C");
             }
             Err(ReadlineError::Eof) => return ExitCode::SUCCESS,
             Err(error) => {
-                eprintln!("read: {error}");
+                let _ = render::stderr_line(format_args!("read: {error}"));
                 return ExitCode::FAILURE;
             }
         }
@@ -95,7 +96,7 @@ fn run_interactive_plain() -> ExitCode {
 
     loop {
         if let Err(error) = print_prompt() {
-            eprintln!("prompt: {error}");
+            let _ = render::stderr_line(format_args!("prompt: {error}"));
             return ExitCode::FAILURE;
         }
 
@@ -104,7 +105,7 @@ fn run_interactive_plain() -> ExitCode {
             Ok(0) => return ExitCode::SUCCESS,
             Ok(_) => {}
             Err(error) => {
-                eprintln!("read: {error}");
+                let _ = render::stderr_line(format_args!("read: {error}"));
                 return ExitCode::FAILURE;
             }
         }
@@ -120,14 +121,14 @@ fn handle_input(input: &str, state: &mut ShellState) -> CommandResult {
         Ok(args) if args.is_empty() => return CommandResult::Continue,
         Ok(args) => args,
         Err(error) => {
-            eprintln!("{error}");
+            let _ = render::stderr_line(error);
             return CommandResult::Continue;
         }
     };
 
     match command::execute(&args, state) {
         CommandResult::Error(error) => {
-            eprintln!("{error}");
+            let _ = render::stderr_line(error);
             CommandResult::Continue
         }
         result => result,

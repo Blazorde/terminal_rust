@@ -1,8 +1,9 @@
 use std::fs;
-use std::io::{self, Write};
+use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::errors::rm::RmError;
+use crate::render;
 
 #[derive(Default)]
 struct RmOptions {
@@ -127,7 +128,7 @@ fn remove_target(
         source,
     })?;
 
-    print_removed(options, path);
+    print_removed(options, path)?;
     Ok(())
 }
 
@@ -146,7 +147,7 @@ fn remove_directory(options: &RmOptions, path: &Path) -> Result<(), RmError> {
         return Err(RmError::IsDirectory(path.to_path_buf()));
     }
 
-    print_removed(options, path);
+    print_removed(options, path)?;
     Ok(())
 }
 
@@ -179,8 +180,7 @@ fn confirm_removal(
 }
 
 fn ask_confirmation(message: &str) -> io::Result<bool> {
-    print!("{message}");
-    io::stdout().flush()?;
+    render::stdout(message)?;
 
     let mut answer = String::new();
     io::stdin().read_line(&mut answer)?;
@@ -188,26 +188,23 @@ fn ask_confirmation(message: &str) -> io::Result<bool> {
     Ok(matches!(answer.trim(), "y" | "Y" | "yes" | "YES"))
 }
 
-fn print_removed(options: &RmOptions, path: &Path) {
+fn print_removed(options: &RmOptions, path: &Path) -> Result<(), RmError> {
     if options.verbose {
-        println!("removed '{}'", path.display());
+        render::stdout_line(format_args!("removed '{}'", path.display())).map_err(|source| {
+            RmError::DeleteFailed {
+                path: path.to_path_buf(),
+                source,
+            }
+        })?;
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn test_path(name: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time should be after Unix epoch")
-            .as_nanos();
-
-        env::temp_dir().join(format!("terminal-rust-rm-{name}-{unique}"))
-    }
+    use crate::utils::path::temp_path;
 
     fn confirm_yes(_message: &str) -> io::Result<bool> {
         Ok(true)
@@ -219,7 +216,7 @@ mod tests {
 
     #[test]
     fn rm_removes_file() {
-        let path = test_path("file");
+        let path = temp_path("rm", "file");
         fs::write(&path, "hello").expect("test file should be written");
 
         rm(&[path.to_string_lossy().into_owned()]).expect("rm should remove file");
@@ -236,7 +233,7 @@ mod tests {
 
     #[test]
     fn rm_rejects_directory_without_option() {
-        let path = test_path("directory");
+        let path = temp_path("rm", "directory");
         fs::create_dir(&path).expect("test directory should be created");
 
         let error = rm(&[path.to_string_lossy().into_owned()])
@@ -249,7 +246,7 @@ mod tests {
 
     #[test]
     fn rm_removes_empty_directory_with_dir_option() {
-        let path = test_path("empty-dir");
+        let path = temp_path("rm", "empty-dir");
         fs::create_dir(&path).expect("test directory should be created");
 
         rm(&["-d".to_string(), path.to_string_lossy().into_owned()])
@@ -260,7 +257,7 @@ mod tests {
 
     #[test]
     fn rm_recursive_asks_confirmation() {
-        let path = test_path("recursive");
+        let path = temp_path("rm", "recursive");
         fs::create_dir(&path).expect("test directory should be created");
         fs::write(path.join("file.txt"), "hello").expect("test file should be written");
 
@@ -269,7 +266,7 @@ mod tests {
             ..RmOptions::default()
         };
 
-        remove_targets(&options, &[path.clone()], confirm_yes)
+        remove_targets(&options, std::slice::from_ref(&path), confirm_yes)
             .expect("recursive rm should remove directory after confirmation");
 
         assert!(!path.exists());
@@ -277,7 +274,7 @@ mod tests {
 
     #[test]
     fn rm_recursive_stops_when_confirmation_is_rejected() {
-        let path = test_path("recursive-no");
+        let path = temp_path("rm", "recursive-no");
         fs::create_dir(&path).expect("test directory should be created");
         fs::write(path.join("file.txt"), "hello").expect("test file should be written");
 
@@ -286,7 +283,7 @@ mod tests {
             ..RmOptions::default()
         };
 
-        remove_targets(&options, &[path.clone()], confirm_no)
+        remove_targets(&options, std::slice::from_ref(&path), confirm_no)
             .expect("rejected confirmation should not be an error");
 
         assert!(path.exists());

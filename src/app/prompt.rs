@@ -1,5 +1,7 @@
 use std::env;
-use std::io::{self, Write};
+use std::io;
+
+use crate::render;
 
 pub fn prompt() -> io::Result<String> {
     let current_dir = env::current_dir()?;
@@ -7,6 +9,5 @@ pub fn prompt() -> io::Result<String> {
 }
 
 pub fn print_prompt() -> io::Result<()> {
-    print!("{}", prompt()?);
-    io::stdout().flush()
+    render::stdout(prompt()?)
 }

@@ -2,6 +2,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use crate::errors::cd::CdError;
+use crate::utils::path::{expand_home, trimmed_arg};
 
 pub fn cd(target: Option<&str>, previous_dir: Option<&Path>) -> Result<PathBuf, CdError> {
     let current_dir = env::current_dir().map_err(CdError::CurrentDirectoryUnavailable)?;
@@ -18,24 +19,13 @@ pub fn cd(target: Option<&str>, previous_dir: Option<&Path>) -> Result<PathBuf, 
 }
 
 fn resolve_target(target: Option<&str>, previous_dir: Option<&Path>) -> Result<PathBuf, CdError> {
-    match target.map(str::trim).filter(|target| !target.is_empty()) {
+    match trimmed_arg(target) {
         Some("-") => previous_dir
             .map(Path::to_path_buf)
             .ok_or(CdError::PreviousDirectoryNotFound),
-        Some("~") => home_directory().ok_or(CdError::HomeDirectoryNotFound),
-        Some(path) if path.starts_with("~/") || path.starts_with("~\\") => {
-            let home = home_directory().ok_or(CdError::HomeDirectoryNotFound)?;
-            Ok(home.join(&path[2..]))
-        }
-        Some(path) => Ok(PathBuf::from(path)),
-        None => home_directory().ok_or(CdError::HomeDirectoryNotFound),
+        Some(path) => expand_home(path).ok_or(CdError::HomeDirectoryNotFound),
+        None => expand_home("~").ok_or(CdError::HomeDirectoryNotFound),
     }
-}
-
-fn home_directory() -> Option<PathBuf> {
-    env::var_os("HOME")
-        .map(PathBuf::from)
-        .or_else(|| env::var_os("USERPROFILE").map(PathBuf::from))
 }
 
 #[cfg(test)]

@@ -1,7 +1,8 @@
 use std::env;
 
+use crate::render;
+
 pub fn pwd() -> std::io::Result<()> {
     let path = env::current_dir()?;
-    println!("{}", path.display());
-    Ok(())
+    render::stdout_line(path.display())
 }
