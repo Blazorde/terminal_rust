@@ -1,0 +1,55 @@
+name: Branch policy
+
+on:
+  create:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-branch-name:
+    name: Required branch name gate
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'branch' || startsWith(github.ref, 'refs/heads/')
+
+    steps:
+      - name: Checkout trusted policy files
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Enforce branch naming convention
+        shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+
+          branch="${REF_NAME}"
+          echo "Branch: ${branch}"
+          echo "Actor: ${ACTOR}"
+
+          if grep -Eiq "^[[:space:]]*${ACTOR}[[:space:]]*$" .github/bypass-owners.txt; then
+            echo "Actor ${ACTOR} is listed in .github/bypass-owners.txt; branch policy gate is bypassed."
+            exit 0
+          fi
+
+          allowed_work_branch_regex='^(feat|fix|chore|refractor|hotfix)/[a-z0-9][a-z0-9._-]*$'
+
+          case "${branch}" in
+            main|develop)
+              exit 0
+              ;;
+          esac
+
+          if [[ "${branch}" =~ ${allowed_work_branch_regex} ]]; then
+            exit 0
+          fi
+
+          echo "::error::Invalid branch name '${branch}'. Use feat/name, fix/name, chore/name, refractor/name, or hotfix/name."
+          exit 1

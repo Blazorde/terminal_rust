@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+      - "feat/**"
+      - "fix/**"
+      - "chore/**"
+      - "refractor/**"
+      - "hotfix/**"
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check compilation
+        run: cargo check --all-targets --all-features
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run unit tests
+        run: cargo test --all-targets --all-features
+
+  required-ci:
+    name: Required CI gate
+    runs-on: ubuntu-latest
+    needs:
+      - rust
+    if: always()
+
+    steps:
+      - name: Require all Rust checks
+        shell: bash
+        env:
+          RUST_RESULT: ${{ needs.rust.result }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${RUST_RESULT}" != "success" ]]; then
+            echo "::error::Required Rust checks did not all pass. Result: ${RUST_RESULT}"
+            exit 1
+          fi
+
+          echo "All required Rust checks passed."
