@@ -3,8 +3,8 @@
 ## Pyramide actuelle
 
 Le projet privilégie des tests unitaires rapides au plus près des modules. Les
-tests d'intégration CLI seront ajoutés dans `tests/` lorsque les comportements de
-sortie seront assez stables.
+tests d'intégration dans `tests/cli_tests.rs` lancent aussi le binaire comme un
+utilisateur pour vérifier ses sorties et ses codes de retour.
 
 ## Suite locale
 
@@ -16,6 +16,11 @@ cargo check --all-targets --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
+
+`cargo test` compile le binaire puis exécute les tests unitaires et les tests
+d'intégration CLI. Ces derniers utilisent des dossiers temporaires uniques,
+notamment avec des espaces dans leur nom, et ne dépendent pas du dossier
+personnel de l'utilisateur.
 
 ## Cas à couvrir
 
@@ -50,8 +55,21 @@ mais les branches « outil absent » et « parsing de sortie » doivent rester
 testables sans Git. Les dossiers temporaires doivent être uniques et supprimés à
 la fin du test.
 
+## Tests CLI
+
+La suite d'intégration vérifie actuellement :
+
+- `terminal_rust pwd` et son dossier de travail ;
+- `terminal_rust ls` avec un fichier et un dossier de test ;
+- une commande inconnue, sa sortie d'erreur et son code de retour ;
+- une commande sans argument obligatoire, sa sortie d'erreur et son code de
+  retour.
+
+Les assertions tolèrent les différences de fins de ligne entre plateformes et
+comparent les chemins après résolution par la bibliothèque standard Rust.
+
 ## CI
 
-La CI actuelle couvre Ubuntu et Windows. Une matrice macOS doit être ajoutée
-avant de déclarer le moteur de prompt complet multiplateforme. Un échec sur une
-plateforme bloque la fusion.
+La CI couvre Ubuntu, Windows et macOS. Chaque système exécute le formatage, la
+compilation, Clippy, les tests unitaires et les tests d'intégration CLI. Un
+échec sur une plateforme bloque la fusion.

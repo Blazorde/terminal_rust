@@ -47,7 +47,9 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
 
-The CI runs on Ubuntu and Windows.
+The CI runs on Ubuntu, Windows, and macOS. The test command includes the
+integration suite in `tests/cli_tests.rs`, which launches the compiled binary
+and verifies stdout, stderr, and exit codes.
 
 ### PR policy
 
@@ -184,4 +186,5 @@ CI / Required CI gate
 PR policy / Required PR policy gate
 ```
 
-The CI gate depends on every Rust matrix job. If Ubuntu or Windows fails, the gate fails too.
+The CI gate depends on every Rust matrix job. If Ubuntu, Windows, or macOS
+fails, the gate fails too.
