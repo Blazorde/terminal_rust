@@ -1,5 +1,16 @@
 # Dépannage
 
+## Le script d'installation échoue
+
+- Relancer sans droits administrateur dans un terminal standard.
+- Vérifier l'accès à `github.com` et l'espace disponible dans le dossier
+  temporaire.
+- Sous Linux ou macOS, installer `curl` ou `wget`, puis `sha256sum` ou `shasum`.
+- Sous Windows, utiliser `-NoPathUpdate` si une politique interdit la modification
+  du `PATH` utilisateur.
+- Utiliser l'installation manuelle de `docs/install.md` si l'exécution des
+  scripts est interdite par la politique de la machine.
+
 ## La commande est introuvable
 
 - Vérifier que le dossier contenant le binaire figure dans le `PATH`.

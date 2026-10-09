@@ -2,7 +2,56 @@
 
 Les versions prêtes à l'emploi sont publiées sur la
 [page Releases](https://github.com/Blazorde/terminal_rust/releases/latest).
-Cette installation est manuelle : aucun script ne modifie encore le système.
+Le guide commence par les scripts utilisateur, puis détaille une méthode
+entièrement manuelle pour chaque système.
+
+## Installation automatisée
+
+Cloner le dépôt ou télécharger les scripts depuis une version de confiance,
+puis les lire avant exécution. Les deux scripts téléchargent l'archive officielle
+et `SHA256SUMS.txt`, vérifient l'intégrité, installent sans droits administrateur
+et lancent `terminal_rust help` comme contrôle final.
+
+Sous Windows :
+
+```powershell
+.\scripts\install.ps1
+```
+
+Le dossier par défaut est `%LOCALAPPDATA%\Programs\TerminalRust`. Le script
+l'ajoute au `PATH` utilisateur sans modifier le `PATH` système. Pour conserver
+le `PATH` inchangé ou choisir une version précise :
+
+```powershell
+.\scripts\install.ps1 -NoPathUpdate -Version v0.2.0
+```
+
+Sous Linux x86_64 ou macOS Apple Silicon :
+
+```bash
+chmod +x scripts/install.sh
+./scripts/install.sh
+```
+
+Le dossier par défaut est `~/.local/bin`. Le script ne modifie pas les fichiers
+du shell : si ce dossier manque dans le `PATH`, il affiche la ligne à ajouter.
+Une version et un dossier différents peuvent être fournis sans arguments
+spécifiques au shell :
+
+```bash
+TERMINAL_RUST_VERSION=v0.2.0 \
+TERMINAL_RUST_INSTALL_DIR="$HOME/bin" \
+./scripts/install.sh
+```
+
+Les sections suivantes restent la solution de repli lorsque les scripts sont
+bloqués ou lorsqu'une plateforme n'a pas encore d'archive.
+
+Pour un dépôt GitHub privé, définir temporairement `GITHUB_TOKEN` avec un jeton
+ayant un accès en lecture au dépôt. Le script Unix utilise alors GitHub CLI
+(`gh`), qui doit être installé ; le script PowerShell utilise directement l'API
+GitHub. Ne jamais écrire ce jeton dans le script ni le committer. Aucune
+authentification n'est nécessaire lorsque le dépôt et ses releases sont publics.
 
 ## Choisir le bon fichier
 

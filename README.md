@@ -56,6 +56,19 @@ Le [guide d'installation détaillé](docs/install.md) explique le fichier à
 choisir, les permissions, le `PATH` et le lancement sous chaque système. En cas
 de problème, consulter le [guide de dépannage](docs/troubleshooting.md).
 
+Les installateurs vérifient la somme SHA-256 avant de remplacer le binaire :
+
+```powershell
+.\scripts\install.ps1
+```
+
+```bash
+./scripts/install.sh
+```
+
+Lire le script avant de l'exécuter et utiliser l'installation manuelle si une
+politique locale bloque son exécution.
+
 ### Compiler depuis les sources
 
 Prérequis:
