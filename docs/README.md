@@ -12,6 +12,8 @@ vivent ici.
 | Concevoir le futur prompt | [Moteur de prompt](architecture/prompt-engine.md) |
 | Vérifier la portabilité | [Compatibilité multiplateforme](architecture/cross-platform.md) |
 | Comprendre une décision | [Registre des ADR](decisions/README.md) |
+| Personnaliser le prompt | [Personnalisation](customization.md) |
+| Créer un thème | [Format des thèmes](themes.md) |
 | Contribuer | [Guide de contribution](development/contributing.md) |
 | Tester une évolution | [Stratégie de tests](development/testing.md) |
 | Valider le MVP | [Checklist qualité MVP](development/mvp-quality-checklist.md) |

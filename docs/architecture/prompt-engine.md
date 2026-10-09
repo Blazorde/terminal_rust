@@ -1,6 +1,7 @@
 # Moteur de prompt
 
-Statut : première version implémentée, configuration et thèmes à venir.
+Statut : première version implémentée, contrat de configuration défini, chargement
+et thèmes dynamiques à venir.
 
 ## Objectif
 
@@ -52,29 +53,33 @@ froid. Le cache évite de répéter ce coût lors de rendus rapprochés tout en
 bornant l'obsolescence à 250 ms. Les tests injectent le temps et le fournisseur
 de données afin de vérifier le TTL sans attente réelle.
 
-## Configuration future
+## Contrat de configuration
 
-Une configuration TOML pourra définir l'ordre et le style sans permettre
-l'exécution arbitraire de commandes :
+La [spécification de personnalisation](../customization.md) sépare désormais la
+sélection des segments de leur apparence. Le fichier utilisateur choisira le
+thème, l'ordre et les options fonctionnelles ; le thème décrira uniquement le
+rendu. Aucun des deux formats ne permet l'exécution arbitraire de commandes.
+
+Exemple :
 
 ```toml
-[[segments]]
-type = "path"
-
-[[segments]]
-type = "git"
-show_status = true
+version = 1
+theme = "default"
 
 [prompt]
-symbol = ">"
 icons = "auto"
+segments = ["path", "git", "symbol"]
 ```
+
+Les exemples canoniques sont `config/default.toml` et
+`config/themes/default.toml`. Le chargement est volontairement reporté aux
+tickets d'implémentation suivants.
 
 ## Étapes recommandées
 
 1. Extraire un trait ou un enum de segments à partir du prototype actuel.
-2. Ajouter un thème intégré et un repli sans couleur.
-3. Charger une configuration TOML validée.
+2. Ajouter un renderer ANSI et son repli texte.
+3. Charger et valider la configuration TOML versionnée.
 4. Ajouter une limite de durée aux commandes externes.
 
 Chaque étape doit rester fusionnable et testable seule. L'ADR-0003 fixe la
