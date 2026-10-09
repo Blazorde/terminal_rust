@@ -1,6 +1,7 @@
 mod app;
 mod commands;
 mod errors;
+pub mod git;
 mod render;
 mod utils;
 

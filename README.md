@@ -11,6 +11,7 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 - [Lancement](#lancement)
 - [Commandes disponibles](#commandes-disponibles)
 - [Historique interactif](#historique-interactif)
+- [Détection Git](#détection-git)
 - [Options de `ls`](#options-de-ls)
 - [Options de `rm`](#options-de-rm)
 - [Architecture](#architecture)
@@ -29,6 +30,7 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 - Parsing des arguments avec support des guillemets.
 - Commande `ls` avec plusieurs options proches de Linux.
 - Commande `rm` avec options et confirmation sur les suppressions dangereuses.
+- Détection silencieuse du contexte Git, prête pour les futurs segments du prompt.
 - Tests unitaires sur les comportements importants.
 - GitHub Actions pour vérifier le formatage, la compilation, Clippy et les tests.
 
@@ -134,6 +136,20 @@ Si le fichier n'existe pas encore, il sera créé à la fermeture normale du she
 Une erreur de lecture ou d'écriture est affichée sans empêcher l'utilisation de
 l'historique en mémoire.
 
+## Détection Git
+
+Le module `src/git/` fournit la première brique du futur prompt enrichi. Il
+détermine si un dossier appartient à un dépôt Git avec :
+
+```text
+git -C <directory> rev-parse --is-inside-work-tree
+```
+
+Cette détection est volontairement non bloquante : un dossier hors dépôt, un
+chemin invalide ou l'absence de Git retournent simplement `false`. Aucun message
+d'erreur Git n'est affiché et le shell reste utilisable sur macOS, Linux et
+Windows.
+
 ## Options de `ls`
 
 La commande `ls` accepte plusieurs options courtes combinables:
@@ -225,6 +241,8 @@ src/
       item.rs
       options.rs
       sort.rs
+  git/
+    mod.rs
   errors/
     cd.rs
     command.rs
