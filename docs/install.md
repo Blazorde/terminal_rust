@@ -1,5 +1,9 @@
 # Installer Terminal Rust
 
+Ce guide concerne l'installation d'une version publiée. Pour modifier le code,
+consulter plutôt la section [Développement du README](../README.md#développement)
+et le [guide de contribution](development/contributing.md).
+
 Les versions prêtes à l'emploi sont publiées sur la
 [page Releases](https://github.com/Blazorde/terminal_rust/releases/latest).
 Le guide commence par les scripts utilisateur, puis détaille une méthode
