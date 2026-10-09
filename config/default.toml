@@ -1,0 +1,17 @@
+version = 1
+theme = "default"
+
+[prompt]
+segments = ["path", "git", "symbol"]
+icons = "auto"
+separator = "  "
+newline = false
+
+[segments.path]
+style = "full"
+
+[segments.git]
+show_status = true
+
+[segments.symbol]
+value = ">"

@@ -11,6 +11,8 @@ and macOS.
 
 ### Added
 
+- Defined the versioned prompt customization and theme contracts with default
+  TOML examples and icon-free fallbacks.
 - Verified user-level installers for Windows x86_64, Linux x86_64, and macOS
   Apple Silicon, with authenticated private-release support.
 
