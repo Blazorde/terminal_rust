@@ -37,8 +37,9 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 - Détection silencieuse du contexte Git, prête pour les futurs segments du prompt.
 - Dashboard système intégré avec CPU, mémoire, stockage, réseau et contexte Git.
 - Preset Fastfetch portable et personnalisable.
-- Tests unitaires sur les comportements importants.
-- GitHub Actions pour vérifier le formatage, la compilation, Clippy et les tests.
+- Tests unitaires et tests d'intégration qui lancent le vrai binaire.
+- GitHub Actions sous Ubuntu, Windows et macOS pour vérifier le formatage, la
+  compilation, Clippy et les tests.
 
 ## Installation
 
@@ -412,7 +413,9 @@ Les tests couvrent notamment:
 - `ls`;
 - `mkdir`;
 - `touch`;
-- `rm`.
+- `rm` ;
+- l'exécution CLI réelle de `pwd` et `ls` ;
+- les sorties d'erreur et codes de retour des commandes invalides.
 
 ## Workflows GitHub
 
