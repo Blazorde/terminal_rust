@@ -20,6 +20,13 @@ pub fn stderr_line(message: impl fmt::Display) -> io::Result<()> {
     with_stderr(|writer| write_line(writer, message))
 }
 
+pub fn stderr(message: impl fmt::Display) -> io::Result<()> {
+    with_stderr(|writer| {
+        write_text(writer, message)?;
+        writer.flush()
+    })
+}
+
 pub fn write_text(writer: &mut impl Write, message: impl fmt::Display) -> io::Result<()> {
     write!(writer, "{message}")
 }

@@ -30,7 +30,7 @@ flowchart LR
 | `app/prompt.rs` | Construction et affichage du prompt | Un client Git monolithique |
 | `commands/` | Comportement des commandes internes | Du code d'interface interactive |
 | `errors/` | Erreurs métier affichables | Des effets de bord |
-| `git/` | Détection et futur contexte Git | Un wrapper de toutes les commandes Git |
+| `git/` | Détection, contexte Git et raccourcis en lecture seule | Un passthrough Git sans liste blanche |
 | `render/` | Sorties standard et erreurs | De la logique métier |
 | `utils/` | Helpers génériques et limités | Un dossier fourre-tout |
 

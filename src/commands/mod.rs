@@ -2,6 +2,7 @@ pub mod cat;
 pub mod cd;
 pub mod clear;
 pub mod dashboard;
+pub mod git_command;
 pub mod ls;
 pub mod mkdir;
 pub mod pwd;
