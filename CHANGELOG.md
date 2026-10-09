@@ -16,6 +16,8 @@ and macOS.
 
 ### Improved
 
+- Added end-to-end CLI coverage and a reproducible MVP quality checklist for
+  public commands and terminal fallbacks.
 - Added copyable onboarding, a supported-platform matrix, and the complete
   contributor validation workflow to the README.
 - Added installer syntax validation to the cross-platform CI matrix.
