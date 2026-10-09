@@ -1,0 +1,83 @@
+name: Release builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build release (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Smoke test release binary
+        if: runner.os != 'Windows'
+        run: ./target/release/terminal_rust help
+
+      - name: Smoke test release binary on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\target\release\terminal_rust.exe help
+
+      - name: Package Linux binary
+        if: runner.os == 'Linux'
+        shell: bash
+        run: tar -czf "terminal_rust-linux-${{ runner.arch }}.tar.gz" -C target/release terminal_rust
+
+      - name: Package macOS binary
+        if: runner.os == 'macOS'
+        shell: bash
+        run: tar -czf "terminal_rust-macos-${{ runner.arch }}.tar.gz" -C target/release terminal_rust
+
+      - name: Package Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -LiteralPath target\release\terminal_rust.exe -DestinationPath "terminal_rust-windows-${{ runner.arch }}.zip"
+
+      - name: Upload Linux artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terminal_rust-linux-${{ runner.arch }}
+          path: terminal_rust-linux-${{ runner.arch }}.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload macOS artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terminal_rust-macos-${{ runner.arch }}
+          path: terminal_rust-macos-${{ runner.arch }}.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Windows artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terminal_rust-windows-${{ runner.arch }}
+          path: terminal_rust-windows-${{ runner.arch }}.zip
+          if-no-files-found: error
+          retention-days: 14

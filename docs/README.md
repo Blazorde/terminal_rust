@@ -14,6 +14,7 @@ vivent ici.
 | Comprendre une décision | [Registre des ADR](decisions/README.md) |
 | Contribuer | [Guide de contribution](development/contributing.md) |
 | Tester une évolution | [Stratégie de tests](development/testing.md) |
+| Produire un binaire | [Builds de distribution](release.md) |
 | Traiter un ticket | [Workflow des agents](agents/ticket-workflow.md) |
 | Configurer GitHub | [Workflows et protections](workflows/README.md) |
 

@@ -23,6 +23,7 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 - [Développement](#développement)
 - [Tests et qualité](#tests-et-qualité)
 - [Workflows GitHub](#workflows-github)
+- [Builds de distribution](#builds-de-distribution)
 - [Roadmap](#roadmap)
 - [Licence](#licence)
 
@@ -445,6 +446,16 @@ Les comptes autorisés à bypass sont listés ici:
 Documentation complète:
 
 [Lire la documentation des workflows](docs/workflows/README.md)
+
+## Builds de distribution
+
+Le workflow **Release builds** produit des archives téléchargeables contenant
+le binaire optimisé pour Windows, Linux et macOS. Il peut être lancé
+manuellement dans GitHub Actions et s'exécute aussi pour les tags `v*.*.*`.
+
+Chaque archive est nommée avec son système et l'architecture du runner. Le
+guide de téléchargement et de validation se trouve dans
+[docs/release.md](docs/release.md).
 
 ## Roadmap
 
