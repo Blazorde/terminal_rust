@@ -60,8 +60,9 @@ and macOS. It packages each binary into a system- and architecture-specific
 archive, then uploads that archive as a GitHub Actions artifact for 14 days.
 
 It runs manually through `workflow_dispatch` and automatically for version tags
-matching `v*.*.*`. It does not create a GitHub Release; publication remains a
-separate reviewed step.
+matching `v*.*.*`. A tag run waits for every build, extracts the matching notes
+from `CHANGELOG.md`, generates `SHA256SUMS.txt`, and publishes a GitHub Release
+with all three archives. Manual runs never publish a release.
 
 ### PR policy
 
