@@ -10,13 +10,20 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 - [Installation](#installation)
 - [Lancement](#lancement)
 - [Commandes disponibles](#commandes-disponibles)
+- [Historique interactif](#historique-interactif)
+- [Détection Git](#détection-git)
+- [Commandes Git développeur](#commandes-git-développeur)
+- [Dashboard système](#dashboard-système)
+- [Preset Fastfetch](#preset-fastfetch)
 - [Options de `ls`](#options-de-ls)
 - [Options de `rm`](#options-de-rm)
 - [Architecture](#architecture)
+- [Documentation technique](#documentation-technique)
 - [Gestion des erreurs](#gestion-des-erreurs)
 - [Développement](#développement)
 - [Tests et qualité](#tests-et-qualité)
 - [Workflows GitHub](#workflows-github)
+- [Builds de distribution](#builds-de-distribution)
 - [Roadmap](#roadmap)
 - [Licence](#licence)
 
@@ -28,10 +35,24 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 - Parsing des arguments avec support des guillemets.
 - Commande `ls` avec plusieurs options proches de Linux.
 - Commande `rm` avec options et confirmation sur les suppressions dangereuses.
-- Tests unitaires sur les comportements importants.
-- GitHub Actions pour vérifier le formatage, la compilation, Clippy et les tests.
+- Détection silencieuse du contexte Git, prête pour les futurs segments du prompt.
+- Dashboard système intégré avec CPU, mémoire, stockage, réseau et contexte Git.
+- Preset Fastfetch portable et personnalisable.
+- Tests unitaires et tests d'intégration qui lancent le vrai binaire.
+- GitHub Actions sous Ubuntu, Windows et macOS pour vérifier le formatage, la
+  compilation, Clippy et les tests.
 
 ## Installation
+
+### Télécharger une version prête à l'emploi
+
+Les archives Windows, Linux et macOS sont disponibles dans la
+[dernière GitHub Release](https://github.com/Blazorde/terminal_rust/releases/latest).
+Télécharger l'archive correspondant au système, l'extraire, puis lancer
+`terminal_rust help` (`terminal_rust.exe help` sous Windows). Le fichier
+`SHA256SUMS.txt` permet de vérifier l'intégrité des téléchargements.
+
+### Compiler depuis les sources
 
 Prérequis:
 
@@ -48,7 +69,7 @@ cargo --version
 Cloner le projet:
 
 ```bash
-git clone https://github.com/TON_USER/terminal_rust.git
+git clone https://github.com/Blazorde/terminal_rust.git
 cd terminal_rust
 ```
 
@@ -91,6 +112,9 @@ Sur Windows, le binaire release se trouve ici:
 | `touch [file]` | Crée un fichier vide ou garde le fichier existant |
 | `cat [file]` | Affiche le contenu d'un fichier |
 | `rm [options] [path...]` | Supprime des fichiers ou dossiers selon les options |
+| `clear` | Efface l'écran d'un terminal compatible ANSI |
+| `dashboard` | Affiche un tableau de bord système et performance |
+| `git <status\|branch\|log> [options]` | Lance un raccourci Git autorisé dans le dossier courant |
 | `help` | Affiche l'aide |
 | `exit` | Ferme le shell |
 | `quit` | Ferme le shell |
@@ -107,8 +131,100 @@ touch test/file.txt
 cat test/file.txt
 rm -i test/file.txt
 rm -r test
+clear
+dashboard
+git status --short --branch
+git branch --all
+git log --oneline -10
 exit
 ```
+
+## Historique interactif
+
+En mode interactif, les commandes non vides sont ajoutées à l'historique de
+`rustyline` et restent accessibles avec les flèches haut et bas pendant toute la
+session.
+
+Par défaut, cet historique reste uniquement en mémoire. Pour le conserver entre
+deux lancements, définir la variable `TERMINAL_RUST_HISTORY_FILE` avec le chemin
+du fichier à utiliser. Le dossier parent doit déjà exister.
+
+Sous PowerShell, par exemple:
+
+```powershell
+$env:TERMINAL_RUST_HISTORY_FILE = "$HOME\.terminal_rust_history"
+cargo run
+```
+
+Si le fichier n'existe pas encore, il sera créé à la fermeture normale du shell.
+Une erreur de lecture ou d'écriture est affichée sans empêcher l'utilisation de
+l'historique en mémoire.
+
+## Détection Git
+
+Le module `src/git/` fournit la première brique du futur prompt enrichi. Il
+détermine si un dossier appartient à un dépôt Git avec :
+
+```text
+git -C <directory> rev-parse --is-inside-work-tree
+```
+
+Cette détection est volontairement non bloquante : un dossier hors dépôt, un
+chemin invalide ou l'absence de Git retournent simplement `false`. Aucun message
+d'erreur Git n'est affiché et le shell reste utilisable sur macOS, Linux et
+Windows.
+
+## Commandes Git développeur
+
+Le shell expose un sous-ensemble volontairement limité de Git : `status`,
+`branch` et `log`. Les options de consultation sont transmises à Git, tandis
+que les commandes et arguments qui modifient un dépôt, comme `push`, `reset`,
+`clean`, `branch -d` ou la création d'une branche, sont refusés.
+
+```bash
+git status --short --branch
+git branch --all
+git log --oneline --decorate -10
+```
+
+La sortie standard, la sortie d'erreur et le code de sortie de Git sont
+conservés. Si Git n'est pas installé, le mini-shell affiche une erreur claire
+sans s'arrêter. Le lancement utilise `git -C <dossier>` et reste identique sur
+Windows, macOS et Linux.
+
+## Dashboard système
+
+La commande `dashboard` affiche directement dans le shell :
+
+- système, noyau, machine et uptime ;
+- modèle, charge et nombre de cœurs CPU ;
+- mémoire, swap et nombre de processus ;
+- utilisation du disque courant ;
+- volumes réseau reçus et envoyés ;
+- dossier courant et présence d'un dépôt Git.
+
+```bash
+cargo run -- dashboard
+```
+
+Le rendu utilise des couleurs et des bordures Unicode dans un terminal
+interactif. Si la sortie est redirigée, si `TERM=dumb` ou si `NO_COLOR` est
+défini, il passe automatiquement en ASCII sans couleur.
+
+## Preset Fastfetch
+
+Une configuration Fastfetch complémentaire est fournie dans
+[`config/fastfetch/config.jsonc`](config/fastfetch/config.jsonc). Elle fonctionne
+sans Nerd Font et regroupe les informations système importantes avec un thème
+cyan, vert, jaune et magenta.
+
+```bash
+fastfetch --config config/fastfetch/config.jsonc
+```
+
+Fastfetch reste optionnel : il n'est ni installé ni requis par Terminal Rust.
+Le guide de personnalisation se trouve dans
+[`config/fastfetch/README.md`](config/fastfetch/README.md).
 
 ## Options de `ls`
 
@@ -190,6 +306,8 @@ src/
     runner.rs
   commands/
     cd.rs
+    clear.rs
+    dashboard.rs
     mkdir.rs
     pwd.rs
     rm.rs
@@ -200,6 +318,8 @@ src/
       item.rs
       options.rs
       sort.rs
+  git/
+    mod.rs
   errors/
     cd.rs
     command.rs
@@ -219,6 +339,20 @@ Rôle des dossiers principaux:
 | `errors/` | Types d'erreurs séparés par commande |
 
 Le fichier `src/app/command.rs` utilise une table de commandes. Cela évite un énorme `match` qui grossit à chaque nouvelle commande.
+
+## Documentation technique
+
+La documentation détaillée est indexée dans [`docs/README.md`](docs/README.md).
+Elle couvre notamment :
+
+- l'architecture actuelle et l'architecture cible ;
+- la compatibilité Windows, macOS et Linux ;
+- le futur moteur de prompt à segments inspiré d'Oh My Posh ;
+- les décisions d'architecture (ADR) ;
+- les règles de contribution, de tests et de traitement des tickets.
+
+Les règles destinées aux contributeurs automatisés se trouvent dans
+[`AGENTS.md`](AGENTS.md).
 
 ## Gestion des erreurs
 
@@ -290,7 +424,9 @@ Les tests couvrent notamment:
 - `ls`;
 - `mkdir`;
 - `touch`;
-- `rm`.
+- `rm` ;
+- l'exécution CLI réelle de `pwd` et `ls` ;
+- les sorties d'erreur et codes de retour des commandes invalides.
 
 ## Workflows GitHub
 
@@ -321,6 +457,16 @@ Documentation complète:
 
 [Lire la documentation des workflows](docs/workflows/README.md)
 
+## Builds de distribution
+
+Le workflow **Release builds** produit des archives téléchargeables contenant
+le binaire optimisé pour Windows, Linux et macOS. Il peut être lancé
+manuellement dans GitHub Actions et s'exécute aussi pour les tags `v*.*.*`.
+
+Chaque archive est nommée avec son système et l'architecture du runner. Le
+guide de téléchargement et de validation se trouve dans
+[docs/release.md](docs/release.md).
+
 ## Roadmap
 
 Idées de commandes ou fonctionnalités à ajouter plus tard:
@@ -328,7 +474,6 @@ Idées de commandes ou fonctionnalités à ajouter plus tard:
 - `cp`
 - `mv`
 - `echo`
-- `clear`
 - `history`
 - variables d'environnement
 - alias

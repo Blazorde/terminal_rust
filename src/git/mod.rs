@@ -1,0 +1,303 @@
+use std::ffi::OsStr;
+use std::fmt;
+use std::io;
+use std::path::Path;
+use std::process::{Command, Stdio};
+
+const DEVELOPER_SUBCOMMANDS: [&str; 3] = ["status", "branch", "log"];
+
+pub struct GitCommandOutput {
+    pub stdout: String,
+    pub stderr: String,
+    pub status_code: Option<i32>,
+    pub success: bool,
+}
+
+#[derive(Debug)]
+pub enum GitCommandError {
+    MissingSubcommand,
+    UnsupportedSubcommand(String),
+    UnsafeArgument(String),
+    GitUnavailable(io::Error),
+    CurrentDirectory(io::Error),
+    Output(io::Error),
+    CommandFailed(Option<i32>),
+}
+
+impl fmt::Display for GitCommandError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingSubcommand => write!(
+                formatter,
+                "git: missing subcommand (supported: {})",
+                DEVELOPER_SUBCOMMANDS.join(", ")
+            ),
+            Self::UnsupportedSubcommand(subcommand) => write!(
+                formatter,
+                "git: unsupported subcommand '{subcommand}' (supported: {})",
+                DEVELOPER_SUBCOMMANDS.join(", ")
+            ),
+            Self::UnsafeArgument(argument) => {
+                write!(
+                    formatter,
+                    "git: argument '{argument}' is not allowed in read-only mode"
+                )
+            }
+            Self::GitUnavailable(error) => {
+                write!(formatter, "git: executable unavailable: {error}")
+            }
+            Self::CurrentDirectory(error) => {
+                write!(formatter, "git: unable to read current directory: {error}")
+            }
+            Self::Output(error) => write!(formatter, "git: unable to write output: {error}"),
+            Self::CommandFailed(Some(code)) => {
+                write!(formatter, "git: command failed with exit code {code}")
+            }
+            Self::CommandFailed(None) => write!(formatter, "git: command terminated by signal"),
+        }
+    }
+}
+
+impl std::error::Error for GitCommandError {}
+
+/// Returns whether `path` belongs to a non-bare Git working tree.
+///
+/// A missing Git executable, an invalid path, and a directory outside a
+/// repository are all treated as `false` so Git detection never prevents the
+/// shell from starting.
+pub fn is_inside_work_tree(path: &Path) -> bool {
+    is_inside_work_tree_with_program(path, "git")
+}
+
+pub fn execute_developer_command(
+    path: &Path,
+    args: &[String],
+) -> Result<GitCommandOutput, GitCommandError> {
+    execute_developer_command_with_program(path, args, "git")
+}
+
+fn execute_developer_command_with_program(
+    path: &Path,
+    args: &[String],
+    program: impl AsRef<OsStr>,
+) -> Result<GitCommandOutput, GitCommandError> {
+    let Some(subcommand) = args.first() else {
+        return Err(GitCommandError::MissingSubcommand);
+    };
+
+    if !DEVELOPER_SUBCOMMANDS.contains(&subcommand.as_str()) {
+        return Err(GitCommandError::UnsupportedSubcommand(subcommand.clone()));
+    }
+    validate_read_only_args(subcommand, &args[1..])?;
+
+    let output = Command::new(program)
+        .arg("--no-pager")
+        .arg("-C")
+        .arg(path)
+        .args(args)
+        .output()
+        .map_err(GitCommandError::GitUnavailable)?;
+
+    Ok(GitCommandOutput {
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        status_code: output.status.code(),
+        success: output.status.success(),
+    })
+}
+
+fn validate_read_only_args(subcommand: &str, args: &[String]) -> Result<(), GitCommandError> {
+    match subcommand {
+        "branch" => {
+            const MUTATING_FLAGS: [&str; 12] = [
+                "-d",
+                "-D",
+                "-m",
+                "-M",
+                "-c",
+                "-C",
+                "--delete",
+                "--move",
+                "--copy",
+                "--edit-description",
+                "--set-upstream-to",
+                "--unset-upstream",
+            ];
+
+            if let Some(argument) = args.iter().find(|argument| {
+                !argument.starts_with('-')
+                    || MUTATING_FLAGS.iter().any(|flag| {
+                        argument.as_str() == *flag || argument.starts_with(&format!("{flag}="))
+                    })
+            }) {
+                return Err(GitCommandError::UnsafeArgument(argument.clone()));
+            }
+        }
+        "log" => {
+            if let Some(argument) = args.iter().find(|argument| {
+                argument.as_str() == "--output" || argument.starts_with("--output=")
+            }) {
+                return Err(GitCommandError::UnsafeArgument(argument.clone()));
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn is_inside_work_tree_with_program(path: &Path, program: impl AsRef<OsStr>) -> bool {
+    let output = Command::new(program)
+        .arg("-C")
+        .arg(path)
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .stderr(Stdio::null())
+        .output();
+
+    let Ok(output) = output else {
+        return false;
+    };
+
+    output.status.success() && output_means_inside(&output.stdout)
+}
+
+fn output_means_inside(stdout: &[u8]) -> bool {
+    std::str::from_utf8(stdout).is_ok_and(|output| output.trim() == "true")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    use crate::utils::path::temp_path;
+
+    #[test]
+    fn recognizes_git_inside_work_tree_output() {
+        assert!(output_means_inside(b"true\n"));
+        assert!(output_means_inside(b" true \r\n"));
+    }
+
+    #[test]
+    fn rejects_non_work_tree_output() {
+        assert!(!output_means_inside(b"false\n"));
+        assert!(!output_means_inside(b"unexpected\n"));
+        assert!(!output_means_inside(&[0xff]));
+    }
+
+    #[test]
+    fn missing_git_is_treated_as_outside_repository() {
+        let missing_program = temp_path("git", "missing-executable");
+
+        assert!(!is_inside_work_tree_with_program(
+            Path::new("."),
+            &missing_program
+        ));
+    }
+
+    #[test]
+    fn detects_an_initialized_repository_when_git_is_available() {
+        let directory = temp_path("git", "repository");
+        fs::create_dir(&directory).expect("test repository should be created");
+
+        let git_available = Command::new("git")
+            .arg("--version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success());
+
+        if git_available {
+            let initialized = Command::new("git")
+                .args(["init", "--quiet"])
+                .current_dir(&directory)
+                .status()
+                .expect("git should start");
+            assert!(initialized.success());
+            assert!(is_inside_work_tree(&directory));
+        }
+
+        fs::remove_dir_all(directory).expect("test repository should be removed");
+    }
+
+    #[test]
+    fn directory_outside_git_is_not_a_work_tree() {
+        let directory = temp_path("git", "outside");
+        fs::create_dir(&directory).expect("test directory should be created");
+
+        assert!(!is_inside_work_tree(&directory));
+
+        fs::remove_dir(directory).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn developer_command_requires_a_supported_subcommand() {
+        let missing = execute_developer_command(Path::new("."), &[]);
+        assert!(matches!(missing, Err(GitCommandError::MissingSubcommand)));
+
+        let unsupported = execute_developer_command(Path::new("."), &["push".to_string()]);
+        assert!(matches!(
+            unsupported,
+            Err(GitCommandError::UnsupportedSubcommand(subcommand)) if subcommand == "push"
+        ));
+    }
+
+    #[test]
+    fn developer_commands_reject_mutating_arguments() {
+        for args in [
+            ["branch", "new-branch"].as_slice(),
+            ["branch", "--delete"].as_slice(),
+            ["log", "--output=history.txt"].as_slice(),
+        ] {
+            let args: Vec<String> = args.iter().map(ToString::to_string).collect();
+            assert!(matches!(
+                execute_developer_command(Path::new("."), &args),
+                Err(GitCommandError::UnsafeArgument(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn developer_command_reports_a_missing_git_executable() {
+        let missing_program = temp_path("git", "missing-command-executable");
+        let result = execute_developer_command_with_program(
+            Path::new("."),
+            &["status".to_string()],
+            &missing_program,
+        );
+
+        assert!(matches!(result, Err(GitCommandError::GitUnavailable(_))));
+    }
+
+    #[test]
+    fn developer_status_runs_inside_an_initialized_repository() {
+        let directory = temp_path("git", "developer-command-repository");
+        fs::create_dir(&directory).expect("test repository should be created");
+
+        let git_available = Command::new("git")
+            .arg("--version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success());
+
+        if git_available {
+            let initialized = Command::new("git")
+                .args(["init", "--quiet"])
+                .current_dir(&directory)
+                .status()
+                .expect("git should start");
+            assert!(initialized.success());
+
+            let output = execute_developer_command(
+                &directory,
+                &["status".to_string(), "--short".to_string()],
+            )
+            .expect("git status should run");
+            assert!(output.success);
+            assert!(output.stderr.is_empty());
+        }
+
+        fs::remove_dir_all(directory).expect("test repository should be removed");
+    }
+}
