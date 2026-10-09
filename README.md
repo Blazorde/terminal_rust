@@ -12,6 +12,8 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 - [Commandes disponibles](#commandes-disponibles)
 - [Historique interactif](#historique-interactif)
 - [Détection Git](#détection-git)
+- [Dashboard système](#dashboard-système)
+- [Preset Fastfetch](#preset-fastfetch)
 - [Options de `ls`](#options-de-ls)
 - [Options de `rm`](#options-de-rm)
 - [Architecture](#architecture)
@@ -31,6 +33,8 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 - Commande `ls` avec plusieurs options proches de Linux.
 - Commande `rm` avec options et confirmation sur les suppressions dangereuses.
 - Détection silencieuse du contexte Git, prête pour les futurs segments du prompt.
+- Dashboard système intégré avec CPU, mémoire, stockage, réseau et contexte Git.
+- Preset Fastfetch portable et personnalisable.
 - Tests unitaires sur les comportements importants.
 - GitHub Actions pour vérifier le formatage, la compilation, Clippy et les tests.
 
@@ -95,6 +99,7 @@ Sur Windows, le binaire release se trouve ici:
 | `cat [file]` | Affiche le contenu d'un fichier |
 | `rm [options] [path...]` | Supprime des fichiers ou dossiers selon les options |
 | `clear` | Efface l'écran d'un terminal compatible ANSI |
+| `dashboard` | Affiche un tableau de bord système et performance |
 | `help` | Affiche l'aide |
 | `exit` | Ferme le shell |
 | `quit` | Ferme le shell |
@@ -112,6 +117,7 @@ cat test/file.txt
 rm -i test/file.txt
 rm -r test
 clear
+dashboard
 exit
 ```
 
@@ -149,6 +155,40 @@ Cette détection est volontairement non bloquante : un dossier hors dépôt, un
 chemin invalide ou l'absence de Git retournent simplement `false`. Aucun message
 d'erreur Git n'est affiché et le shell reste utilisable sur macOS, Linux et
 Windows.
+
+## Dashboard système
+
+La commande `dashboard` affiche directement dans le shell :
+
+- système, noyau, machine et uptime ;
+- modèle, charge et nombre de cœurs CPU ;
+- mémoire, swap et nombre de processus ;
+- utilisation du disque courant ;
+- volumes réseau reçus et envoyés ;
+- dossier courant et présence d'un dépôt Git.
+
+```bash
+cargo run -- dashboard
+```
+
+Le rendu utilise des couleurs et des bordures Unicode dans un terminal
+interactif. Si la sortie est redirigée, si `TERM=dumb` ou si `NO_COLOR` est
+défini, il passe automatiquement en ASCII sans couleur.
+
+## Preset Fastfetch
+
+Une configuration Fastfetch complémentaire est fournie dans
+[`config/fastfetch/config.jsonc`](config/fastfetch/config.jsonc). Elle fonctionne
+sans Nerd Font et regroupe les informations système importantes avec un thème
+cyan, vert, jaune et magenta.
+
+```bash
+fastfetch --config config/fastfetch/config.jsonc
+```
+
+Fastfetch reste optionnel : il n'est ni installé ni requis par Terminal Rust.
+Le guide de personnalisation se trouve dans
+[`config/fastfetch/README.md`](config/fastfetch/README.md).
 
 ## Options de `ls`
 
@@ -231,6 +271,7 @@ src/
   commands/
     cd.rs
     clear.rs
+    dashboard.rs
     mkdir.rs
     pwd.rs
     rm.rs

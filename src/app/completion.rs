@@ -81,4 +81,12 @@ mod tests {
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].replacement, "clear ");
     }
+
+    #[test]
+    fn dashboard_is_available_in_completion() {
+        let completions = command_completions("dash");
+
+        assert_eq!(completions.len(), 1);
+        assert_eq!(completions[0].replacement, "dashboard ");
+    }
 }

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::app::help;
-use crate::commands::{cat, cd, clear, ls, mkdir, pwd, rm, touch};
+use crate::commands::{cat, cd, clear, dashboard, ls, mkdir, pwd, rm, touch};
 use crate::errors::command::CommandError;
 use crate::render;
 
@@ -65,6 +65,11 @@ const COMMANDS: &[CommandSpec] = &[
         name: "clear",
         max_args: Some(0),
         handler: run_clear,
+    },
+    CommandSpec {
+        name: "dashboard",
+        max_args: Some(0),
+        handler: run_dashboard,
     },
     CommandSpec {
         name: "help",
@@ -166,6 +171,10 @@ fn run_rm(args: &[String], _state: &mut ShellState) -> CommandResult {
 
 fn run_clear(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("clear", clear::clear())
+}
+
+fn run_dashboard(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("dashboard", dashboard::dashboard())
 }
 
 fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {

@@ -13,6 +13,7 @@ pub fn print_help() -> io::Result<()> {
         "  cat [file]           print file content",
         "  rm [-dfirRv] [path...]",
         "  clear                clear the terminal screen",
+        "  dashboard            show system performance and context",
         "  exit                 close the terminal",
         "  quit                 close the terminal",
     ])
