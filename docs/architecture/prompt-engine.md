@@ -1,6 +1,6 @@
-# Moteur de prompt cible
+# Moteur de prompt
 
-Statut : proposition de conception, non encore implémentée.
+Statut : première version implémentée, configuration et thèmes à venir.
 
 ## Objectif
 
@@ -8,14 +8,14 @@ Construire un prompt inspiré d'Oh My Posh sans en reproduire toute la complexit
 dès la première version. Le système doit composer des segments indépendants et
 rester lisible sans couleur, icône ou Git.
 
-## Première version
+## Première version actuelle
 
-Segments envisagés :
+Le rendu actuel compose :
 
 - dossier courant ;
 - branche Git ;
 - état propre ou modifié du dépôt ;
-- symbole final configurable.
+- symbole final statique.
 
 Exemple enrichi :
 
@@ -29,22 +29,28 @@ Exemple de repli :
 C:\project>
 ```
 
-## Modèle proposé
+## Modèle actuel
 
 ```rust
-struct PromptContext {
-    current_dir: PathBuf,
-    git: Option<GitContext>,
+struct Prompt {
+    git_cache: GitPromptCache,
 }
 
-trait Segment {
-    fn render(&self, context: &PromptContext) -> Option<RenderedSegment>;
+struct PromptGitInfo {
+    branch: String,
+    dirty: bool,
 }
 ```
 
-Le contexte collecte les informations une fois. Les segments décident ensuite
-s'ils ont quelque chose à afficher. Le rendu final applique le thème et les
-capacités du terminal.
+`Prompt` vit pendant toute la session interactive. Le module `git` collecte la
+branche et l'état avec une seule commande porcelain v2 ; le module `cache`
+conserve ce résultat pendant 250 ms, y compris l'absence de contexte Git. Le
+rendu n'affiche le segment que lorsque ces données sont disponibles.
+
+La commande mesurée sur le dépôt du projet sous Windows prend environ 50 ms à
+froid. Le cache évite de répéter ce coût lors de rendus rapprochés tout en
+bornant l'obsolescence à 250 ms. Les tests injectent le temps et le fournisseur
+de données afin de vérifier le TTL sans attente réelle.
 
 ## Configuration future
 
@@ -66,12 +72,10 @@ icons = "auto"
 
 ## Étapes recommandées
 
-1. Enrichir le module Git avec branche et statut.
-2. Introduire `PromptContext` sans changer le rendu visible.
-3. Extraire un trait ou un enum de segments.
-4. Ajouter un thème intégré et un repli sans couleur.
-5. Charger une configuration TOML validée.
-6. Ajouter cache, mesure de performance et délai des commandes externes.
+1. Extraire un trait ou un enum de segments à partir du prototype actuel.
+2. Ajouter un thème intégré et un repli sans couleur.
+3. Charger une configuration TOML validée.
+4. Ajouter une limite de durée aux commandes externes.
 
-Chaque étape doit rester fusionnable et testable seule. Les choix définitifs du
-modèle de segments et de configuration feront l'objet d'un ADR après prototype.
+Chaque étape doit rester fusionnable et testable seule. L'ADR-0003 fixe la
+direction par segments ; les interfaces pourront évoluer avec la configuration.

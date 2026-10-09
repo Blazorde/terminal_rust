@@ -6,6 +6,12 @@ use std::process::{Command, Stdio};
 
 const DEVELOPER_SUBCOMMANDS: [&str; 3] = ["status", "branch", "log"];
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PromptGitInfo {
+    pub branch: String,
+    pub dirty: bool,
+}
+
 pub struct GitCommandOutput {
     pub stdout: String,
     pub stderr: String,
@@ -67,6 +73,14 @@ impl std::error::Error for GitCommandError {}
 /// shell from starting.
 pub fn is_inside_work_tree(path: &Path) -> bool {
     is_inside_work_tree_with_program(path, "git")
+}
+
+/// Collects the branch and working-tree state with one stable porcelain call.
+///
+/// Git being unavailable, a directory outside a repository, or malformed
+/// output all disable the optional prompt segment instead of failing the shell.
+pub fn prompt_info(path: &Path) -> Option<PromptGitInfo> {
+    prompt_info_with_program(path, "git")
 }
 
 pub fn execute_developer_command(
@@ -161,6 +175,58 @@ fn is_inside_work_tree_with_program(path: &Path, program: impl AsRef<OsStr>) -> 
     output.status.success() && output_means_inside(&output.stdout)
 }
 
+fn prompt_info_with_program(path: &Path, program: impl AsRef<OsStr>) -> Option<PromptGitInfo> {
+    let output = Command::new(program)
+        .arg("--no-optional-locks")
+        .arg("-C")
+        .arg(path)
+        .args([
+            "status",
+            "--porcelain=v2",
+            "--branch",
+            "--untracked-files=normal",
+        ])
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    parse_prompt_status(&output.stdout)
+}
+
+fn parse_prompt_status(stdout: &[u8]) -> Option<PromptGitInfo> {
+    let output = std::str::from_utf8(stdout).ok()?;
+    let mut head = None;
+    let mut oid = None;
+    let mut dirty = false;
+
+    for line in output.lines() {
+        if let Some(value) = line.strip_prefix("# branch.head ") {
+            head = Some(value.trim());
+        } else if let Some(value) = line.strip_prefix("# branch.oid ") {
+            oid = Some(value.trim());
+        } else if !line.starts_with("# ") && !line.is_empty() {
+            dirty = true;
+        }
+    }
+
+    let head = head?;
+    let branch = if head == "(detached)" {
+        let short_oid = oid
+            .filter(|value| *value != "(initial)")
+            .map(|value| &value[..value.len().min(7)])
+            .unwrap_or("unknown");
+        format!("detached@{short_oid}")
+    } else {
+        head.to_string()
+    };
+
+    Some(PromptGitInfo { branch, dirty })
+}
+
 fn output_means_inside(stdout: &[u8]) -> bool {
     std::str::from_utf8(stdout).is_ok_and(|output| output.trim() == "true")
 }
@@ -183,6 +249,52 @@ mod tests {
         assert!(!output_means_inside(b"false\n"));
         assert!(!output_means_inside(b"unexpected\n"));
         assert!(!output_means_inside(&[0xff]));
+    }
+
+    #[test]
+    fn parses_clean_and_dirty_prompt_status() {
+        let clean = parse_prompt_status(
+            b"# branch.oid 0123456789abcdef\n# branch.head main\n# branch.upstream origin/main\n",
+        );
+        let dirty = parse_prompt_status(
+            b"# branch.oid 0123456789abcdef\r\n# branch.head feature/test\r\n1 .M N... 100644 100644 100644 abc def file.txt\r\n? new.txt\r\n",
+        );
+
+        assert_eq!(
+            clean,
+            Some(PromptGitInfo {
+                branch: "main".to_string(),
+                dirty: false,
+            })
+        );
+        assert_eq!(
+            dirty,
+            Some(PromptGitInfo {
+                branch: "feature/test".to_string(),
+                dirty: true,
+            })
+        );
+    }
+
+    #[test]
+    fn gives_detached_head_a_stable_label() {
+        let info =
+            parse_prompt_status(b"# branch.oid 0123456789abcdef\n# branch.head (detached)\n");
+
+        assert_eq!(
+            info,
+            Some(PromptGitInfo {
+                branch: "detached@0123456".to_string(),
+                dirty: false,
+            })
+        );
+    }
+
+    #[test]
+    fn missing_git_disables_prompt_information() {
+        let missing_program = temp_path("git", "missing-prompt-executable");
+
+        assert!(prompt_info_with_program(Path::new("."), missing_program).is_none());
     }
 
     #[test]
