@@ -52,6 +52,10 @@ Télécharger l'archive correspondant au système, l'extraire, puis lancer
 `terminal_rust help` (`terminal_rust.exe help` sous Windows). Le fichier
 `SHA256SUMS.txt` permet de vérifier l'intégrité des téléchargements.
 
+Le [guide d'installation détaillé](docs/install.md) explique le fichier à
+choisir, les permissions, le `PATH` et le lancement sous chaque système. En cas
+de problème, consulter le [guide de dépannage](docs/troubleshooting.md).
+
 ### Compiler depuis les sources
 
 Prérequis:
