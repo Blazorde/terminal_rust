@@ -15,6 +15,7 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 - [Options de `ls`](#options-de-ls)
 - [Options de `rm`](#options-de-rm)
 - [Architecture](#architecture)
+- [Documentation technique](#documentation-technique)
 - [Gestion des erreurs](#gestion-des-erreurs)
 - [Développement](#développement)
 - [Tests et qualité](#tests-et-qualité)
@@ -51,7 +52,7 @@ cargo --version
 Cloner le projet:
 
 ```bash
-git clone https://github.com/TON_USER/terminal_rust.git
+git clone https://github.com/Blazorde/terminal_rust.git
 cd terminal_rust
 ```
 
@@ -262,6 +263,20 @@ Rôle des dossiers principaux:
 | `errors/` | Types d'erreurs séparés par commande |
 
 Le fichier `src/app/command.rs` utilise une table de commandes. Cela évite un énorme `match` qui grossit à chaque nouvelle commande.
+
+## Documentation technique
+
+La documentation détaillée est indexée dans [`docs/README.md`](docs/README.md).
+Elle couvre notamment :
+
+- l'architecture actuelle et l'architecture cible ;
+- la compatibilité Windows, macOS et Linux ;
+- le futur moteur de prompt à segments inspiré d'Oh My Posh ;
+- les décisions d'architecture (ADR) ;
+- les règles de contribution, de tests et de traitement des tickets.
+
+Les règles destinées aux contributeurs automatisés se trouvent dans
+[`AGENTS.md`](AGENTS.md).
 
 ## Gestion des erreurs
 
