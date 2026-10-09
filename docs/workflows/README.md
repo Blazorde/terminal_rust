@@ -51,6 +51,18 @@ The CI runs on Ubuntu, Windows, and macOS. The test command includes the
 integration suite in `tests/cli_tests.rs`, which launches the compiled binary
 and verifies stdout, stderr, and exit codes.
 
+### Release builds
+
+File: `.github/workflows/release.yml`
+
+The workflow builds and smoke-tests an optimized binary on Ubuntu, Windows,
+and macOS. It packages each binary into a system- and architecture-specific
+archive, then uploads that archive as a GitHub Actions artifact for 14 days.
+
+It runs manually through `workflow_dispatch` and automatically for version tags
+matching `v*.*.*`. It does not create a GitHub Release; publication remains a
+separate reviewed step.
+
 ### PR policy
 
 File: `.github/workflows/pr-policy.yml`
