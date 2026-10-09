@@ -59,8 +59,12 @@ la fin du test.
 
 La suite d'intégration vérifie actuellement :
 
+- `terminal_rust help` et la présence de toutes les commandes publiques ;
 - `terminal_rust pwd` et son dossier de travail ;
 - `terminal_rust ls` avec un fichier et un dossier de test ;
+- le cycle `mkdir`, `touch`, `cat`, `rm` sur un chemin contenant des espaces ;
+- `terminal_rust dashboard`, ses sections principales et son rendu sans ANSI
+  lorsque la sortie n'est pas un terminal ;
 - une commande inconnue, sa sortie d'erreur et son code de retour ;
 - une commande sans argument obligatoire, sa sortie d'erreur et son code de
   retour.
@@ -73,3 +77,6 @@ comparent les chemins après résolution par la bibliothèque standard Rust.
 La CI couvre Ubuntu, Windows et macOS. Chaque système exécute le formatage, la
 compilation, Clippy, les tests unitaires et les tests d'intégration CLI. Un
 échec sur une plateforme bloque la fusion.
+
+La [checklist qualité MVP](mvp-quality-checklist.md) complète la suite automatisée
+avec une vérification manuelle courte des comportements interactifs.

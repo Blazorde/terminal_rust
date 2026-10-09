@@ -125,6 +125,96 @@ fn missing_required_argument_returns_a_failure_and_writes_to_stderr() {
 }
 
 #[test]
+fn help_lists_every_public_command() {
+    let directory = TestDirectory::new("help");
+    let output = run_cli(directory.path(), &["help"]);
+    let rendered = stdout(&output);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(output.stderr.is_empty());
+
+    for command in [
+        "pwd",
+        "cd",
+        "ls",
+        "mkdir",
+        "touch",
+        "cat",
+        "rm",
+        "clear",
+        "dashboard",
+        "git",
+        "help",
+        "exit",
+        "quit",
+    ] {
+        assert!(
+            rendered
+                .lines()
+                .any(|line| line.trim_start().starts_with(command)),
+            "help should list {command}:\n{rendered}"
+        );
+    }
+}
+
+#[test]
+fn file_commands_complete_a_cross_platform_workflow() {
+    let directory = TestDirectory::new("file workflow");
+
+    let mkdir = run_cli(directory.path(), &["mkdir", "nested directory"]);
+    assert!(mkdir.status.success(), "stderr: {}", stderr(&mkdir));
+
+    let file = directory.path().join("nested directory").join("notes.txt");
+    let file_arg = file.to_string_lossy().into_owned();
+    let touch = run_cli(directory.path(), &["touch", &file_arg]);
+    assert!(touch.status.success(), "stderr: {}", stderr(&touch));
+    assert!(file.is_file());
+
+    fs::write(&file, "portable content\n").expect("the fixture file should be writable");
+    let cat = run_cli(directory.path(), &["cat", &file_arg]);
+    assert!(cat.status.success(), "stderr: {}", stderr(&cat));
+    assert_eq!(stdout(&cat), "portable content\n");
+
+    let remove_file = run_cli(directory.path(), &["rm", &file_arg]);
+    assert!(
+        remove_file.status.success(),
+        "stderr: {}",
+        stderr(&remove_file)
+    );
+    assert!(!file.exists());
+
+    let directory_arg = directory.path().join("nested directory");
+    let directory_arg = directory_arg.to_string_lossy().into_owned();
+    let remove_directory = run_cli(directory.path(), &["rm", "-d", &directory_arg]);
+    assert!(
+        remove_directory.status.success(),
+        "stderr: {}",
+        stderr(&remove_directory)
+    );
+    assert!(!Path::new(&directory_arg).exists());
+}
+
+#[test]
+fn dashboard_renders_important_sections_without_a_terminal() {
+    let directory = TestDirectory::new("dashboard");
+    let output = run_cli(directory.path(), &["dashboard"]);
+    let rendered = stdout(&output);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(output.stderr.is_empty());
+    for section in ["SYSTEM", "PERFORMANCE", "STORAGE & NETWORK", "CONTEXT"] {
+        assert!(
+            rendered.contains(section),
+            "dashboard should include {section}"
+        );
+    }
+    assert!(
+        !rendered.contains('\u{1b}'),
+        "piped output should not use ANSI escapes"
+    );
+}
+
+#[test]
 fn interactive_prompt_stays_simple_outside_git() {
     let directory = TestDirectory::new("prompt outside git");
     let output = run_interactive(directory.path(), "exit\n");

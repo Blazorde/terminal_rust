@@ -14,6 +14,7 @@ vivent ici.
 | Comprendre une décision | [Registre des ADR](decisions/README.md) |
 | Contribuer | [Guide de contribution](development/contributing.md) |
 | Tester une évolution | [Stratégie de tests](development/testing.md) |
+| Valider le MVP | [Checklist qualité MVP](development/mvp-quality-checklist.md) |
 | Installer Terminal Rust | [Installation](install.md) |
 | Résoudre un problème | [Dépannage](troubleshooting.md) |
 | Produire un binaire | [Builds de distribution](release.md) |
