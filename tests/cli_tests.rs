@@ -128,9 +128,16 @@ fn missing_required_argument_returns_a_failure_and_writes_to_stderr() {
 fn interactive_prompt_stays_simple_outside_git() {
     let directory = TestDirectory::new("prompt outside git");
     let output = run_interactive(directory.path(), "exit\n");
+    let rendered = stdout(&output);
+    let rendered_path = rendered
+        .strip_suffix("> ")
+        .expect("the simple prompt should end with its symbol");
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert_eq!(stdout(&output), format!("{}> ", directory.path().display()));
+    assert_eq!(
+        fs::canonicalize(rendered_path).expect("the rendered directory should exist"),
+        fs::canonicalize(directory.path()).expect("the fixture directory should exist")
+    );
 }
 
 #[test]
@@ -165,10 +172,14 @@ fn interactive_prompt_shows_a_dirty_git_branch() {
         .expect("the dirty fixture should be created");
 
     let output = run_interactive(directory.path(), "exit\n");
+    let rendered = stdout(&output);
+    let rendered_path = rendered
+        .strip_suffix("  main* > ")
+        .expect("the Git prompt should contain its branch and dirty marker");
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     assert_eq!(
-        stdout(&output),
-        format!("{}  main* > ", directory.path().display())
+        fs::canonicalize(rendered_path).expect("the rendered directory should exist"),
+        fs::canonicalize(directory.path()).expect("the fixture directory should exist")
     );
 }
