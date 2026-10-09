@@ -14,6 +14,7 @@ pub fn print_help() -> io::Result<()> {
         "  rm [-dfirRv] [path...]",
         "  clear                clear the terminal screen",
         "  dashboard            show system performance and context",
+        "  git <status|branch|log> [options]",
         "  exit                 close the terminal",
         "  quit                 close the terminal",
     ])

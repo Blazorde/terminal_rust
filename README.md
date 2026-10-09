@@ -12,6 +12,7 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 - [Commandes disponibles](#commandes-disponibles)
 - [Historique interactif](#historique-interactif)
 - [Détection Git](#détection-git)
+- [Commandes Git développeur](#commandes-git-développeur)
 - [Dashboard système](#dashboard-système)
 - [Preset Fastfetch](#preset-fastfetch)
 - [Options de `ls`](#options-de-ls)
@@ -101,6 +102,7 @@ Sur Windows, le binaire release se trouve ici:
 | `rm [options] [path...]` | Supprime des fichiers ou dossiers selon les options |
 | `clear` | Efface l'écran d'un terminal compatible ANSI |
 | `dashboard` | Affiche un tableau de bord système et performance |
+| `git <status\|branch\|log> [options]` | Lance un raccourci Git autorisé dans le dossier courant |
 | `help` | Affiche l'aide |
 | `exit` | Ferme le shell |
 | `quit` | Ferme le shell |
@@ -119,6 +121,9 @@ rm -i test/file.txt
 rm -r test
 clear
 dashboard
+git status --short --branch
+git branch --all
+git log --oneline -10
 exit
 ```
 
@@ -156,6 +161,24 @@ Cette détection est volontairement non bloquante : un dossier hors dépôt, un
 chemin invalide ou l'absence de Git retournent simplement `false`. Aucun message
 d'erreur Git n'est affiché et le shell reste utilisable sur macOS, Linux et
 Windows.
+
+## Commandes Git développeur
+
+Le shell expose un sous-ensemble volontairement limité de Git : `status`,
+`branch` et `log`. Les options de consultation sont transmises à Git, tandis
+que les commandes et arguments qui modifient un dépôt, comme `push`, `reset`,
+`clean`, `branch -d` ou la création d'une branche, sont refusés.
+
+```bash
+git status --short --branch
+git branch --all
+git log --oneline --decorate -10
+```
+
+La sortie standard, la sortie d'erreur et le code de sortie de Git sont
+conservés. Si Git n'est pas installé, le mini-shell affiche une erreur claire
+sans s'arrêter. Le lancement utilise `git -C <dossier>` et reste identique sur
+Windows, macOS et Linux.
 
 ## Dashboard système
 

@@ -11,6 +11,7 @@ choix a été fait et quelles conséquences il faut accepter.
 | [0001](0001-command-registry.md) | Acceptée | Registre central des commandes internes |
 | [0002](0002-non-blocking-git-detection.md) | Acceptée | Détection Git externe et non bloquante |
 | [0003](0003-segmented-prompt-engine.md) | Proposée | Moteur de prompt composé de segments |
+| [0004](0004-allowlisted-git-commands.md) | Acceptée | Raccourcis Git limités à une liste blanche en lecture seule |
 
 ## Cycle de vie
 
