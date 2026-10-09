@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::app::help;
-use crate::commands::{cat, cd, ls, mkdir, pwd, rm, touch};
+use crate::commands::{cat, cd, clear, dashboard, git_command, ls, mkdir, pwd, rm, touch};
 use crate::errors::command::CommandError;
 use crate::render;
 
@@ -60,6 +60,21 @@ const COMMANDS: &[CommandSpec] = &[
         name: "rm",
         max_args: None,
         handler: run_rm,
+    },
+    CommandSpec {
+        name: "clear",
+        max_args: Some(0),
+        handler: run_clear,
+    },
+    CommandSpec {
+        name: "dashboard",
+        max_args: Some(0),
+        handler: run_dashboard,
+    },
+    CommandSpec {
+        name: "git",
+        max_args: None,
+        handler: run_git,
     },
     CommandSpec {
         name: "help",
@@ -157,6 +172,18 @@ fn run_cat(args: &[String], _state: &mut ShellState) -> CommandResult {
 
 fn run_rm(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_display_error(rm::rm(args))
+}
+
+fn run_clear(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("clear", clear::clear())
+}
+
+fn run_dashboard(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("dashboard", dashboard::dashboard())
+}
+
+fn run_git(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(git_command::git(args))
 }
 
 fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
