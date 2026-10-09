@@ -162,17 +162,27 @@ l'historique en mémoire.
 
 ## Détection Git
 
-Le module `src/git/` fournit la première brique du futur prompt enrichi. Il
-détermine si un dossier appartient à un dépôt Git avec :
+Dans un dépôt, le prompt affiche la branche courante et ajoute `*` lorsque le
+working tree contient des modifications :
 
 ```text
-git -C <directory> rev-parse --is-inside-work-tree
+C:\workspace\terminal_rust  main >
+C:\workspace\terminal_rust  main* >
 ```
 
-Cette détection est volontairement non bloquante : un dossier hors dépôt, un
-chemin invalide ou l'absence de Git retournent simplement `false`. Aucun message
-d'erreur Git n'est affiché et le shell reste utilisable sur macOS, Linux et
-Windows.
+En HEAD détachée, le segment prend la forme `detached@1a2b3c4`. Hors dépôt ou
+si Git est absent, le prompt conserve simplement le chemin suivi de `>`. Une
+seule commande Git au format porcelain stable collecte la branche et l'état :
+
+```text
+git --no-optional-locks -C <directory> status --porcelain=v2 --branch
+```
+
+Les informations sont gardées en mémoire pendant 250 ms et immédiatement
+rechargées lors d'un changement de dossier. Cette durée absorbe les rendus
+rapprochés sans masquer longtemps une modification. Un dossier hors dépôt, une
+sortie invalide ou l'absence de Git désactive silencieusement ce segment ; le
+shell reste utilisable sur macOS, Linux et Windows.
 
 ## Commandes Git développeur
 

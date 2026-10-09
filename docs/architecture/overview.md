@@ -46,10 +46,11 @@ flowchart LR
 
 ## Architecture cible
 
-Les dossiers vides déjà présents (`core`, `platform`, `config`, `cache`,
-`diagnostics`, `cli`) représentent des frontières possibles, pas une obligation
-de migration immédiate. Une évolution doit entrer dans ces dossiers uniquement
-quand une responsabilité concrète le justifie.
+Les dossiers encore vides (`core`, `platform`, `config`, `diagnostics`, `cli`)
+représentent des frontières possibles, pas une obligation de migration
+immédiate. `cache` contient désormais le cache court du contexte Git du prompt.
+Une évolution doit entrer dans ces dossiers uniquement quand une responsabilité
+concrète le justifie.
 
 Le moteur de prompt cible suivra le pipeline suivant :
 

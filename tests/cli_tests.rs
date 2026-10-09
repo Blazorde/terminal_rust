@@ -1,6 +1,7 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 struct TestDirectory {
@@ -40,6 +41,27 @@ fn run_cli(current_dir: &Path, args: &[&str]) -> Output {
         .current_dir(current_dir)
         .output()
         .expect("the terminal_rust binary should start")
+}
+
+fn run_interactive(current_dir: &Path, input: &str) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+        .current_dir(current_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the terminal_rust binary should start");
+
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin should be piped")
+        .write_all(input.as_bytes())
+        .expect("interactive input should be written");
+
+    child
+        .wait_with_output()
+        .expect("the terminal_rust binary should finish")
 }
 
 fn stdout(output: &Output) -> String {
@@ -100,4 +122,64 @@ fn missing_required_argument_returns_a_failure_and_writes_to_stderr() {
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
     assert_eq!(stderr(&output).trim(), "cat: missing file name");
+}
+
+#[test]
+fn interactive_prompt_stays_simple_outside_git() {
+    let directory = TestDirectory::new("prompt outside git");
+    let output = run_interactive(directory.path(), "exit\n");
+    let rendered = stdout(&output);
+    let rendered_path = rendered
+        .strip_suffix("> ")
+        .expect("the simple prompt should end with its symbol");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_eq!(
+        fs::canonicalize(rendered_path).expect("the rendered directory should exist"),
+        fs::canonicalize(directory.path()).expect("the fixture directory should exist")
+    );
+}
+
+#[test]
+fn interactive_prompt_shows_a_dirty_git_branch() {
+    let directory = TestDirectory::new("git prompt");
+    let git_available = Command::new("git")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success());
+
+    if !git_available {
+        return;
+    }
+
+    let initialized = Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git should start");
+    assert!(initialized.success());
+
+    let named_branch = Command::new("git")
+        .args(["symbolic-ref", "HEAD", "refs/heads/main"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git should name the initial branch");
+    assert!(named_branch.success());
+
+    fs::write(directory.path().join("dirty file.txt"), "dirty")
+        .expect("the dirty fixture should be created");
+
+    let output = run_interactive(directory.path(), "exit\n");
+    let rendered = stdout(&output);
+    let rendered_path = rendered
+        .strip_suffix("  main* > ")
+        .expect("the Git prompt should contain its branch and dirty marker");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_eq!(
+        fs::canonicalize(rendered_path).expect("the rendered directory should exist"),
+        fs::canonicalize(directory.path()).expect("the fixture directory should exist")
+    );
 }
