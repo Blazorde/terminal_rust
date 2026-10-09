@@ -1,5 +1,6 @@
 pub mod cat;
 pub mod cd;
+pub mod clear;
 pub mod ls;
 pub mod mkdir;
 pub mod pwd;

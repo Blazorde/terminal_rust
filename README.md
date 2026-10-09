@@ -10,6 +10,7 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 - [Installation](#installation)
 - [Lancement](#lancement)
 - [Commandes disponibles](#commandes-disponibles)
+- [Historique interactif](#historique-interactif)
 - [Options de `ls`](#options-de-ls)
 - [Options de `rm`](#options-de-rm)
 - [Architecture](#architecture)
@@ -91,6 +92,7 @@ Sur Windows, le binaire release se trouve ici:
 | `touch [file]` | Crée un fichier vide ou garde le fichier existant |
 | `cat [file]` | Affiche le contenu d'un fichier |
 | `rm [options] [path...]` | Supprime des fichiers ou dossiers selon les options |
+| `clear` | Efface l'écran d'un terminal compatible ANSI |
 | `help` | Affiche l'aide |
 | `exit` | Ferme le shell |
 | `quit` | Ferme le shell |
@@ -107,8 +109,30 @@ touch test/file.txt
 cat test/file.txt
 rm -i test/file.txt
 rm -r test
+clear
 exit
 ```
+
+## Historique interactif
+
+En mode interactif, les commandes non vides sont ajoutées à l'historique de
+`rustyline` et restent accessibles avec les flèches haut et bas pendant toute la
+session.
+
+Par défaut, cet historique reste uniquement en mémoire. Pour le conserver entre
+deux lancements, définir la variable `TERMINAL_RUST_HISTORY_FILE` avec le chemin
+du fichier à utiliser. Le dossier parent doit déjà exister.
+
+Sous PowerShell, par exemple:
+
+```powershell
+$env:TERMINAL_RUST_HISTORY_FILE = "$HOME\.terminal_rust_history"
+cargo run
+```
+
+Si le fichier n'existe pas encore, il sera créé à la fermeture normale du shell.
+Une erreur de lecture ou d'écriture est affichée sans empêcher l'utilisation de
+l'historique en mémoire.
 
 ## Options de `ls`
 
@@ -190,6 +214,7 @@ src/
     runner.rs
   commands/
     cd.rs
+    clear.rs
     mkdir.rs
     pwd.rs
     rm.rs
@@ -328,7 +353,6 @@ Idées de commandes ou fonctionnalités à ajouter plus tard:
 - `cp`
 - `mv`
 - `echo`
-- `clear`
 - `history`
 - variables d'environnement
 - alias

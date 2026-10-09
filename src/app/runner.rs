@@ -1,5 +1,6 @@
 use std::env;
 use std::io::{self, BufRead, IsTerminal};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use rustyline::error::ReadlineError;
@@ -11,6 +12,8 @@ use crate::app::completion::ShellHelper;
 use crate::app::parser::parse_input;
 use crate::app::prompt::{print_prompt, prompt};
 use crate::render;
+
+const HISTORY_FILE_ENV: &str = "TERMINAL_RUST_HISTORY_FILE";
 
 pub fn run() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -55,14 +58,28 @@ fn run_interactive_editor() -> ExitCode {
     };
     editor.set_helper(Some(ShellHelper::new()));
 
+    let history_path = history_path();
+    if let Some(path) = history_path.as_deref() {
+        match editor.load_history(path) {
+            Ok(()) => {}
+            Err(ReadlineError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => {
+                let _ = render::stderr_line(format_args!(
+                    "history: cannot load {}: {error}",
+                    path.display()
+                ));
+            }
+        }
+    }
+
     let mut state = ShellState::default();
 
-    loop {
+    let exit_code = loop {
         let prompt = match prompt() {
             Ok(prompt) => prompt,
             Err(error) => {
                 let _ = render::stderr_line(format_args!("prompt: {error}"));
-                return ExitCode::FAILURE;
+                break ExitCode::FAILURE;
             }
         };
 
@@ -73,19 +90,36 @@ fn run_interactive_editor() -> ExitCode {
                     let _ = editor.add_history_entry(trimmed);
                 }
                 if handle_input(&input, &mut state) == CommandResult::Exit {
-                    return ExitCode::SUCCESS;
+                    break ExitCode::SUCCESS;
                 }
             }
             Err(ReadlineError::Interrupted) => {
                 let _ = render::stdout_line("^C");
             }
-            Err(ReadlineError::Eof) => return ExitCode::SUCCESS,
+            Err(ReadlineError::Eof) => break ExitCode::SUCCESS,
             Err(error) => {
                 let _ = render::stderr_line(format_args!("read: {error}"));
-                return ExitCode::FAILURE;
+                break ExitCode::FAILURE;
             }
         }
+    };
+
+    if let Some(path) = history_path.as_deref()
+        && let Err(error) = editor.save_history(path)
+    {
+        let _ = render::stderr_line(format_args!(
+            "history: cannot save {}: {error}",
+            path.display()
+        ));
     }
+
+    exit_code
+}
+
+fn history_path() -> Option<PathBuf> {
+    env::var_os(HISTORY_FILE_ENV)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
 }
 
 fn run_interactive_plain() -> ExitCode {

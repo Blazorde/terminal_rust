@@ -12,6 +12,7 @@ pub fn print_help() -> io::Result<()> {
         "  touch [file]         create an empty file",
         "  cat [file]           print file content",
         "  rm [-dfirRv] [path...]",
+        "  clear                clear the terminal screen",
         "  exit                 close the terminal",
         "  quit                 close the terminal",
     ])
