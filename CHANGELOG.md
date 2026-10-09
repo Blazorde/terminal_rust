@@ -3,6 +3,23 @@
 All notable changes to Terminal Rust are documented in this file. Versions use
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+The next planned minor release is **0.3.0**. It will focus on the configurable,
+segmented prompt engine while preserving graceful fallbacks on Windows, Linux,
+and macOS.
+
+### Added
+
+- Verified user-level installers for Windows x86_64, Linux x86_64, and macOS
+  Apple Silicon, with authenticated private-release support.
+
+### Improved
+
+- Added copyable onboarding, a supported-platform matrix, and the complete
+  contributor validation workflow to the README.
+- Added installer syntax validation to the cross-platform CI matrix.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added
@@ -33,5 +50,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
-- First public release with the interactive shell and core filesystem commands.
+- First public release with the interactive shell, command history for the
+  current session, completion, and quoted-argument parsing.
+- Core `pwd`, `cd`, `ls`, `mkdir`, `touch`, `cat`, and `rm` commands.
+- Cross-platform CI for formatting, compilation, Clippy, and tests.
 - Windows x86_64 binary and checksum attached to the GitHub Release.

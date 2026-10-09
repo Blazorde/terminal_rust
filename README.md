@@ -542,6 +542,11 @@ Chaque archive est nommée avec son système et l'architecture du runner. Le
 guide de téléchargement et de validation se trouve dans
 [docs/release.md](docs/release.md).
 
+La version stable actuelle est `0.2.0` et la prochaine version mineure prévue
+est `0.3.0`. Les changements à venir sont regroupés sous `Unreleased` dans le
+[changelog](CHANGELOG.md). La stratégie SemVer et la checklist de publication
+sont détaillées dans le [guide de release](docs/release.md#publier-une-version).
+
 ## Roadmap
 
 Idées de commandes ou fonctionnalités à ajouter plus tard:
