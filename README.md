@@ -4,8 +4,38 @@ Terminal Rust est un mini shell écrit en Rust. Le projet sert à apprendre comm
 
 Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but est de construire progressivement un shell fiable, lisible, maintenable et proche des bonnes pratiques Rust.
 
+## Démarrage rapide
+
+Pour découvrir le projet depuis les sources :
+
+```bash
+git clone https://github.com/Blazorde/terminal_rust.git
+cd terminal_rust
+cargo run
+```
+
+Le prompt interactif apparaît alors dans le terminal. Taper `help` pour voir les
+commandes, `dashboard` pour afficher l'état de la machine et `exit` pour quitter.
+Pour exécuter une seule commande sans ouvrir une session interactive :
+
+```bash
+cargo run -- pwd
+cargo run -- ls -la
+cargo run -- dashboard
+```
+
+| Plateforme | Archive publiée | Installateur | CI |
+| --- | --- | --- | --- |
+| Windows x86_64 | `.zip` | `scripts/install.ps1` | Oui |
+| Linux x86_64 | `.tar.gz` | `scripts/install.sh` | Oui |
+| macOS Apple Silicon | `.tar.gz` | `scripts/install.sh` | Oui |
+
+macOS Intel n'a pas encore de binaire précompilé ; la compilation depuis les
+sources reste possible avec une toolchain Rust compatible.
+
 ## Sommaire
 
+- [Démarrage rapide](#démarrage-rapide)
 - [Fonctionnalités](#fonctionnalités)
 - [Installation](#installation)
 - [Lancement](#lancement)
@@ -413,14 +443,32 @@ pub enum RmError {
 
 ## Développement
 
-Commandes utiles pendant le développement:
+Le développement nécessite la toolchain Rust stable. Git est recommandé pour
+contribuer et pour tester le segment de prompt, mais son absence n'empêche pas
+le shell de démarrer. Aucune Nerd Font ni séquence ANSI avancée n'est requise.
+
+Préparer une branche depuis `develop` :
 
 ```bash
-cargo fmt
-cargo check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
+git switch develop
+git pull --ff-only origin develop
+git switch -c feat/ma-fonctionnalite
 ```
+
+Lancer le projet et la suite de validation complète :
+
+```bash
+cargo run
+cargo fmt --all -- --check
+cargo check --all-targets --all-features
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+```
+
+Les mêmes contrôles sont exécutés sur Ubuntu, Windows et macOS dans GitHub
+Actions. Le [guide de contribution](docs/development/contributing.md) décrit le
+cycle ticket-branche-PR et le [guide de tests](docs/development/testing.md)
+explique la stratégie de validation.
 
 Ajouter une nouvelle commande:
 
@@ -501,13 +549,17 @@ Idées de commandes ou fonctionnalités à ajouter plus tard:
 - `cp`
 - `mv`
 - `echo`
-- `history`
 - variables d'environnement
 - alias
 - redirections
 - pipes
 - meilleure gestion des permissions
+- moteur de prompt à segments configurables inspiré d'Oh My Posh
 - interface terminal graphique dédiée
+
+Les changements livrés sont recensés dans le [changelog](CHANGELOG.md). Les
+limitations propres à une version y sont distinguées des éléments encore
+prévus dans la roadmap.
 
 ## Licence
 
