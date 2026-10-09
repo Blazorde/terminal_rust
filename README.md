@@ -44,6 +44,16 @@ Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but es
 
 ## Installation
 
+### Télécharger une version prête à l'emploi
+
+Les archives Windows, Linux et macOS sont disponibles dans la
+[dernière GitHub Release](https://github.com/Blazorde/terminal_rust/releases/latest).
+Télécharger l'archive correspondant au système, l'extraire, puis lancer
+`terminal_rust help` (`terminal_rust.exe help` sous Windows). Le fichier
+`SHA256SUMS.txt` permet de vérifier l'intégrité des téléchargements.
+
+### Compiler depuis les sources
+
 Prérequis:
 
 - Rust installé avec `rustup`
