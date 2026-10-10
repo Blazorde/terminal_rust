@@ -1,5 +1,7 @@
 use std::env;
 
+use super::palette::Palette;
+
 const ESCAPE_PREFIX: &str = "\u{1b}[";
 const RESET: &str = "\u{1b}[0m";
 
@@ -16,6 +18,20 @@ pub enum AnsiColor {
 }
 
 impl AnsiColor {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "black" => Some(Self::Black),
+            "red" => Some(Self::Red),
+            "green" => Some(Self::Green),
+            "yellow" => Some(Self::Yellow),
+            "blue" => Some(Self::Blue),
+            "magenta" => Some(Self::Magenta),
+            "cyan" => Some(Self::Cyan),
+            "white" => Some(Self::White),
+            _ => None,
+        }
+    }
+
     const fn foreground_code(self) -> u8 {
         match self {
             Self::Black => 30,
@@ -94,17 +110,21 @@ pub fn paint(text: &str, style: AnsiStyle, enabled: bool) -> String {
     format!("{ESCAPE_PREFIX}{}m{text}{RESET}", codes.join(";"))
 }
 
-pub fn style_for_key(style_key: &str) -> AnsiStyle {
+pub fn style_for_key(style_key: &str, palette: &Palette) -> AnsiStyle {
+    if style_key == "inverse" {
+        return AnsiStyle::foreground(palette.color("muted").unwrap_or(AnsiColor::White))
+            .with_background(palette.color("primary").unwrap_or(AnsiColor::Black));
+    }
+
+    let Some(color) = palette.color(style_key) else {
+        return AnsiStyle::default();
+    };
+
+    let style = AnsiStyle::foreground(color);
     match style_key {
-        "path" => AnsiStyle::foreground(AnsiColor::Cyan).bold(),
-        "git_clean" => AnsiStyle::foreground(AnsiColor::Green),
-        "git_dirty" => AnsiStyle::foreground(AnsiColor::Yellow).bold(),
-        "symbol" => AnsiStyle::foreground(AnsiColor::Magenta).bold(),
-        "error" => AnsiStyle::foreground(AnsiColor::Red).bold(),
-        "info" => AnsiStyle::foreground(AnsiColor::Blue),
-        "muted" => AnsiStyle::foreground(AnsiColor::White).dim(),
-        "inverse" => AnsiStyle::foreground(AnsiColor::Black).with_background(AnsiColor::White),
-        _ => AnsiStyle::default(),
+        "primary" | "secondary" | "warning" | "error" => style.bold(),
+        "muted" => style.dim(),
+        _ => style,
     }
 }
 
@@ -196,14 +216,34 @@ mod tests {
             colors.map(AnsiColor::foreground_code),
             [30, 31, 32, 33, 34, 35, 36, 37]
         );
+        assert_eq!(AnsiColor::from_name("magenta"), Some(AnsiColor::Magenta));
+        assert_eq!(AnsiColor::from_name("unknown"), None);
     }
 
     #[test]
     fn maps_semantic_keys_without_exposing_escape_codes_to_segments() {
+        let palette = Palette::default();
         assert_eq!(
-            style_for_key("git_dirty"),
+            style_for_key("warning", &palette),
             AnsiStyle::foreground(AnsiColor::Yellow).bold()
         );
-        assert_eq!(style_for_key("unknown"), AnsiStyle::default());
+        assert_eq!(style_for_key("unknown", &palette), AnsiStyle::default());
+    }
+
+    #[test]
+    fn renderer_uses_an_injected_palette() {
+        let palette = Palette::new(
+            AnsiColor::Blue,
+            AnsiColor::White,
+            AnsiColor::Cyan,
+            AnsiColor::Magenta,
+            AnsiColor::Yellow,
+            AnsiColor::Black,
+        );
+
+        assert_eq!(
+            paint("path", style_for_key("primary", &palette), true),
+            "\u{1b}[1;34mpath\u{1b}[0m"
+        );
     }
 }

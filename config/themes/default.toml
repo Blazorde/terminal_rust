@@ -2,22 +2,24 @@ version = 1
 name = "default"
 
 [palette]
-path = "cyan"
-git_clean = "green"
-git_dirty = "yellow"
-symbol = "white"
+primary = "cyan"
+secondary = "magenta"
+success = "green"
+warning = "yellow"
+error = "red"
+muted = "white"
 
 [segments.path]
-foreground = "path"
+foreground = "primary"
 icon = "folder"
 fallback = ""
 
 [segments.git]
-foreground_clean = "git_clean"
-foreground_dirty = "git_dirty"
+foreground_clean = "success"
+foreground_dirty = "warning"
 icon = "git_branch"
 fallback = "git:"
 
 [segments.symbol]
-foreground = "symbol"
+foreground = "secondary"
 value = ">"

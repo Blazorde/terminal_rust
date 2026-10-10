@@ -17,6 +17,8 @@ and macOS.
   optional icons independent from ANSI rendering.
 - Added a portable ANSI prompt renderer with foreground, background, emphasis,
   per-segment resets, and automatic plain-text fallback.
+- Added an injectable semantic color palette so themes can remap prompt colors
+  without changing path or Git segment logic.
 - Verified user-level installers for Windows x86_64, Linux x86_64, and macOS
   Apple Silicon, with authenticated private-release support.
 

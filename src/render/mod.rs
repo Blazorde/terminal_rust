@@ -2,6 +2,7 @@ use std::fmt;
 use std::io::{self, Write};
 
 pub mod ansi;
+pub mod palette;
 
 pub fn stdout(message: impl fmt::Display) -> io::Result<()> {
     with_stdout(|writer| {

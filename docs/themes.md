@@ -10,30 +10,40 @@ version = 1
 name = "default"
 
 [palette]
-path = "cyan"
-git_clean = "green"
-git_dirty = "yellow"
-symbol = "white"
+primary = "cyan"
+secondary = "magenta"
+success = "green"
+warning = "yellow"
+error = "red"
+muted = "white"
 
 [segments.path]
-foreground = "path"
+foreground = "primary"
 icon = "folder"
 fallback = ""
 
 [segments.git]
-foreground_clean = "git_clean"
-foreground_dirty = "git_dirty"
+foreground_clean = "success"
+foreground_dirty = "warning"
 icon = "git_branch"
 fallback = "git:"
 
 [segments.symbol]
-foreground = "symbol"
+foreground = "secondary"
 value = ">"
 ```
 
-Les couleurs peuvent référencer un nom de la palette. La liste exacte des
-couleurs et la traduction ANSI seront définies avec le renderer ; un nom inconnu
-doit produire un avertissement puis revenir à la couleur du terminal.
+Les segments référencent uniquement un rôle sémantique de la palette :
+`primary`, `secondary`, `success`, `warning`, `error` ou `muted`. Le thème mappe
+ensuite ces rôles vers l'une des huit couleurs ANSI portables : `black`, `red`,
+`green`, `yellow`, `blue`, `magenta`, `cyan` ou `white`. Un nom inconnu revient à
+la couleur du terminal ; le futur chargeur de thème ajoutera aussi un diagnostic
+non fatal.
+
+La palette intégrée utilise cyan pour le chemin (`primary`), magenta pour le
+symbole (`secondary`), vert pour un dépôt propre (`success`) et jaune pour un
+dépôt modifié (`warning`). Modifier ces associations ne demande aucune
+modification des modules qui collectent le chemin ou l'état Git.
 
 ## Règles
 
