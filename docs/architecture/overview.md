@@ -2,14 +2,17 @@
 
 ## Vue d'ensemble
 
-Terminal Rust est actuellement un binaire Rust unique. Son architecture sépare
-la boucle interactive, l'analyse des entrées, le dispatch des commandes, la
-logique métier et le rendu.
+Terminal Rust fournit une bibliothèque Rust et un binaire CLI mince. Son
+architecture sépare la boucle interactive, l'API de moteur réutilisable,
+l'analyse des entrées, le dispatch des commandes, la logique métier et le
+rendu.
 
 ```mermaid
 flowchart LR
     User[Utilisateur] --> Runner[app/runner]
-    Runner --> Parser[app/parser]
+    Runner --> Engine[core/ShellEngine]
+    GUI[Future GUI Tauri] --> Engine
+    Engine --> Parser[app/parser]
     Parser --> Dispatcher[app/command]
     Dispatcher --> Commands[commands/*]
     Commands --> Render[render]
@@ -22,8 +25,10 @@ flowchart LR
 
 | Module | Responsabilité | Ne doit pas devenir |
 | --- | --- | --- |
-| `main.rs` | Composition minimale et code de sortie | Un second runner |
+| `lib.rs` | Frontière de bibliothèque et exports publics stables | Une copie du moteur |
+| `main.rs` | Appel minimal du runner CLI | Un second runner |
 | `app/runner.rs` | Modes interactif/non interactif, historique, cycle de vie | Un catalogue de commandes |
+| `core/engine.rs` | Contrat d'exécution partagé, sorties, erreurs et changement de dossier | Une interface terminal ou GUI |
 | `app/parser.rs` | Transformation d'une ligne en arguments | Un exécuteur |
 | `app/command.rs` | Registre, validation simple et dispatch | Un module métier géant |
 | `app/completion.rs` | Complétion des commandes et chemins | Une copie du registre |
@@ -37,12 +42,15 @@ flowchart LR
 ## Flux d'une commande
 
 1. `runner` lit une ligne avec `rustyline` ou depuis l'entrée standard.
-2. `parser` produit une liste d'arguments.
-3. `command` cherche la commande dans son registre et valide le nombre maximal
+2. `ShellEngine` reçoit la ligne et capture séparément stdout et stderr.
+3. `parser` produit une liste d'arguments.
+4. `command` cherche la commande dans son registre et valide le nombre maximal
    d'arguments.
-4. Le module métier exécute l'opération.
-5. `render` écrit la sortie ; `runner` garde la session active après une erreur
-   récupérable.
+5. Le module métier exécute l'opération.
+6. Le moteur retourne un `ExecutionResult` avec statut typé, sorties, erreur,
+   dossier courant et éventuel changement de dossier.
+7. Le consommateur CLI ou GUI décide comment présenter ce résultat ; le runner
+   CLI garde la session active après une erreur récupérable.
 
 ## Architecture cible
 

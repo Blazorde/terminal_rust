@@ -1,7 +1,7 @@
-mod command;
+pub(crate) mod command;
 mod completion;
 mod help;
-mod parser;
+pub(crate) mod parser;
 mod prompt;
 mod runner;
 

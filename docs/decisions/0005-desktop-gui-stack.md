@@ -1,6 +1,6 @@
 # ADR-0005 — Couche desktop Tauri autour du moteur Rust
 
-- Statut : Proposée
+- Statut : Acceptée
 - Date : 2026-10-10
 - Décideurs : équipe Terminal Rust
 
@@ -17,12 +17,12 @@ simule les commandes. Elle sert uniquement de preuve visuelle et fonctionnelle :
 son moteur, ses données fictives et ses instructions embarquées ne sont pas une
 base d'exécution.
 
-## Décision proposée
+## Décision
 
 Utiliser **Tauri 2** pour la fenêtre desktop et une interface locale
-TypeScript/React pour le rendu, sous réserve de validation par le propriétaire
-du projet. Le moteur, les commandes, Git, les chemins, la configuration et les
-sessions terminal restent en Rust.
+TypeScript/React pour le rendu. Le propriétaire du projet a délégué le choix
+technique après examen des compromis documentés. Le moteur, les commandes, Git,
+les chemins, la configuration et les sessions terminal restent en Rust.
 
 La frontière est stricte :
 
@@ -103,8 +103,7 @@ documentation avertit de changements cassants fréquents
 
 ## Validation
 
-L'ADR devient `Acceptée` seulement après confirmation du choix Tauri. Le spike
-T121 devra ensuite prouver :
+Le spike T121 devra prouver :
 
 - lancement de la même session réelle sur Windows, macOS et Linux ;
 - aucune exécution de commande dans la WebView ;

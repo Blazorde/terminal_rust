@@ -5,6 +5,17 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- Added a reusable `ShellEngine` library API with typed execution status,
+  captured standard streams, errors, and directory-change metadata for CLI and
+  future desktop consumers.
+
+### Changed
+
+- The CLI now executes built-in commands through the same public Rust engine
+  intended for the desktop adapter.
+
 ## [0.3.0] - 2026-10-10
 
 This release introduces the configurable, segmented prompt engine while

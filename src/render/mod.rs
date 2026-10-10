@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::fmt;
 use std::io::{self, Write};
 
@@ -10,6 +11,36 @@ pub mod separators;
 
 use palette::Palette;
 use separators::Separator;
+
+#[derive(Default)]
+pub(crate) struct CapturedOutput {
+    pub stdout: String,
+    pub stderr: String,
+}
+
+thread_local! {
+    static OUTPUT_CAPTURE: RefCell<Option<CapturedOutput>> = const { RefCell::new(None) };
+}
+
+pub(crate) fn capture_output<T>(operation: impl FnOnce() -> T) -> (T, CapturedOutput) {
+    OUTPUT_CAPTURE.with(|capture| {
+        assert!(
+            capture.borrow().is_none(),
+            "nested output capture is not supported"
+        );
+        *capture.borrow_mut() = Some(CapturedOutput::default());
+    });
+
+    let result = operation();
+    let output = OUTPUT_CAPTURE.with(|capture| {
+        capture
+            .borrow_mut()
+            .take()
+            .expect("output capture should be active")
+    });
+
+    (result, output)
+}
 
 pub fn prompt_segments(
     segments: &[PromptSegment],
@@ -52,37 +83,55 @@ pub fn prompt_segments(
 }
 
 pub fn stdout(message: impl fmt::Display) -> io::Result<()> {
+    let message = message.to_string();
+    if capture_text(OutputStream::Stdout, &message) {
+        return Ok(());
+    }
+
     with_stdout(|writer| {
-        write_text(writer, message)?;
+        write_text(writer, &message)?;
         writer.flush()
     })
 }
 
 pub fn stdout_line(message: impl fmt::Display) -> io::Result<()> {
-    with_stdout(|writer| write_line(writer, message))
+    let message = format!("{message}\n");
+    if capture_text(OutputStream::Stdout, &message) {
+        return Ok(());
+    }
+
+    with_stdout(|writer| write_text(writer, message))
 }
 
 pub fn stdout_lines(lines: &[&str]) -> io::Result<()> {
-    with_stdout(|writer| lines.iter().try_for_each(|line| write_line(writer, line)))
+    let mut message = lines.join("\n");
+    message.push('\n');
+    stdout(message)
 }
 
 pub fn stderr_line(message: impl fmt::Display) -> io::Result<()> {
-    with_stderr(|writer| write_line(writer, message))
+    let message = format!("{message}\n");
+    if capture_text(OutputStream::Stderr, &message) {
+        return Ok(());
+    }
+
+    with_stderr(|writer| write_text(writer, message))
 }
 
 pub fn stderr(message: impl fmt::Display) -> io::Result<()> {
+    let message = message.to_string();
+    if capture_text(OutputStream::Stderr, &message) {
+        return Ok(());
+    }
+
     with_stderr(|writer| {
-        write_text(writer, message)?;
+        write_text(writer, &message)?;
         writer.flush()
     })
 }
 
 pub fn write_text(writer: &mut impl Write, message: impl fmt::Display) -> io::Result<()> {
     write!(writer, "{message}")
-}
-
-pub fn write_line(writer: &mut impl Write, message: impl fmt::Display) -> io::Result<()> {
-    writeln!(writer, "{message}")
 }
 
 fn with_stdout<T>(render: impl FnOnce(&mut io::StdoutLock<'_>) -> io::Result<T>) -> io::Result<T> {
@@ -97,6 +146,27 @@ fn with_stderr<T>(render: impl FnOnce(&mut io::StderrLock<'_>) -> io::Result<T>)
     let mut writer = stderr.lock();
 
     render(&mut writer)
+}
+
+#[derive(Clone, Copy)]
+enum OutputStream {
+    Stdout,
+    Stderr,
+}
+
+fn capture_text(stream: OutputStream, message: &str) -> bool {
+    OUTPUT_CAPTURE.with(|capture| {
+        let mut capture = capture.borrow_mut();
+        let Some(output) = capture.as_mut() else {
+            return false;
+        };
+
+        match stream {
+            OutputStream::Stdout => output.stdout.push_str(message),
+            OutputStream::Stderr => output.stderr.push_str(message),
+        }
+        true
+    })
 }
 
 #[cfg(test)]

@@ -8,6 +8,7 @@ use std::io;
 use std::path::Path;
 
 use crate::errors::ls::LsError;
+use crate::render;
 
 use self::display::print_item;
 use self::fs::{metadata, read_directory_items};
@@ -17,19 +18,20 @@ use self::sort::sort_items;
 
 pub fn ls(args: &[String]) -> Result<(), LsError> {
     let (options, targets) = options::parse_args(args)?;
-    let stdout = io::stdout();
-    let mut writer = io::BufWriter::new(stdout.lock());
+    let mut writer = Vec::new();
 
     if targets.is_empty() {
-        return list_path(Path::new("."), &options, &mut writer);
+        list_path(Path::new("."), &options, &mut writer)?;
+    } else {
+        for (index, target) in targets.iter().enumerate() {
+            display::print_target_header(target, index, targets.len(), &mut writer)?;
+            list_path(target, &options, &mut writer)?;
+        }
     }
 
-    for (index, target) in targets.iter().enumerate() {
-        display::print_target_header(target, index, targets.len(), &mut writer)?;
-        list_path(target, &options, &mut writer)?;
-    }
-
-    Ok(())
+    let output = String::from_utf8(writer)
+        .map_err(|error| LsError::Output(io::Error::new(io::ErrorKind::InvalidData, error)))?;
+    render::stdout(output).map_err(LsError::Output)
 }
 
 fn list_path(path: &Path, options: &LsOptions, writer: &mut impl io::Write) -> Result<(), LsError> {

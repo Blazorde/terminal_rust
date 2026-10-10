@@ -7,11 +7,10 @@ use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use rustyline::{CompletionType, Config, Editor};
 
-use crate::app::command::{self, CommandResult, ShellState};
 use crate::app::completion::ShellHelper;
-use crate::app::parser::parse_input;
 use crate::app::prompt::Prompt;
 use crate::config;
+use crate::core::{ExecutionResult, ExecutionStatus, ShellEngine};
 use crate::render;
 
 const HISTORY_FILE_ENV: &str = "TERMINAL_RUST_HISTORY_FILE";
@@ -27,14 +26,13 @@ pub fn run() -> ExitCode {
 }
 
 fn run_once(args: &[String]) -> ExitCode {
-    let mut state = ShellState::default();
+    let mut engine = ShellEngine::new();
+    let result = engine.execute_args(args);
+    emit_result(&result);
 
-    match command::execute(args, &mut state) {
-        CommandResult::Continue | CommandResult::Exit => ExitCode::SUCCESS,
-        CommandResult::Error(error) => {
-            let _ = render::stderr_line(error);
-            ExitCode::FAILURE
-        }
+    match result.status {
+        ExecutionStatus::Continue | ExecutionStatus::Exit => ExitCode::SUCCESS,
+        ExecutionStatus::Failed => ExitCode::FAILURE,
     }
 }
 
@@ -73,7 +71,7 @@ fn run_interactive_editor() -> ExitCode {
         }
     }
 
-    let mut state = ShellState::default();
+    let mut engine = ShellEngine::new();
     let mut shell_prompt = load_prompt();
 
     let exit_code = loop {
@@ -91,7 +89,7 @@ fn run_interactive_editor() -> ExitCode {
                 if !trimmed.is_empty() {
                     let _ = editor.add_history_entry(trimmed);
                 }
-                if handle_input(&input, &mut state) == CommandResult::Exit {
+                if handle_input(&input, &mut engine) == ExecutionStatus::Exit {
                     break ExitCode::SUCCESS;
                 }
             }
@@ -128,7 +126,7 @@ fn run_interactive_plain() -> ExitCode {
     let stdin = io::stdin();
     let mut stdin = stdin.lock();
     let mut input = String::new();
-    let mut state = ShellState::default();
+    let mut engine = ShellEngine::new();
     let mut shell_prompt = load_prompt();
 
     loop {
@@ -147,28 +145,27 @@ fn run_interactive_plain() -> ExitCode {
             }
         }
 
-        if handle_input(&input, &mut state) == CommandResult::Exit {
+        if handle_input(&input, &mut engine) == ExecutionStatus::Exit {
             return ExitCode::SUCCESS;
         }
     }
 }
 
-fn handle_input(input: &str, state: &mut ShellState) -> CommandResult {
-    let args = match parse_input(input) {
-        Ok(args) if args.is_empty() => return CommandResult::Continue,
-        Ok(args) => args,
-        Err(error) => {
-            let _ = render::stderr_line(error);
-            return CommandResult::Continue;
-        }
-    };
+fn handle_input(input: &str, engine: &mut ShellEngine) -> ExecutionStatus {
+    let result = engine.execute_line(input);
+    emit_result(&result);
+    result.status
+}
 
-    match command::execute(&args, state) {
-        CommandResult::Error(error) => {
-            let _ = render::stderr_line(error);
-            CommandResult::Continue
-        }
-        result => result,
+fn emit_result(result: &ExecutionResult) {
+    if !result.stdout.is_empty() {
+        let _ = render::stdout(&result.stdout);
+    }
+    if !result.stderr.is_empty() {
+        let _ = render::stderr(&result.stderr);
+    }
+    if let Some(error) = &result.error {
+        let _ = render::stderr_line(error);
     }
 }
 
