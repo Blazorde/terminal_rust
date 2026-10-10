@@ -1,0 +1,30 @@
+version = 1
+name = "powerline"
+icons = "auto"
+
+[palette]
+primary = "blue"
+secondary = "magenta"
+success = "green"
+warning = "yellow"
+error = "red"
+muted = "white"
+
+[separator]
+glyph = "\ue0b0"
+fallback = " | "
+
+[segments.path]
+foreground = "primary"
+icon = "folder"
+fallback = ""
+
+[segments.git]
+foreground_clean = "success"
+foreground_dirty = "warning"
+icon = "git_branch"
+fallback = "git:"
+
+[segments.symbol]
+foreground = "secondary"
+value = ">"

@@ -4,6 +4,7 @@ use std::io::{self, Write};
 pub mod ansi;
 pub mod icons;
 pub mod palette;
+pub mod separators;
 
 pub fn stdout(message: impl fmt::Display) -> io::Result<()> {
     with_stdout(|writer| {

@@ -67,6 +67,7 @@ Trois thèmes sont intégrés et ne nécessitent aucun fichier supplémentaire :
 | `default` | Palette équilibrée pour un usage général | détection automatique |
 | `minimal` | Peu de couleurs, compatible avec toutes les polices | désactivées |
 | `git-focus` | État Git plus contrasté, notamment lorsqu'il est modifié | détection automatique |
+| `powerline` | Séparateurs triangulaires colorés entre les segments | détection automatique |
 
 Choisissez le preset dans le fichier de configuration utilisateur :
 
@@ -98,6 +99,24 @@ schéma sans changer les fournisseurs de données.
 principaux au blanc. Il reste donc lisible sans Nerd Font et avec les capacités
 ANSI de base. `config/themes/git-focus.toml` conserve les fallbacks ASCII mais
 utilise le rouge pour rendre immédiatement visible un dépôt modifié.
+
+## Séparateurs Powerline
+
+Le preset `powerline` utilise le glyphe `U+E0B0` entre les segments et lui
+applique la couleur du segment précédent. Son activation se fait comme pour les
+autres presets :
+
+```toml
+theme = "powerline"
+```
+
+Le glyphe enrichi nécessite une Nerd Font et la même détection prudente que les
+icônes. Définissez `TERMINAL_RUST_NERD_FONT=1` (`true` et `yes` sont aussi
+acceptés) lorsque la police du terminal est compatible. Sans confirmation, sans
+terminal interactif, ou avec `prompt.icons = "never"`, le séparateur devient
+automatiquement ` | `. Le prompt reste donc lisible sous Windows, macOS et
+Linux avec une police standard. `prompt.separator` continue de contrôler les
+thèmes qui n'ont pas de séparateur dédié.
 
 ## Icônes et repli ASCII
 

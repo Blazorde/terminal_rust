@@ -107,6 +107,26 @@ fn interactive_shell_follows_configured_segment_order() {
 }
 
 #[test]
+fn powerline_theme_uses_ascii_separator_without_terminal_font_capability() {
+    let directory = TestDirectory::new("powerline fallback");
+    let config = directory.path().join("config.toml");
+    fs::write(&config, "version = 1\ntheme = \"powerline\"\n")
+        .expect("configuration should be written");
+
+    let output = run_interactive_with_env(directory.path(), "exit\n", Some(&config));
+    let rendered = stdout(&output);
+    let rendered_path = rendered
+        .strip_suffix(" | > ")
+        .expect("powerline should use its ASCII fallback when output is piped");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_eq!(
+        fs::canonicalize(rendered_path).expect("rendered path should exist"),
+        fs::canonicalize(directory.path()).expect("fixture path should exist")
+    );
+}
+
+#[test]
 fn invalid_toml_reports_its_path_and_uses_defaults() {
     let directory = TestDirectory::new("invalid config");
     let config = directory.path().join("broken config.toml");

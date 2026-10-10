@@ -80,6 +80,11 @@ entre le glyphe et le fallback ASCII porté par `SegmentIcon`. Les modes `always
 `never` et `auto` sont indépendants de la couleur ; le mode automatique reste
 prudent et exige une confirmation explicite de la police configurée.
 
+Le module `render::separators` applique la même détection aux séparateurs
+Powerline. Il colore le glyphe avec le rôle du segment précédent et retourne un
+fallback ASCII lorsque la capacité Nerd Font n'est pas confirmée. La collecte
+des données et les segments restent ainsi indépendants de la décoration.
+
 La commande mesurée sur le dépôt du projet sous Windows prend environ 50 ms à
 froid. Le cache évite de répéter ce coût lors de rendus rapprochés tout en
 bornant l'obsolescence à 250 ms. Les tests injectent le temps et le fournisseur
