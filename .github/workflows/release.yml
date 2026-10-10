@@ -40,20 +40,36 @@ jobs:
         shell: pwsh
         run: .\target\release\terminal_rust.exe help
 
+      - name: Stage release files
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist/package
+          cp target/release/terminal_rust LICENSE README.md CHANGELOG.md dist/package/
+          cp -R config dist/package/config
+
+      - name: Stage release files on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist\package -Force | Out-Null
+          Copy-Item target\release\terminal_rust.exe, LICENSE, README.md, CHANGELOG.md -Destination dist\package
+          Copy-Item config -Destination dist\package\config -Recurse
+
       - name: Package Linux binary
         if: runner.os == 'Linux'
         shell: bash
-        run: tar -czf "terminal_rust-linux-${{ runner.arch }}.tar.gz" -C target/release terminal_rust
+        run: tar -czf "terminal_rust-linux-${{ runner.arch }}.tar.gz" -C dist/package .
 
       - name: Package macOS binary
         if: runner.os == 'macOS'
         shell: bash
-        run: tar -czf "terminal_rust-macos-${{ runner.arch }}.tar.gz" -C target/release terminal_rust
+        run: tar -czf "terminal_rust-macos-${{ runner.arch }}.tar.gz" -C dist/package .
 
       - name: Package Windows binary
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -LiteralPath target\release\terminal_rust.exe -DestinationPath "terminal_rust-windows-${{ runner.arch }}.zip"
+        run: Compress-Archive -Path dist\package\* -DestinationPath "terminal_rust-windows-${{ runner.arch }}.zip"
 
       - name: Upload Linux artifact
         if: runner.os == 'Linux'

@@ -10,7 +10,8 @@ use rustyline::{CompletionType, Config, Editor};
 use crate::app::command::{self, CommandResult, ShellState};
 use crate::app::completion::ShellHelper;
 use crate::app::parser::parse_input;
-use crate::app::prompt::{print_prompt, prompt};
+use crate::app::prompt::Prompt;
+use crate::config;
 use crate::render;
 
 const HISTORY_FILE_ENV: &str = "TERMINAL_RUST_HISTORY_FILE";
@@ -73,9 +74,10 @@ fn run_interactive_editor() -> ExitCode {
     }
 
     let mut state = ShellState::default();
+    let mut shell_prompt = load_prompt();
 
     let exit_code = loop {
-        let prompt = match prompt() {
+        let prompt = match shell_prompt.render() {
             Ok(prompt) => prompt,
             Err(error) => {
                 let _ = render::stderr_line(format_args!("prompt: {error}"));
@@ -127,9 +129,10 @@ fn run_interactive_plain() -> ExitCode {
     let mut stdin = stdin.lock();
     let mut input = String::new();
     let mut state = ShellState::default();
+    let mut shell_prompt = load_prompt();
 
     loop {
-        if let Err(error) = print_prompt() {
+        if let Err(error) = shell_prompt.print() {
             let _ = render::stderr_line(format_args!("prompt: {error}"));
             return ExitCode::FAILURE;
         }
@@ -166,5 +169,21 @@ fn handle_input(input: &str, state: &mut ShellState) -> CommandResult {
             CommandResult::Continue
         }
         result => result,
+    }
+}
+
+fn load_prompt() -> Prompt {
+    match config::load_user_config() {
+        Ok(config) => match Prompt::from_config(&config) {
+            Ok(prompt) => prompt,
+            Err(error) => {
+                let _ = render::stderr_line(format_args!("theme: {error}; using defaults"));
+                Prompt::default()
+            }
+        },
+        Err(error) => {
+            let _ = render::stderr_line(format_args!("config: {error}; using defaults"));
+            Prompt::default()
+        }
     }
 }

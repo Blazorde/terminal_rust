@@ -4,8 +4,40 @@ Terminal Rust est un mini shell écrit en Rust. Le projet sert à apprendre comm
 
 Le but n'est pas de remplacer Bash, PowerShell ou Zsh dès maintenant. Le but est de construire progressivement un shell fiable, lisible, maintenable et proche des bonnes pratiques Rust.
 
+## Démarrage rapide
+
+Pour découvrir le projet depuis les sources :
+
+```bash
+git clone https://github.com/Blazorde/terminal_rust.git
+cd terminal_rust
+cargo run
+```
+
+Le prompt interactif apparaît alors dans le terminal. Taper `help` pour voir les
+commandes, `dashboard` pour afficher l'état de la machine et `exit` pour quitter.
+Pour exécuter une seule commande sans ouvrir une session interactive :
+
+```bash
+cargo run -- pwd
+cargo run -- ls -la
+cargo run -- dashboard
+cargo run -- theme list
+cargo run -- theme preview minimal
+```
+
+| Plateforme | Archive publiée | Installateur | CI |
+| --- | --- | --- | --- |
+| Windows x86_64 | `.zip` | `scripts/install.ps1` | Oui |
+| Linux x86_64 | `.tar.gz` | `scripts/install.sh` | Oui |
+| macOS Apple Silicon | `.tar.gz` | `scripts/install.sh` | Oui |
+
+macOS Intel n'a pas encore de binaire précompilé ; la compilation depuis les
+sources reste possible avec une toolchain Rust compatible.
+
 ## Sommaire
 
+- [Démarrage rapide](#démarrage-rapide)
 - [Fonctionnalités](#fonctionnalités)
 - [Installation](#installation)
 - [Lancement](#lancement)
@@ -51,6 +83,23 @@ Les archives Windows, Linux et macOS sont disponibles dans la
 Télécharger l'archive correspondant au système, l'extraire, puis lancer
 `terminal_rust help` (`terminal_rust.exe help` sous Windows). Le fichier
 `SHA256SUMS.txt` permet de vérifier l'intégrité des téléchargements.
+
+Le [guide d'installation détaillé](docs/install.md) explique le fichier à
+choisir, les permissions, le `PATH` et le lancement sous chaque système. En cas
+de problème, consulter le [guide de dépannage](docs/troubleshooting.md).
+
+Les installateurs vérifient la somme SHA-256 avant de remplacer le binaire :
+
+```powershell
+.\scripts\install.ps1
+```
+
+```bash
+./scripts/install.sh
+```
+
+Lire le script avant de l'exécuter et utiliser l'installation manuelle si une
+politique locale bloque son exécution.
 
 ### Compiler depuis les sources
 
@@ -115,6 +164,8 @@ Sur Windows, le binaire release se trouve ici:
 | `clear` | Efface l'écran d'un terminal compatible ANSI |
 | `dashboard` | Affiche un tableau de bord système et performance |
 | `git <status\|branch\|log> [options]` | Lance un raccourci Git autorisé dans le dossier courant |
+| `theme list` | Liste les thèmes intégrés |
+| `theme preview <name>` | Prévisualise un thème avec des données de démonstration |
 | `help` | Affiche l'aide |
 | `exit` | Ferme le shell |
 | `quit` | Ferme le shell |
@@ -136,6 +187,8 @@ dashboard
 git status --short --branch
 git branch --all
 git log --oneline -10
+theme list
+theme preview powerline
 exit
 ```
 
@@ -162,17 +215,45 @@ l'historique en mémoire.
 
 ## Détection Git
 
-Le module `src/git/` fournit la première brique du futur prompt enrichi. Il
-détermine si un dossier appartient à un dépôt Git avec :
+Dans un dépôt, le prompt affiche la branche courante et ajoute `*` lorsque le
+working tree contient des modifications :
 
 ```text
-git -C <directory> rev-parse --is-inside-work-tree
+C:\workspace\terminal_rust  git:main >
+C:\workspace\terminal_rust  git:main* >
 ```
 
-Cette détection est volontairement non bloquante : un dossier hors dépôt, un
-chemin invalide ou l'absence de Git retournent simplement `false`. Aucun message
-d'erreur Git n'est affiché et le shell reste utilisable sur macOS, Linux et
-Windows.
+En HEAD détachée, le segment prend la forme `detached@1a2b3c4`. Hors dépôt ou
+si Git est absent, le prompt conserve simplement le chemin suivi de `>`. Une
+seule commande Git au format porcelain stable collecte la branche et l'état :
+
+```text
+git --no-optional-locks -C <directory> status --porcelain=v2 --branch
+```
+
+Les informations sont gardées en mémoire pendant 250 ms et immédiatement
+rechargées lors d'un changement de dossier. Cette durée absorbe les rendus
+rapprochés sans masquer longtemps une modification. Un dossier hors dépôt, une
+sortie invalide ou l'absence de Git désactive silencieusement ce segment ; le
+shell reste utilisable sur macOS, Linux et Windows.
+
+## Icônes du prompt
+
+Le mode par défaut reste compatible avec toutes les polices et affiche les
+fallbacks ASCII, par exemple `git:main`. Pour activer les glyphes façon Oh My
+Posh, installer une [Nerd Font](https://www.nerdfonts.com/) (MesloLGS NF est un
+bon choix multiplateforme), la sélectionner dans le terminal, puis définir :
+
+```powershell
+$env:TERMINAL_RUST_ICONS = "always"
+cargo run
+```
+
+Sous macOS ou Linux, utiliser `export TERMINAL_RUST_ICONS=always`. La valeur
+`never` force le mode ASCII. La valeur `auto` est prudente : elle active les
+icônes seulement dans un terminal lorsque `TERMINAL_RUST_NERD_FONT=1` confirme
+qu'une Nerd Font est configurée. Ces valeurs correspondent à l'option
+`prompt.icons` du futur chargeur de configuration.
 
 ## Commandes Git développeur
 
@@ -347,7 +428,7 @@ Elle couvre notamment :
 
 - l'architecture actuelle et l'architecture cible ;
 - la compatibilité Windows, macOS et Linux ;
-- le futur moteur de prompt à segments inspiré d'Oh My Posh ;
+- le moteur de prompt configurable à segments inspiré d'Oh My Posh ;
 - les décisions d'architecture (ADR) ;
 - les règles de contribution, de tests et de traitement des tickets.
 
@@ -386,14 +467,32 @@ pub enum RmError {
 
 ## Développement
 
-Commandes utiles pendant le développement:
+Le développement nécessite la toolchain Rust stable. Git est recommandé pour
+contribuer et pour tester le segment de prompt, mais son absence n'empêche pas
+le shell de démarrer. Aucune Nerd Font ni séquence ANSI avancée n'est requise.
+
+Préparer une branche depuis `develop` :
 
 ```bash
-cargo fmt
-cargo check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
+git switch develop
+git pull --ff-only origin develop
+git switch -c feat/ma-fonctionnalite
 ```
+
+Lancer le projet et la suite de validation complète :
+
+```bash
+cargo run
+cargo fmt --all -- --check
+cargo check --all-targets --all-features
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+```
+
+Les mêmes contrôles sont exécutés sur Ubuntu, Windows et macOS dans GitHub
+Actions. Le [guide de contribution](docs/development/contributing.md) décrit le
+cycle ticket-branche-PR et le [guide de tests](docs/development/testing.md)
+explique la stratégie de validation.
 
 Ajouter une nouvelle commande:
 
@@ -467,6 +566,11 @@ Chaque archive est nommée avec son système et l'architecture du runner. Le
 guide de téléchargement et de validation se trouve dans
 [docs/release.md](docs/release.md).
 
+La version préparée pour publication est `0.3.0`. Les changements à venir sont
+regroupés sous `Unreleased` dans le [changelog](CHANGELOG.md). La stratégie
+SemVer et la checklist de publication sont détaillées dans le
+[guide de release](docs/release.md#publier-une-version).
+
 ## Roadmap
 
 Idées de commandes ou fonctionnalités à ajouter plus tard:
@@ -474,14 +578,18 @@ Idées de commandes ou fonctionnalités à ajouter plus tard:
 - `cp`
 - `mv`
 - `echo`
-- `history`
 - variables d'environnement
 - alias
 - redirections
 - pipes
 - meilleure gestion des permissions
+- chargement de thèmes personnalisés depuis des fichiers externes
 - interface terminal graphique dédiée
+
+Les changements livrés sont recensés dans le [changelog](CHANGELOG.md). Les
+limitations propres à une version y sont distinguées des éléments encore
+prévus dans la roadmap.
 
 ## Licence
 
-Ce projet est sous licence MIT.
+Ce projet est distribué sous [licence MIT](LICENSE).

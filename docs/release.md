@@ -31,6 +31,11 @@ terminal_rust-macos-<architecture>.tar.gz
 terminal_rust-windows-<architecture>.zip
 ```
 
+Chaque archive place le binaire à sa racine et inclut aussi `LICENSE`,
+`README.md`, `CHANGELOG.md` et le dossier `config/` avec les exemples de
+configuration et de thèmes. Les installateurs existants restent donc
+compatibles tout en distribuant les informations légales et d'utilisation.
+
 Les artefacts sont conservés pendant 14 jours dans l'exécution GitHub Actions.
 
 ## Télécharger une version stable
@@ -76,11 +81,31 @@ Actions. Un échec de compilation, de smoke test, d'archivage ou d'upload fait
 
 ## Publier une version
 
+Terminal Rust suit [Semantic Versioning](https://semver.org/) :
+
+- `PATCH` (`0.2.1`) pour une correction rétrocompatible ;
+- `MINOR` (`0.3.0`) pour une fonctionnalité rétrocompatible ;
+- `MAJOR` (`1.0.0`) pour une rupture de compatibilité publique.
+
+Avant `1.0.0`, une rupture importante peut aussi faire évoluer la version
+mineure. Elle doit être signalée sous `### Changed` dans le changelog et dans
+les notes de release. La version de `Cargo.toml`, celle de `Cargo.lock`, le titre
+du changelog et le tag Git doivent toujours correspondre.
+
+Les changements destinés à la prochaine version restent dans
+`## [Unreleased]`. Lors de la préparation d'une release, cette section est
+transformée en `## [x.y.z] - YYYY-MM-DD`, puis une nouvelle section
+`## [Unreleased]` vide est créée. La prochaine version prévue est `0.3.0`.
+
+### Checklist
+
 1. Mettre à jour la version dans `Cargo.toml` et `Cargo.lock`.
-2. Ajouter une section `## [x.y.z]` dans `CHANGELOG.md`.
-3. Fusionner la version validée dans `main`.
-4. Créer et pousser un tag minuscule `vx.y.z` sur ce commit.
-5. Vérifier que les trois builds et le job **Publish GitHub Release** réussissent.
+2. Déplacer les notes de `Unreleased` vers une section datée `## [x.y.z]`.
+3. Exécuter la validation obligatoire et ouvrir une PR vers `develop`.
+4. Fusionner `develop` dans `main` par pull request après le passage de la CI.
+5. Créer et pousser un tag minuscule `vx.y.z` sur ce commit de `main`.
+6. Vérifier que les trois builds et le job **Publish GitHub Release** réussissent.
+7. Contrôler les archives, `SHA256SUMS.txt` et les notes sur la page Releases.
 
 Le job de publication refuse un tag sans section correspondante dans le
 changelog et vérifie que le tag existe déjà sur GitHub.

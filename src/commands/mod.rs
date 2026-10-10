@@ -7,4 +7,5 @@ pub mod ls;
 pub mod mkdir;
 pub mod pwd;
 pub mod rm;
+pub mod theme;
 pub mod touch;

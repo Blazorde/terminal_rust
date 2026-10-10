@@ -38,7 +38,9 @@ Feat/autocomplete
 
 File: `.github/workflows/ci.yml`
 
-Runs on pull requests and pushes. It checks:
+Runs on pull requests targeting `main` or `develop`, and on direct updates to
+those two protected branches. Work branches are validated through their pull
+request so the same commit does not consume a duplicate CI matrix. It checks:
 
 ```bash
 cargo fmt --all -- --check
@@ -50,6 +52,15 @@ cargo test --all-targets --all-features
 The CI runs on Ubuntu, Windows, and macOS. The test command includes the
 integration suite in `tests/cli_tests.rs`, which launches the compiled binary
 and verifies stdout, stderr, and exit codes.
+
+The matrix also parses the platform installer that can run on each host:
+
+```text
+Linux/macOS: sh -n scripts/install.sh
+Windows:     PowerShell parser for scripts/install.ps1
+```
+
+`CI / Required CI gate` succeeds only after every matrix job has passed.
 
 ### Release builds
 
