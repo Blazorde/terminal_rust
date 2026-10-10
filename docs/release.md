@@ -31,6 +31,11 @@ terminal_rust-macos-<architecture>.tar.gz
 terminal_rust-windows-<architecture>.zip
 ```
 
+Chaque archive place le binaire à sa racine et inclut aussi `LICENSE`,
+`README.md`, `CHANGELOG.md` et le dossier `config/` avec les exemples de
+configuration et de thèmes. Les installateurs existants restent donc
+compatibles tout en distribuant les informations légales et d'utilisation.
+
 Les artefacts sont conservés pendant 14 jours dans l'exécution GitHub Actions.
 
 ## Télécharger une version stable

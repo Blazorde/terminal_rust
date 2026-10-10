@@ -1,6 +1,6 @@
 [package]
 name = "terminal_rust"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "Mini shell Rust for developers on macOS, Linux, and Windows. A simple command-line interface for executing commands and managing files."
 readme = "README.md"
