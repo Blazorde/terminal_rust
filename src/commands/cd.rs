@@ -32,13 +32,8 @@ fn resolve_target(target: Option<&str>, previous_dir: Option<&Path>) -> Result<P
 mod tests {
     use super::*;
     use crate::errors::cd::CdError;
+    use crate::test_support::cwd_lock;
     use std::fs::{self, File};
-    use std::sync::{Mutex, OnceLock};
-
-    fn cwd_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
 
     #[test]
     fn cd_changes_current_directory() {

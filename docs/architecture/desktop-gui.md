@@ -1,8 +1,7 @@
 # Architecture cible de l'interface desktop
 
-Ce document décrit les frontières prévues par T118. Le choix de Tauri reste
-proposé dans l'[ADR-0005](../decisions/0005-desktop-gui-stack.md) tant qu'il
-n'est pas confirmé.
+Ce document décrit les frontières prévues par T118. Tauri 2 est retenu par
+l'[ADR-0005](../decisions/0005-desktop-gui-stack.md).
 
 ## Frontières
 
@@ -18,8 +17,8 @@ n'est pas confirmé.
 └───────────────────────┬──────────────────────────────────────┘
                         │ API Rust sans dépendance GUI
 ┌───────────────────────▼──────────────────────────────────────┐
-│ terminal-core                                                │
-│ commandes · parser · contexte · prompt · Git · configuration │
+│ ShellEngine / bibliothèque Rust                              │
+│ résultats · commandes · parser · prompt · Git · configuration│
 └───────────────┬───────────────────────────────┬──────────────┘
                 │                               │
        ┌────────▼────────┐             ┌────────▼────────┐
@@ -30,9 +29,9 @@ n'est pas confirmé.
 
 ## Règles d'architecture
 
-- `terminal-core` ne dépend ni de Tauri, ni de React, ni d'un toolkit GUI.
-- Le CLI et le desktop appellent les mêmes fonctions métier et reçoivent les
-  mêmes erreurs typées.
+- La bibliothèque Rust ne dépend ni de Tauri, ni de React, ni d'un toolkit GUI.
+- Le CLI utilise déjà `ShellEngine`; le desktop consommera le même contrat
+  `ExecutionResult` pour les sorties, les erreurs et les changements de dossier.
 - La couche desktop ne construit pas des commandes shell par concaténation de
   chaînes. Les entrées utilisateur voyagent comme données vers une API bornée.
 - Le processus Rust possède les PTY, les handles de processus, le dossier

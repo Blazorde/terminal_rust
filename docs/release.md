@@ -95,7 +95,8 @@ du changelog et le tag Git doivent toujours correspondre.
 Les changements destinés à la prochaine version restent dans
 `## [Unreleased]`. Lors de la préparation d'une release, cette section est
 transformée en `## [x.y.z] - YYYY-MM-DD`, puis une nouvelle section
-`## [Unreleased]` vide est créée. La prochaine version prévue est `0.3.0`.
+`## [Unreleased]` vide est créée. La prochaine version est choisie au moment de
+la préparation selon la portée des changements accumulés.
 
 ### Checklist
 
