@@ -1,6 +1,8 @@
 use std::fmt;
 use std::io::{self, Write};
 
+pub mod ansi;
+
 pub fn stdout(message: impl fmt::Display) -> io::Result<()> {
     with_stdout(|writer| {
         write_text(writer, message)?;

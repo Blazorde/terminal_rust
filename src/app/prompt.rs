@@ -1,5 +1,5 @@
 use std::env;
-use std::io;
+use std::io::{self, IsTerminal};
 use std::path::Path;
 use std::time::Duration;
 
@@ -7,6 +7,7 @@ use crate::cache::GitPromptCache;
 use crate::git::{self, PromptGitInfo};
 use crate::prompt::segment::{PromptSegment, SegmentKind};
 use crate::render;
+use crate::render::ansi;
 
 const GIT_CACHE_TTL: Duration = Duration::from_millis(250);
 
@@ -28,7 +29,8 @@ impl Prompt {
         let git = self
             .git_cache
             .get_or_refresh(&current_dir, git::prompt_info);
-        Ok(render_for_path(&current_dir, git.as_ref()))
+        let color = ansi::color_enabled(io::stdout().is_terminal());
+        Ok(render_for_path(&current_dir, git.as_ref(), color))
     }
 
     pub fn print(&mut self) -> io::Result<()> {
@@ -36,29 +38,30 @@ impl Prompt {
     }
 }
 
-fn render_for_path(path: &Path, git: Option<&PromptGitInfo>) -> String {
+fn render_for_path(path: &Path, git: Option<&PromptGitInfo>, color: bool) -> String {
     let segments = segments_for_path(path, git);
-    let path = segments[0]
-        .value
-        .as_deref()
-        .expect("the path segment always has a value");
-    let symbol = segments
-        .last()
-        .and_then(|segment| segment.value.as_deref())
-        .expect("the symbol segment always has a value");
+    let path = render_segment(&segments[0], color);
+    let symbol = render_segment(
+        segments.last().expect("the symbol segment always exists"),
+        color,
+    );
 
     match segments
         .get(1)
         .filter(|segment| segment.kind == SegmentKind::Git)
     {
-        Some(git) => format!(
-            "{path}  {} {symbol} ",
-            git.value
-                .as_deref()
-                .expect("a visible Git segment has a value")
-        ),
+        Some(git) => format!("{path}  {} {symbol} ", render_segment(git, color)),
         None => format!("{path}{symbol} "),
     }
+}
+
+fn render_segment(segment: &PromptSegment, color: bool) -> String {
+    let value = segment.value.as_deref().unwrap_or_default();
+    ansi::paint(
+        value,
+        ansi::style_for_key(segment.style_key.as_str()),
+        color,
+    )
 }
 
 fn segments_for_path(path: &Path, git: Option<&PromptGitInfo>) -> Vec<PromptSegment> {
@@ -97,7 +100,10 @@ mod tests {
 
     #[test]
     fn renders_a_simple_prompt_without_git() {
-        assert_eq!(render_for_path(Path::new("workspace"), None), "workspace> ");
+        assert_eq!(
+            render_for_path(Path::new("workspace"), None, false),
+            "workspace> "
+        );
     }
 
     #[test]
@@ -112,12 +118,25 @@ mod tests {
         };
 
         assert_eq!(
-            render_for_path(Path::new("project with spaces"), Some(&clean)),
+            render_for_path(Path::new("project with spaces"), Some(&clean), false),
             "project with spaces  main > "
         );
         assert_eq!(
-            render_for_path(Path::new("project"), Some(&dirty)),
+            render_for_path(Path::new("project"), Some(&dirty), false),
             "project  feature/prompt* > "
+        );
+    }
+
+    #[test]
+    fn renders_each_colored_segment_with_its_own_reset() {
+        let git = PromptGitInfo {
+            branch: "main".to_string(),
+            dirty: false,
+        };
+
+        assert_eq!(
+            render_for_path(Path::new("project"), Some(&git), true),
+            "\u{1b}[1;36mproject\u{1b}[0m  \u{1b}[32mmain\u{1b}[0m \u{1b}[1;35m>\u{1b}[0m "
         );
     }
 
