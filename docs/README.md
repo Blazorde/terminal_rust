@@ -13,6 +13,7 @@ vivent ici.
 | Vérifier la portabilité | [Compatibilité multiplateforme](architecture/cross-platform.md) |
 | Comprendre une décision | [Registre des ADR](decisions/README.md) |
 | Personnaliser le prompt | [Personnalisation](customization.md) |
+| Configurer le shell | [Configuration utilisateur](configuration.md) |
 | Créer un thème | [Format des thèmes](themes.md) |
 | Contribuer | [Guide de contribution](development/contributing.md) |
 | Tester une évolution | [Stratégie de tests](development/testing.md) |

@@ -11,6 +11,7 @@ use crate::app::command::{self, CommandResult, ShellState};
 use crate::app::completion::ShellHelper;
 use crate::app::parser::parse_input;
 use crate::app::prompt::Prompt;
+use crate::config;
 use crate::render;
 
 const HISTORY_FILE_ENV: &str = "TERMINAL_RUST_HISTORY_FILE";
@@ -73,7 +74,7 @@ fn run_interactive_editor() -> ExitCode {
     }
 
     let mut state = ShellState::default();
-    let mut shell_prompt = Prompt::default();
+    let mut shell_prompt = load_prompt();
 
     let exit_code = loop {
         let prompt = match shell_prompt.render() {
@@ -128,7 +129,7 @@ fn run_interactive_plain() -> ExitCode {
     let mut stdin = stdin.lock();
     let mut input = String::new();
     let mut state = ShellState::default();
-    let mut shell_prompt = Prompt::default();
+    let mut shell_prompt = load_prompt();
 
     loop {
         if let Err(error) = shell_prompt.print() {
@@ -168,5 +169,15 @@ fn handle_input(input: &str, state: &mut ShellState) -> CommandResult {
             CommandResult::Continue
         }
         result => result,
+    }
+}
+
+fn load_prompt() -> Prompt {
+    match config::load_user_config() {
+        Ok(config) => Prompt::from_config(&config),
+        Err(error) => {
+            let _ = render::stderr_line(format_args!("config: {error}; using defaults"));
+            Prompt::default()
+        }
     }
 }

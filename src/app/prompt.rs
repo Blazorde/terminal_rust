@@ -4,6 +4,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::cache::GitPromptCache;
+use crate::config::{AppConfig, IconSetting};
 use crate::git::{self, PromptGitInfo};
 use crate::prompt::segment::{PromptSegment, SegmentKind};
 use crate::render;
@@ -30,6 +31,20 @@ impl Default for Prompt {
 }
 
 impl Prompt {
+    pub fn from_config(config: &AppConfig) -> Self {
+        let icon_mode = match config.prompt.icons {
+            IconSetting::Auto => IconMode::Auto,
+            IconSetting::Always => IconMode::Always,
+            IconSetting::Never => IconMode::Never,
+        };
+
+        Self {
+            git_cache: GitPromptCache::new(GIT_CACHE_TTL),
+            palette: Palette::default(),
+            icon_mode,
+        }
+    }
+
     pub fn render(&mut self) -> io::Result<String> {
         let current_dir = env::current_dir()?;
         let git = self

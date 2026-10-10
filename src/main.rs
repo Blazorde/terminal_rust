@@ -1,6 +1,7 @@
 mod app;
 mod cache;
 mod commands;
+mod config;
 mod errors;
 pub mod git;
 mod prompt;
