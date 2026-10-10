@@ -41,12 +41,26 @@ struct PromptGitInfo {
     branch: String,
     dirty: bool,
 }
+
+struct PromptSegment {
+    kind: SegmentKind,
+    label: Option<String>,
+    value: Option<String>,
+    style_key: String,
+    icon: Option<SegmentIcon>,
+}
 ```
 
 `Prompt` vit pendant toute la session interactive. Le module `git` collecte la
 branche et l'état avec une seule commande porcelain v2 ; le module `cache`
 conserve ce résultat pendant 250 ms, y compris l'absence de contexte Git. Le
 rendu n'affiche le segment que lorsque ces données sont disponibles.
+
+`PromptSegment` est le contrat commun entre collecte et rendu. Il transporte une
+valeur et des références sémantiques de style ou d'icône, jamais un code ANSI.
+Une valeur absente ou vide rend le segment invisible. Le modèle couvre le
+chemin, Git et le symbole dans la version actuelle ; sa structure commune pourra
+être réutilisée pour l'utilisateur, l'heure ou le statut de sortie.
 
 La commande mesurée sur le dépôt du projet sous Windows prend environ 50 ms à
 froid. Le cache évite de répéter ce coût lors de rendus rapprochés tout en
