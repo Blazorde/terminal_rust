@@ -264,7 +264,7 @@ fn interactive_prompt_shows_a_dirty_git_branch() {
     let output = run_interactive(directory.path(), "exit\n");
     let rendered = stdout(&output);
     let rendered_path = rendered
-        .strip_suffix("  main* > ")
+        .strip_suffix("  git:main* > ")
         .expect("the Git prompt should contain its branch and dirty marker");
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));

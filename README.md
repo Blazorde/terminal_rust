@@ -213,8 +213,8 @@ Dans un dépôt, le prompt affiche la branche courante et ajoute `*` lorsque le
 working tree contient des modifications :
 
 ```text
-C:\workspace\terminal_rust  main >
-C:\workspace\terminal_rust  main* >
+C:\workspace\terminal_rust  git:main >
+C:\workspace\terminal_rust  git:main* >
 ```
 
 En HEAD détachée, le segment prend la forme `detached@1a2b3c4`. Hors dépôt ou
@@ -230,6 +230,24 @@ rechargées lors d'un changement de dossier. Cette durée absorbe les rendus
 rapprochés sans masquer longtemps une modification. Un dossier hors dépôt, une
 sortie invalide ou l'absence de Git désactive silencieusement ce segment ; le
 shell reste utilisable sur macOS, Linux et Windows.
+
+## Icônes du prompt
+
+Le mode par défaut reste compatible avec toutes les polices et affiche les
+fallbacks ASCII, par exemple `git:main`. Pour activer les glyphes façon Oh My
+Posh, installer une [Nerd Font](https://www.nerdfonts.com/) (MesloLGS NF est un
+bon choix multiplateforme), la sélectionner dans le terminal, puis définir :
+
+```powershell
+$env:TERMINAL_RUST_ICONS = "always"
+cargo run
+```
+
+Sous macOS ou Linux, utiliser `export TERMINAL_RUST_ICONS=always`. La valeur
+`never` force le mode ASCII. La valeur `auto` est prudente : elle active les
+icônes seulement dans un terminal lorsque `TERMINAL_RUST_NERD_FONT=1` confirme
+qu'une Nerd Font est configurée. Ces valeurs correspondent à l'option
+`prompt.icons` du futur chargeur de configuration.
 
 ## Commandes Git développeur
 

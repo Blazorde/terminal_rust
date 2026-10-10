@@ -90,6 +90,10 @@ icônes du thème. `auto` ne les active que lorsque le détecteur de capacités 
 juge sûres ; en cas de doute, il choisit le mode sans icônes. Le thème doit donc
 fournir un `fallback` ASCII pour chaque icône.
 
+En attendant le chargement TOML du ticket suivant, la même politique est
+disponible avec `TERMINAL_RUST_ICONS=auto|always|never`. En mode `auto`, définir
+`TERMINAL_RUST_NERD_FONT=1` confirme explicitement qu'une Nerd Font est active.
+
 La couleur suit la même règle de dégradation : sortie non interactive,
 `NO_COLOR` ou `TERM=dumb` donnent un rendu sans ANSI. Le chemin, la branche et le
 symbole restent lisibles dans tous les modes.

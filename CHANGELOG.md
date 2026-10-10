@@ -19,6 +19,8 @@ and macOS.
   per-segment resets, and automatic plain-text fallback.
 - Added an injectable semantic color palette so themes can remap prompt colors
   without changing path or Git segment logic.
+- Added centralized Nerd Font icons with deterministic ASCII fallbacks and
+  `auto`, `always`, and `never` display modes.
 - Verified user-level installers for Windows x86_64, Linux x86_64, and macOS
   Apple Silicon, with authenticated private-release support.
 

@@ -8,6 +8,7 @@ use crate::git::{self, PromptGitInfo};
 use crate::prompt::segment::{PromptSegment, SegmentKind};
 use crate::render;
 use crate::render::ansi;
+use crate::render::icons::{self, IconMode};
 use crate::render::palette::Palette;
 
 const GIT_CACHE_TTL: Duration = Duration::from_millis(250);
@@ -15,6 +16,7 @@ const GIT_CACHE_TTL: Duration = Duration::from_millis(250);
 pub struct Prompt {
     git_cache: GitPromptCache,
     palette: Palette,
+    icon_mode: IconMode,
 }
 
 impl Default for Prompt {
@@ -22,6 +24,7 @@ impl Default for Prompt {
         Self {
             git_cache: GitPromptCache::new(GIT_CACHE_TTL),
             palette: Palette::default(),
+            icon_mode: IconMode::from_environment(),
         }
     }
 }
@@ -32,11 +35,14 @@ impl Prompt {
         let git = self
             .git_cache
             .get_or_refresh(&current_dir, git::prompt_info);
-        let color = ansi::color_enabled(io::stdout().is_terminal());
+        let is_terminal = io::stdout().is_terminal();
+        let color = ansi::color_enabled(is_terminal);
+        let icons = self.icon_mode.enabled(is_terminal);
         Ok(render_for_path(
             &current_dir,
             git.as_ref(),
             color,
+            icons,
             &self.palette,
         ))
     }
@@ -50,13 +56,15 @@ fn render_for_path(
     path: &Path,
     git: Option<&PromptGitInfo>,
     color: bool,
+    icons: bool,
     palette: &Palette,
 ) -> String {
     let segments = segments_for_path(path, git);
-    let path = render_segment(&segments[0], color, palette);
+    let path = render_segment(&segments[0], color, icons, palette);
     let symbol = render_segment(
         segments.last().expect("the symbol segment always exists"),
         color,
+        icons,
         palette,
     );
 
@@ -64,26 +72,34 @@ fn render_for_path(
         .get(1)
         .filter(|segment| segment.kind == SegmentKind::Git)
     {
-        Some(git) => format!("{path}  {} {symbol} ", render_segment(git, color, palette)),
+        Some(git) => format!(
+            "{path}  {} {symbol} ",
+            render_segment(git, color, icons, palette)
+        ),
         None => format!("{path}{symbol} "),
     }
 }
 
-fn render_segment(segment: &PromptSegment, color: bool, palette: &Palette) -> String {
+fn render_segment(
+    segment: &PromptSegment,
+    color: bool,
+    icons_enabled: bool,
+    palette: &Palette,
+) -> String {
     let value = segment.value.as_deref().unwrap_or_default();
+    let decorated = icons::decorate(value, segment.icon.as_ref(), icons_enabled);
     ansi::paint(
-        value,
+        &decorated,
         ansi::style_for_key(segment.style_key.as_str(), palette),
         color,
     )
 }
 
 fn segments_for_path(path: &Path, git: Option<&PromptGitInfo>) -> Vec<PromptSegment> {
-    let mut segments = vec![PromptSegment::new(
-        SegmentKind::Path,
-        path.display().to_string(),
-        "primary",
-    )];
+    let mut segments = vec![
+        PromptSegment::new(SegmentKind::Path, path.display().to_string(), "primary")
+            .with_icon("folder", ""),
+    ];
 
     let git_segment = PromptSegment::optional(
         SegmentKind::Git,
@@ -115,7 +131,13 @@ mod tests {
     #[test]
     fn renders_a_simple_prompt_without_git() {
         assert_eq!(
-            render_for_path(Path::new("workspace"), None, false, &Palette::default()),
+            render_for_path(
+                Path::new("workspace"),
+                None,
+                false,
+                false,
+                &Palette::default(),
+            ),
             "workspace> "
         );
     }
@@ -136,18 +158,20 @@ mod tests {
                 Path::new("project with spaces"),
                 Some(&clean),
                 false,
+                false,
                 &Palette::default(),
             ),
-            "project with spaces  main > "
+            "project with spaces  git:main > "
         );
         assert_eq!(
             render_for_path(
                 Path::new("project"),
                 Some(&dirty),
                 false,
+                false,
                 &Palette::default(),
             ),
-            "project  feature/prompt* > "
+            "project  git:feature/prompt* > "
         );
     }
 
@@ -159,8 +183,33 @@ mod tests {
         };
 
         assert_eq!(
-            render_for_path(Path::new("project"), Some(&git), true, &Palette::default(),),
-            "\u{1b}[1;36mproject\u{1b}[0m  \u{1b}[32mmain\u{1b}[0m \u{1b}[1;35m>\u{1b}[0m "
+            render_for_path(
+                Path::new("project"),
+                Some(&git),
+                true,
+                false,
+                &Palette::default(),
+            ),
+            "\u{1b}[1;36mproject\u{1b}[0m  \u{1b}[32mgit:main\u{1b}[0m \u{1b}[1;35m>\u{1b}[0m "
+        );
+    }
+
+    #[test]
+    fn renders_nerd_font_icons_without_losing_segment_values() {
+        let git = PromptGitInfo {
+            branch: "main".to_string(),
+            dirty: false,
+        };
+
+        assert_eq!(
+            render_for_path(
+                Path::new("project"),
+                Some(&git),
+                false,
+                true,
+                &Palette::default(),
+            ),
+            "\u{f07b} project  \u{e0a0} main > "
         );
     }
 
