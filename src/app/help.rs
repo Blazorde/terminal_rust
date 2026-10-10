@@ -15,6 +15,7 @@ pub fn print_help() -> io::Result<()> {
         "  clear                clear the terminal screen",
         "  dashboard            show system performance and context",
         "  git <status|branch|log> [options]",
+        "  theme <list|preview NAME>",
         "  help                 show this help",
         "  exit                 close the terminal",
         "  quit                 close the terminal",

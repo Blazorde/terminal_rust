@@ -22,6 +22,8 @@ Pour exécuter une seule commande sans ouvrir une session interactive :
 cargo run -- pwd
 cargo run -- ls -la
 cargo run -- dashboard
+cargo run -- theme list
+cargo run -- theme preview minimal
 ```
 
 | Plateforme | Archive publiée | Installateur | CI |
@@ -162,6 +164,8 @@ Sur Windows, le binaire release se trouve ici:
 | `clear` | Efface l'écran d'un terminal compatible ANSI |
 | `dashboard` | Affiche un tableau de bord système et performance |
 | `git <status\|branch\|log> [options]` | Lance un raccourci Git autorisé dans le dossier courant |
+| `theme list` | Liste les thèmes intégrés |
+| `theme preview <name>` | Prévisualise un thème avec des données de démonstration |
 | `help` | Affiche l'aide |
 | `exit` | Ferme le shell |
 | `quit` | Ferme le shell |
@@ -183,6 +187,8 @@ dashboard
 git status --short --branch
 git branch --all
 git log --oneline -10
+theme list
+theme preview powerline
 exit
 ```
 

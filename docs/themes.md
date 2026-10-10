@@ -118,6 +118,25 @@ automatiquement ` | `. Le prompt reste donc lisible sous Windows, macOS et
 Linux avec une police standard. `prompt.separator` continue de contrôler les
 thèmes qui n'ont pas de séparateur dédié.
 
+## Lister et prévisualiser
+
+Les commandes suivantes inspectent les presets intégrés sans lire ni modifier
+le fichier de configuration utilisateur :
+
+```bash
+terminal_rust theme list
+terminal_rust theme preview default
+terminal_rust theme preview minimal
+terminal_rust theme preview powerline
+```
+
+La prévisualisation utilise toujours les mêmes données de démonstration : le
+dossier `terminal-rust`, la branche modifiée `main*` et le symbole `>`. Cela
+permet de comparer les thèmes dans les mêmes conditions. En sortie redirigée,
+le rendu reste sans ANSI et utilise les fallbacks ASCII ; dans un terminal, les
+règles de couleur et de Nerd Font habituelles s'appliquent. Un nom inconnu
+affiche les choix disponibles et retourne un code d'échec.
+
 ## Icônes et repli ASCII
 
 Le registre `render::icons` centralise les glyphes `folder`, `git_branch`,

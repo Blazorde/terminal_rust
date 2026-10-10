@@ -5,13 +5,42 @@ use serde::Deserialize;
 
 use crate::config::IconSetting;
 use crate::render::ansi::AnsiColor;
+use crate::render::icons::IconMode;
 use crate::render::palette::Palette;
 use crate::render::separators::Separator;
+use crate::{
+    prompt::segment::{PromptSegment, SegmentKind},
+    render,
+};
 
 const DEFAULT_THEME: &str = include_str!("../../config/themes/default.toml");
 const MINIMAL_THEME: &str = include_str!("../../config/themes/minimal.toml");
 const GIT_FOCUS_THEME: &str = include_str!("../../config/themes/git-focus.toml");
 const POWERLINE_THEME: &str = include_str!("../../config/themes/powerline.toml");
+
+pub struct PresetSummary {
+    pub name: &'static str,
+    pub description: &'static str,
+}
+
+pub const PRESETS: &[PresetSummary] = &[
+    PresetSummary {
+        name: "default",
+        description: "balanced colors with automatic icons",
+    },
+    PresetSummary {
+        name: "minimal",
+        description: "few colors and no icons",
+    },
+    PresetSummary {
+        name: "git-focus",
+        description: "high-contrast Git status",
+    },
+    PresetSummary {
+        name: "powerline",
+        description: "Powerline separators with ASCII fallback",
+    },
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Theme {
@@ -102,6 +131,31 @@ pub fn load_builtin(name: &str) -> Result<Theme, ThemeError> {
     })
 }
 
+pub fn preview(name: &str, is_terminal: bool) -> Result<String, ThemeError> {
+    let theme = load_builtin(name)?;
+    let icon_mode = match theme.icons {
+        IconSetting::Auto => IconMode::from_environment(),
+        IconSetting::Always => IconMode::Always,
+        IconSetting::Never => IconMode::Never,
+    };
+    let icons = icon_mode.enabled(is_terminal);
+    let segments = [
+        PromptSegment::new(SegmentKind::Path, "terminal-rust", "primary").with_icon("folder", ""),
+        PromptSegment::new(SegmentKind::Git, "main*", "warning").with_icon("git_branch", "git:"),
+        PromptSegment::new(SegmentKind::Symbol, ">", "secondary"),
+    ];
+
+    Ok(render::prompt_segments(
+        &segments,
+        crate::render::ansi::color_enabled(is_terminal),
+        icons,
+        theme.separator.as_ref(),
+        "  ",
+        false,
+        &theme.palette,
+    ))
+}
+
 fn validate(requested_name: &str, definition: &ThemeFile) -> Result<(), ThemeError> {
     if definition.version != 1 {
         return Err(ThemeError::Invalid {
@@ -164,6 +218,18 @@ mod tests {
         assert_eq!(
             separator.render(false, true, "primary", &theme.palette),
             " | "
+        );
+    }
+
+    #[test]
+    fn preview_uses_fixed_demo_data_and_plain_fallbacks() {
+        assert_eq!(
+            preview("default", false).expect("default preview should render"),
+            "terminal-rust  git:main*  > "
+        );
+        assert_eq!(
+            preview("powerline", false).expect("powerline preview should render"),
+            "terminal-rust | git:main* | > "
         );
     }
 }

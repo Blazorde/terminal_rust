@@ -7,10 +7,9 @@ use crate::cache::GitPromptCache;
 use crate::config::{AppConfig, IconSetting};
 use crate::git::{self, PromptGitInfo};
 use crate::prompt::builder;
-use crate::prompt::segment::{PromptSegment, SegmentKind};
 use crate::render;
 use crate::render::ansi;
-use crate::render::icons::{self, IconMode};
+use crate::render::icons::IconMode;
 use crate::render::palette::Palette;
 use crate::render::separators::Separator;
 use crate::theme::{self, ThemeError};
@@ -93,48 +92,21 @@ fn render_for_path(
     config: &AppConfig,
 ) -> String {
     let segments = builder::build(path, git, config);
-    let mut output = String::new();
-
-    for (index, segment) in segments.iter().enumerate() {
-        if !output.is_empty() {
-            if config.prompt.newline && segment.kind == SegmentKind::Symbol {
-                output.push('\n');
-            } else if let Some(separator) = separator {
-                output.push_str(&separator.render(
-                    icons,
-                    color,
-                    &segments[index - 1].style_key,
-                    palette,
-                ));
-            } else {
-                output.push_str(&config.prompt.separator);
-            }
-        }
-        output.push_str(&render_segment(segment, color, icons, palette));
-    }
-
-    output.push(' ');
-    output
-}
-
-fn render_segment(
-    segment: &PromptSegment,
-    color: bool,
-    icons_enabled: bool,
-    palette: &Palette,
-) -> String {
-    let value = segment.value.as_deref().unwrap_or_default();
-    let decorated = icons::decorate(value, segment.icon.as_ref(), icons_enabled);
-    ansi::paint(
-        &decorated,
-        ansi::style_for_key(segment.style_key.as_str(), palette),
+    render::prompt_segments(
+        &segments,
         color,
+        icons,
+        separator,
+        &config.prompt.separator,
+        config.prompt.newline,
+        palette,
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prompt::segment::SegmentKind;
 
     #[test]
     fn renders_a_simple_prompt_without_git() {
