@@ -1,8 +1,8 @@
 # Personnalisation du prompt
 
 Terminal Rust vise un prompt composé de segments, inspiré d'Oh My Posh mais
-volontairement plus petit et déclaratif. Cette page fixe le contrat cible ; la
-version 0.2.0 utilise encore le prompt intégré statique.
+volontairement plus petit et déclaratif. Le chargeur TOML et la composition
+dynamique appliquent maintenant ce contrat.
 
 ## Séparation des responsabilités
 
@@ -19,7 +19,7 @@ le shell inutilisable.
 ## Emplacements et priorité
 
 Le fichier intégré `config/default.toml` documente les valeurs par défaut. Le
-chargeur futur cherchera ensuite une configuration utilisateur dans le dossier
+chargeur cherche une configuration utilisateur dans le dossier
 de configuration fourni par le système d'exploitation, sans supposer que
 `HOME` existe :
 
@@ -28,7 +28,7 @@ de configuration fourni par le système d'exploitation, sans supposer que
 - Linux : `$XDG_CONFIG_HOME/terminal-rust/config.toml`, ou
   `$HOME/.config/terminal-rust/config.toml` si `XDG_CONFIG_HOME` est absent.
 
-Une variable `TERMINAL_RUST_CONFIG` pourra sélectionner explicitement un autre
+La variable `TERMINAL_RUST_CONFIG` peut sélectionner explicitement un autre
 fichier. Si aucun emplacement n'est disponible, les valeurs intégrées restent
 actives.
 
@@ -79,6 +79,12 @@ revenir à la valeur par défaut concernée, sans empêcher le démarrage du she
 | `git` | branche, état modifié | `show_status` | segment omis hors dépôt ou sans Git |
 | `symbol` | symbole final | `value` | `>` |
 
+L'ordre de `prompt.segments` est conservé exactement. Un segment absent de la
+liste n'est ni collecté ni affiché. Les doublons et identifiants inconnus sont
+refusés avec un diagnostic clair. `prompt.separator` sépare les segments visibles
+et `prompt.newline = true` place le symbole sur une nouvelle ligne lorsqu'il est
+précédé d'un autre segment.
+
 Les futurs segments doivent avoir un identifiant stable, des données typées et
 un coût borné. Les commandes externes personnalisées et les expressions ne font
 pas partie du format v1.
@@ -90,8 +96,8 @@ icônes du thème. `auto` ne les active que lorsque le détecteur de capacités 
 juge sûres ; en cas de doute, il choisit le mode sans icônes. Le thème doit donc
 fournir un `fallback` ASCII pour chaque icône.
 
-En attendant le chargement TOML du ticket suivant, la même politique est
-disponible avec `TERMINAL_RUST_ICONS=auto|always|never`. En mode `auto`, définir
+La même politique peut être surchargée avec
+`TERMINAL_RUST_ICONS=auto|always|never`. En mode `auto`, définir
 `TERMINAL_RUST_NERD_FONT=1` confirme explicitement qu'une Nerd Font est active.
 
 La couleur suit la même règle de dégradation : sortie non interactive,

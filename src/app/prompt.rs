@@ -6,6 +6,7 @@ use std::time::Duration;
 use crate::cache::GitPromptCache;
 use crate::config::{AppConfig, IconSetting};
 use crate::git::{self, PromptGitInfo};
+use crate::prompt::builder;
 use crate::prompt::segment::{PromptSegment, SegmentKind};
 use crate::render;
 use crate::render::ansi;
@@ -18,6 +19,7 @@ pub struct Prompt {
     git_cache: GitPromptCache,
     palette: Palette,
     icon_mode: IconMode,
+    config: AppConfig,
 }
 
 impl Default for Prompt {
@@ -26,6 +28,7 @@ impl Default for Prompt {
             git_cache: GitPromptCache::new(GIT_CACHE_TTL),
             palette: Palette::default(),
             icon_mode: IconMode::from_environment(),
+            config: AppConfig::default(),
         }
     }
 }
@@ -33,7 +36,7 @@ impl Default for Prompt {
 impl Prompt {
     pub fn from_config(config: &AppConfig) -> Self {
         let icon_mode = match config.prompt.icons {
-            IconSetting::Auto => IconMode::Auto,
+            IconSetting::Auto => IconMode::from_environment(),
             IconSetting::Always => IconMode::Always,
             IconSetting::Never => IconMode::Never,
         };
@@ -42,6 +45,7 @@ impl Prompt {
             git_cache: GitPromptCache::new(GIT_CACHE_TTL),
             palette: Palette::default(),
             icon_mode,
+            config: config.clone(),
         }
     }
 
@@ -59,6 +63,7 @@ impl Prompt {
             color,
             icons,
             &self.palette,
+            &self.config,
         ))
     }
 
@@ -73,26 +78,24 @@ fn render_for_path(
     color: bool,
     icons: bool,
     palette: &Palette,
+    config: &AppConfig,
 ) -> String {
-    let segments = segments_for_path(path, git);
-    let path = render_segment(&segments[0], color, icons, palette);
-    let symbol = render_segment(
-        segments.last().expect("the symbol segment always exists"),
-        color,
-        icons,
-        palette,
-    );
+    let segments = builder::build(path, git, config);
+    let mut output = String::new();
 
-    match segments
-        .get(1)
-        .filter(|segment| segment.kind == SegmentKind::Git)
-    {
-        Some(git) => format!(
-            "{path}  {} {symbol} ",
-            render_segment(git, color, icons, palette)
-        ),
-        None => format!("{path}{symbol} "),
+    for segment in &segments {
+        if !output.is_empty() {
+            if config.prompt.newline && segment.kind == SegmentKind::Symbol {
+                output.push('\n');
+            } else {
+                output.push_str(&config.prompt.separator);
+            }
+        }
+        output.push_str(&render_segment(segment, color, icons, palette));
     }
+
+    output.push(' ');
+    output
 }
 
 fn render_segment(
@@ -110,35 +113,6 @@ fn render_segment(
     )
 }
 
-fn segments_for_path(path: &Path, git: Option<&PromptGitInfo>) -> Vec<PromptSegment> {
-    let mut segments = vec![
-        PromptSegment::new(SegmentKind::Path, path.display().to_string(), "primary")
-            .with_icon("folder", ""),
-    ];
-
-    let git_segment = PromptSegment::optional(
-        SegmentKind::Git,
-        git.map(|info| {
-            let dirty_marker = if info.dirty { "*" } else { "" };
-            format!("{}{dirty_marker}", info.branch)
-        }),
-        if git.is_some_and(|info| info.dirty) {
-            "warning"
-        } else {
-            "success"
-        },
-    )
-    .with_label("Git")
-    .with_icon("git_branch", "git:");
-
-    if git_segment.is_visible() {
-        segments.push(git_segment);
-    }
-
-    segments.push(PromptSegment::new(SegmentKind::Symbol, ">", "secondary"));
-    segments
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,8 +126,9 @@ mod tests {
                 false,
                 false,
                 &Palette::default(),
+                &AppConfig::default(),
             ),
-            "workspace> "
+            "workspace  > "
         );
     }
 
@@ -175,8 +150,9 @@ mod tests {
                 false,
                 false,
                 &Palette::default(),
+                &AppConfig::default(),
             ),
-            "project with spaces  git:main > "
+            "project with spaces  git:main  > "
         );
         assert_eq!(
             render_for_path(
@@ -185,8 +161,9 @@ mod tests {
                 false,
                 false,
                 &Palette::default(),
+                &AppConfig::default(),
             ),
-            "project  git:feature/prompt* > "
+            "project  git:feature/prompt*  > "
         );
     }
 
@@ -204,8 +181,9 @@ mod tests {
                 true,
                 false,
                 &Palette::default(),
+                &AppConfig::default(),
             ),
-            "\u{1b}[1;36mproject\u{1b}[0m  \u{1b}[32mgit:main\u{1b}[0m \u{1b}[1;35m>\u{1b}[0m "
+            "\u{1b}[1;36mproject\u{1b}[0m  \u{1b}[32mgit:main\u{1b}[0m  \u{1b}[1;35m>\u{1b}[0m "
         );
     }
 
@@ -223,8 +201,9 @@ mod tests {
                 false,
                 true,
                 &Palette::default(),
+                &AppConfig::default(),
             ),
-            "\u{f07b} project  \u{e0a0} main > "
+            "\u{f07b} project  \u{e0a0} main  > "
         );
     }
 
@@ -235,7 +214,7 @@ mod tests {
             dirty: true,
         };
 
-        let segments = segments_for_path(Path::new("workspace"), Some(&git));
+        let segments = builder::build(Path::new("workspace"), Some(&git), &AppConfig::default());
 
         assert_eq!(segments.len(), 3);
         assert_eq!(segments[0].kind, SegmentKind::Path);
@@ -248,5 +227,29 @@ mod tests {
                 .as_ref()
                 .is_none_or(|value| !value.contains("\u{1b}["))
         }));
+    }
+
+    #[test]
+    fn follows_custom_order_separator_and_newline() {
+        let mut config = AppConfig::default();
+        config.prompt.segments = vec!["git".into(), "path".into(), "symbol".into()];
+        config.prompt.separator = " | ".into();
+        config.prompt.newline = true;
+        let git = PromptGitInfo {
+            branch: "main".into(),
+            dirty: false,
+        };
+
+        assert_eq!(
+            render_for_path(
+                Path::new("project"),
+                Some(&git),
+                false,
+                false,
+                &Palette::default(),
+                &config,
+            ),
+            "git:main | project\n> "
+        );
     }
 }
