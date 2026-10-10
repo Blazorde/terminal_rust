@@ -15,6 +15,8 @@ and macOS.
   TOML examples and icon-free fallbacks.
 - Added a reusable prompt segment model that keeps data, semantic styles, and
   optional icons independent from ANSI rendering.
+- Added a portable ANSI prompt renderer with foreground, background, emphasis,
+  per-segment resets, and automatic plain-text fallback.
 - Verified user-level installers for Windows x86_64, Linux x86_64, and macOS
   Apple Silicon, with authenticated private-release support.
 
