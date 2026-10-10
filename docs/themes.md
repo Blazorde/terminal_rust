@@ -8,6 +8,7 @@ Le format TOML est versionné indépendamment de l'implémentation du renderer.
 ```toml
 version = 1
 name = "default"
+icons = "auto"
 
 [palette]
 primary = "cyan"
@@ -57,12 +58,27 @@ modification des modules qui collectent le chemin ou l'état Git.
 - Le renderer réinitialise son style après chaque segment pour éviter les fuites
   de couleur dans la ligne de commande.
 
-## Résolution
+## Choisir un preset
 
-`theme = "default"` utilise le thème intégré. Une valeur qui se termine par
-`.toml` sera traitée comme un chemin relatif au fichier de configuration, ou
-comme un chemin absolu natif. Un thème manquant, illisible ou incompatible
-retombe sur `default` et produit un diagnostic non fatal.
+Trois thèmes sont intégrés et ne nécessitent aucun fichier supplémentaire :
+
+| Valeur | Usage | Icônes par défaut |
+| --- | --- | --- |
+| `default` | Palette équilibrée pour un usage général | détection automatique |
+| `minimal` | Peu de couleurs, compatible avec toutes les polices | désactivées |
+| `git-focus` | État Git plus contrasté, notamment lorsqu'il est modifié | détection automatique |
+
+Choisissez le preset dans le fichier de configuration utilisateur :
+
+```toml
+version = 1
+theme = "minimal"
+```
+
+Une valeur inconnue produit un diagnostic non fatal et le shell utilise le
+thème `default`. `prompt.icons = "always"` ou `"never"` garde la priorité sur
+la préférence du thème. Le chargement d'un thème depuis un chemin personnalisé
+n'est pas encore pris en charge.
 
 ## Thème par défaut
 
@@ -77,6 +93,11 @@ C:\workspace\terminal_rust  git:main* >
 Le thème ne suppose ni police particulière, ni palette 24 bits, ni terminal
 Unix. Les séparateurs Powerline et les palettes avancées pourront enrichir le
 schéma sans changer les fournisseurs de données.
+
+`config/themes/minimal.toml` force les icônes à `never` et réduit les rôles
+principaux au blanc. Il reste donc lisible sans Nerd Font et avec les capacités
+ANSI de base. `config/themes/git-focus.toml` conserve les fallbacks ASCII mais
+utilise le rouge pour rendre immédiatement visible un dépôt modifié.
 
 ## Icônes et repli ASCII
 

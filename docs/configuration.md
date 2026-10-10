@@ -28,6 +28,10 @@ Les champs absents reçoivent leur valeur par défaut. La politique
 ligne, le style du chemin, l'affichage de l'état Git et le symbole final sont
 appliqués au prompt.
 
+`theme` accepte les presets intégrés `default`, `minimal` et `git-focus`. Le
+guide [des thèmes](themes.md) décrit leur rendu et la priorité des options
+d'icônes.
+
 ## Exemple minimal
 
 ```toml
