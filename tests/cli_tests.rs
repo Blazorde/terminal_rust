@@ -83,6 +83,30 @@ fn interactive_shell_loads_icon_mode_from_toml() {
 }
 
 #[test]
+fn interactive_shell_follows_configured_segment_order() {
+    let directory = TestDirectory::new("ordered prompt");
+    let config = directory.path().join("config.toml");
+    fs::write(
+        &config,
+        "version = 1\n[prompt]\nsegments = [\"symbol\", \"path\"]\nseparator = \" | \"\n",
+    )
+    .expect("configuration should be written");
+
+    let output = run_interactive_with_env(directory.path(), "exit\n", Some(&config));
+    let rendered = stdout(&output);
+    let rendered_path = rendered
+        .strip_prefix("> | ")
+        .and_then(|value| value.strip_suffix(' '))
+        .expect("configured prompt should follow symbol then path order");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_eq!(
+        fs::canonicalize(rendered_path).expect("rendered path should exist"),
+        fs::canonicalize(directory.path()).expect("fixture path should exist")
+    );
+}
+
+#[test]
 fn invalid_toml_reports_its_path_and_uses_defaults() {
     let directory = TestDirectory::new("invalid config");
     let config = directory.path().join("broken config.toml");
@@ -253,7 +277,7 @@ fn interactive_prompt_stays_simple_outside_git() {
     let output = run_interactive(directory.path(), "exit\n");
     let rendered = stdout(&output);
     let rendered_path = rendered
-        .strip_suffix("> ")
+        .strip_suffix("  > ")
         .expect("the simple prompt should end with its symbol");
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -297,7 +321,7 @@ fn interactive_prompt_shows_a_dirty_git_branch() {
     let output = run_interactive(directory.path(), "exit\n");
     let rendered = stdout(&output);
     let rendered_path = rendered
-        .strip_suffix("  git:main* > ")
+        .strip_suffix("  git:main*  > ")
         .expect("the Git prompt should contain its branch and dirty marker");
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));

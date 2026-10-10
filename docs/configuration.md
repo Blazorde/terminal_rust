@@ -24,9 +24,9 @@ le fichier concerné. Le shell affiche le diagnostic puis démarre avec ses
 valeurs par défaut.
 
 Les champs absents reçoivent leur valeur par défaut. La politique
-`prompt.icons` est déjà appliquée au prompt. Le choix, l'ordre et les options des
-segments sont chargés et validés ; leur composition dynamique est prévue par le
-ticket suivant.
+`prompt.icons`, le choix des segments, leur ordre, le séparateur, le mode nouvelle
+ligne, le style du chemin, l'affichage de l'état Git et le symbole final sont
+appliqués au prompt.
 
 ## Exemple minimal
 

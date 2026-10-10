@@ -1,4 +1,5 @@
 use super::schema::AppConfig;
+use std::collections::HashSet;
 
 pub fn validate(config: &AppConfig) -> Result<(), String> {
     if config.version != 1 {
@@ -13,10 +14,16 @@ pub fn validate(config: &AppConfig) -> Result<(), String> {
     if config.prompt.segments.is_empty() {
         return Err("prompt.segments must contain at least one segment".to_string());
     }
+    let mut seen = HashSet::new();
     for segment in &config.prompt.segments {
         if !matches!(segment.as_str(), "path" | "git" | "symbol") {
             return Err(format!(
                 "prompt.segments contains unknown segment '{segment}'"
+            ));
+        }
+        if !seen.insert(segment) {
+            return Err(format!(
+                "prompt.segments contains duplicate segment '{segment}'"
             ));
         }
     }
