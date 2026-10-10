@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::app::help;
-use crate::commands::{cat, cd, clear, dashboard, git_command, ls, mkdir, pwd, rm, touch};
+use crate::commands::{cat, cd, clear, dashboard, git_command, ls, mkdir, pwd, rm, theme, touch};
 use crate::errors::command::CommandError;
 use crate::render;
 
@@ -75,6 +75,11 @@ const COMMANDS: &[CommandSpec] = &[
         name: "git",
         max_args: None,
         handler: run_git,
+    },
+    CommandSpec {
+        name: "theme",
+        max_args: None,
+        handler: run_theme,
     },
     CommandSpec {
         name: "help",
@@ -184,6 +189,10 @@ fn run_dashboard(_args: &[String], _state: &mut ShellState) -> CommandResult {
 
 fn run_git(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_display_error(git_command::git(args))
+}
+
+fn run_theme(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(theme::theme(args))
 }
 
 fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {

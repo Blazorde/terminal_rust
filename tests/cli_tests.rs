@@ -221,6 +221,7 @@ fn help_lists_every_public_command() {
         "clear",
         "dashboard",
         "git",
+        "theme",
         "help",
         "exit",
         "quit",
@@ -232,6 +233,36 @@ fn help_lists_every_public_command() {
             "help should list {command}:\n{rendered}"
         );
     }
+}
+
+#[test]
+fn theme_list_and_preview_are_available_without_starting_the_shell() {
+    let directory = TestDirectory::new("theme commands");
+
+    let list = run_cli(directory.path(), &["theme", "list"]);
+    let listed = stdout(&list);
+    assert!(list.status.success(), "stderr: {}", stderr(&list));
+    for name in ["default", "minimal", "git-focus", "powerline"] {
+        assert!(listed.contains(name), "theme list should include {name}");
+    }
+
+    let preview = run_cli(directory.path(), &["theme", "preview", "minimal"]);
+    assert!(preview.status.success(), "stderr: {}", stderr(&preview));
+    assert_eq!(
+        stdout(&preview),
+        "Theme: minimal\nterminal-rust  git:main*  > \n"
+    );
+}
+
+#[test]
+fn theme_preview_reports_an_unknown_preset() {
+    let directory = TestDirectory::new("unknown theme");
+    let output = run_cli(directory.path(), &["theme", "preview", "missing"]);
+    let error = stderr(&output);
+
+    assert!(!output.status.success());
+    assert!(error.contains("unknown theme 'missing'"), "stderr: {error}");
+    assert!(error.contains("default, minimal, git-focus, powerline"));
 }
 
 #[test]

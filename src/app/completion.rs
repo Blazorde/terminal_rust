@@ -97,4 +97,12 @@ mod tests {
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].replacement, "git ");
     }
+
+    #[test]
+    fn theme_is_available_in_completion() {
+        let completions = command_completions("the");
+
+        assert_eq!(completions.len(), 1);
+        assert_eq!(completions[0].replacement, "theme ");
+    }
 }
