@@ -12,6 +12,7 @@ use crate::render;
 use crate::render::ansi;
 use crate::render::icons::{self, IconMode};
 use crate::render::palette::Palette;
+use crate::render::separators::Separator;
 use crate::theme::{self, ThemeError};
 
 const GIT_CACHE_TTL: Duration = Duration::from_millis(250);
@@ -20,6 +21,7 @@ pub struct Prompt {
     git_cache: GitPromptCache,
     palette: Palette,
     icon_mode: IconMode,
+    separator: Option<Separator>,
     config: AppConfig,
 }
 
@@ -29,6 +31,7 @@ impl Default for Prompt {
             git_cache: GitPromptCache::new(GIT_CACHE_TTL),
             palette: Palette::default(),
             icon_mode: IconMode::from_environment(),
+            separator: None,
             config: AppConfig::default(),
         }
     }
@@ -51,6 +54,7 @@ impl Prompt {
             git_cache: GitPromptCache::new(GIT_CACHE_TTL),
             palette: theme.palette,
             icon_mode,
+            separator: theme.separator,
             config: config.clone(),
         })
     }
@@ -68,6 +72,7 @@ impl Prompt {
             git.as_ref(),
             color,
             icons,
+            self.separator.as_ref(),
             &self.palette,
             &self.config,
         ))
@@ -83,16 +88,24 @@ fn render_for_path(
     git: Option<&PromptGitInfo>,
     color: bool,
     icons: bool,
+    separator: Option<&Separator>,
     palette: &Palette,
     config: &AppConfig,
 ) -> String {
     let segments = builder::build(path, git, config);
     let mut output = String::new();
 
-    for segment in &segments {
+    for (index, segment) in segments.iter().enumerate() {
         if !output.is_empty() {
             if config.prompt.newline && segment.kind == SegmentKind::Symbol {
                 output.push('\n');
+            } else if let Some(separator) = separator {
+                output.push_str(&separator.render(
+                    icons,
+                    color,
+                    &segments[index - 1].style_key,
+                    palette,
+                ));
             } else {
                 output.push_str(&config.prompt.separator);
             }
@@ -131,6 +144,7 @@ mod tests {
                 None,
                 false,
                 false,
+                None,
                 &Palette::default(),
                 &AppConfig::default(),
             ),
@@ -155,6 +169,7 @@ mod tests {
                 Some(&clean),
                 false,
                 false,
+                None,
                 &Palette::default(),
                 &AppConfig::default(),
             ),
@@ -166,6 +181,7 @@ mod tests {
                 Some(&dirty),
                 false,
                 false,
+                None,
                 &Palette::default(),
                 &AppConfig::default(),
             ),
@@ -186,6 +202,7 @@ mod tests {
                 Some(&git),
                 true,
                 false,
+                None,
                 &Palette::default(),
                 &AppConfig::default(),
             ),
@@ -206,6 +223,7 @@ mod tests {
                 Some(&git),
                 false,
                 true,
+                None,
                 &Palette::default(),
                 &AppConfig::default(),
             ),
@@ -252,6 +270,7 @@ mod tests {
                 Some(&git),
                 false,
                 false,
+                None,
                 &Palette::default(),
                 &config,
             ),
@@ -275,5 +294,36 @@ mod tests {
         config.prompt.icons = IconSetting::Always;
         let prompt = Prompt::from_config(&config).expect("minimal theme should load");
         assert_eq!(prompt.icon_mode, IconMode::Always);
+    }
+
+    #[test]
+    fn renders_powerline_separator_or_ascii_fallback() {
+        let separator = Separator::new("\u{e0b0}", " | ");
+        let config = AppConfig::default();
+
+        assert_eq!(
+            render_for_path(
+                Path::new("project"),
+                None,
+                false,
+                true,
+                Some(&separator),
+                &Palette::default(),
+                &config,
+            ),
+            "\u{f07b} project\u{e0b0}> "
+        );
+        assert_eq!(
+            render_for_path(
+                Path::new("project"),
+                None,
+                false,
+                false,
+                Some(&separator),
+                &Palette::default(),
+                &config,
+            ),
+            "project | > "
+        );
     }
 }

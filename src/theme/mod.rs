@@ -6,15 +6,18 @@ use serde::Deserialize;
 use crate::config::IconSetting;
 use crate::render::ansi::AnsiColor;
 use crate::render::palette::Palette;
+use crate::render::separators::Separator;
 
 const DEFAULT_THEME: &str = include_str!("../../config/themes/default.toml");
 const MINIMAL_THEME: &str = include_str!("../../config/themes/minimal.toml");
 const GIT_FOCUS_THEME: &str = include_str!("../../config/themes/git-focus.toml");
+const POWERLINE_THEME: &str = include_str!("../../config/themes/powerline.toml");
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Theme {
     pub palette: Palette,
     pub icons: IconSetting,
+    pub separator: Option<Separator>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -29,7 +32,7 @@ impl fmt::Display for ThemeError {
         match self {
             Self::Unknown(name) => write!(
                 formatter,
-                "unknown theme '{name}' (available: default, minimal, git-focus)"
+                "unknown theme '{name}' (available: default, minimal, git-focus, powerline)"
             ),
             Self::Parse { name, message } => {
                 write!(formatter, "cannot parse built-in theme '{name}': {message}")
@@ -50,6 +53,7 @@ struct ThemeFile {
     #[serde(default)]
     icons: IconSetting,
     palette: ThemePalette,
+    separator: Option<ThemeSeparator>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -62,11 +66,18 @@ struct ThemePalette {
     muted: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct ThemeSeparator {
+    glyph: String,
+    fallback: String,
+}
+
 pub fn load_builtin(name: &str) -> Result<Theme, ThemeError> {
     let source = match name {
         "default" => DEFAULT_THEME,
         "minimal" => MINIMAL_THEME,
         "git-focus" => GIT_FOCUS_THEME,
+        "powerline" => POWERLINE_THEME,
         _ => return Err(ThemeError::Unknown(name.to_string())),
     };
     let definition = toml::from_str::<ThemeFile>(source).map_err(|error| ThemeError::Parse {
@@ -85,6 +96,9 @@ pub fn load_builtin(name: &str) -> Result<Theme, ThemeError> {
             color(name, "muted", &definition.palette.muted)?,
         ),
         icons: definition.icons,
+        separator: definition
+            .separator
+            .map(|separator| Separator::new(separator.glyph, separator.fallback)),
     })
 }
 
@@ -117,7 +131,7 @@ mod tests {
 
     #[test]
     fn loads_every_documented_builtin_theme() {
-        for name in ["default", "minimal", "git-focus"] {
+        for name in ["default", "minimal", "git-focus", "powerline"] {
             load_builtin(name).unwrap_or_else(|error| panic!("{name}: {error}"));
         }
     }
@@ -135,6 +149,21 @@ mod tests {
     fn rejects_unknown_theme_names_with_available_choices() {
         let error = load_builtin("missing").expect_err("unknown theme should fail");
 
-        assert!(error.to_string().contains("default, minimal, git-focus"));
+        assert!(
+            error
+                .to_string()
+                .contains("default, minimal, git-focus, powerline")
+        );
+    }
+
+    #[test]
+    fn powerline_theme_exposes_an_ascii_fallback() {
+        let theme = load_builtin("powerline").expect("powerline theme should load");
+        let separator = theme.separator.expect("powerline separator should exist");
+
+        assert_eq!(
+            separator.render(false, true, "primary", &theme.palette),
+            " | "
+        );
     }
 }
