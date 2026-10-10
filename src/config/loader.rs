@@ -1,0 +1,165 @@
+use std::env;
+use std::error::Error;
+use std::fmt;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
+
+use super::schema::AppConfig;
+use super::validation;
+
+const CONFIG_ENV: &str = "TERMINAL_RUST_CONFIG";
+
+#[derive(Debug)]
+pub enum ConfigError {
+    Read {
+        path: PathBuf,
+        source: io::Error,
+    },
+    Parse {
+        path: PathBuf,
+        source: toml::de::Error,
+    },
+    Validation {
+        path: PathBuf,
+        message: String,
+    },
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Read { path, source } => {
+                write!(formatter, "cannot read {}: {source}", path.display())
+            }
+            Self::Parse { path, source } => {
+                write!(formatter, "invalid TOML in {}: {source}", path.display())
+            }
+            Self::Validation { path, message } => {
+                write!(
+                    formatter,
+                    "invalid configuration in {}: {message}",
+                    path.display()
+                )
+            }
+        }
+    }
+}
+
+impl Error for ConfigError {}
+
+pub fn load_user_config() -> Result<AppConfig, ConfigError> {
+    let explicit = env::var_os(CONFIG_ENV).filter(|value| !value.is_empty());
+    let path = explicit.map(PathBuf::from).or_else(default_config_path);
+    let Some(path) = path else {
+        return Ok(AppConfig::default());
+    };
+
+    if !path.exists() && env::var_os(CONFIG_ENV).is_none() {
+        return Ok(AppConfig::default());
+    }
+
+    load_from_path(&path)
+}
+
+fn load_from_path(path: &Path) -> Result<AppConfig, ConfigError> {
+    let content = fs::read_to_string(path).map_err(|source| ConfigError::Read {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let config = toml::from_str::<AppConfig>(&content).map_err(|source| ConfigError::Parse {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    validation::validate(&config).map_err(|message| ConfigError::Validation {
+        path: path.to_path_buf(),
+        message,
+    })?;
+    Ok(config)
+}
+
+fn default_config_path() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        env::var_os("APPDATA")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .map(|path| path.join("terminal-rust").join("config.toml"))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        env::var_os("HOME")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .map(|path| {
+                path.join("Library")
+                    .join("Application Support")
+                    .join("terminal-rust")
+                    .join("config.toml")
+            })
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        env::var_os("XDG_CONFIG_HOME")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| {
+                env::var_os("HOME")
+                    .filter(|value| !value.is_empty())
+                    .map(PathBuf::from)
+                    .map(|path| path.join(".config"))
+            })
+            .map(|path| path.join("terminal-rust").join("config.toml"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn fixture(name: &str, content: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should follow the Unix epoch")
+            .as_nanos();
+        let directory = env::temp_dir().join(format!(
+            "terminal-rust-config-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&directory).expect("fixture directory should be created");
+        let path = directory.join(name);
+        fs::write(&path, content).expect("fixture should be written");
+        path
+    }
+
+    #[test]
+    fn loads_a_valid_partial_configuration_with_defaults() {
+        let path = fixture("valid.toml", "version = 1\n[prompt]\nicons = \"never\"\n");
+        let config = load_from_path(&path).expect("configuration should load");
+
+        assert_eq!(
+            config.prompt.icons,
+            super::super::schema::IconSetting::Never
+        );
+        assert_eq!(config.theme, "default");
+        assert_eq!(config.segments.symbol.value, ">");
+    }
+
+    #[test]
+    fn reports_the_file_for_invalid_toml() {
+        let path = fixture("invalid.toml", "version = [");
+        let error = load_from_path(&path).expect_err("invalid TOML should fail");
+
+        assert!(error.to_string().contains("invalid.toml"));
+        assert!(error.to_string().contains("invalid TOML"));
+    }
+
+    #[test]
+    fn rejects_an_unsupported_version() {
+        let path = fixture("future.toml", "version = 2");
+        let error = load_from_path(&path).expect_err("future version should fail");
+
+        assert!(error.to_string().contains("expected 1"));
+    }
+}

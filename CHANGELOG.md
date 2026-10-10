@@ -21,6 +21,8 @@ and macOS.
   without changing path or Git segment logic.
 - Added centralized Nerd Font icons with deterministic ASCII fallbacks and
   `auto`, `always`, and `never` display modes.
+- Added validated, cross-platform TOML user configuration loading with safe
+  defaults and actionable file-specific diagnostics.
 - Verified user-level installers for Windows x86_64, Linux x86_64, and macOS
   Apple Silicon, with authenticated private-release support.
 

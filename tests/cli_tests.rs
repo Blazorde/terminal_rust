@@ -44,8 +44,13 @@ fn run_cli(current_dir: &Path, args: &[&str]) -> Output {
 }
 
 fn run_interactive(current_dir: &Path, input: &str) -> Output {
+    run_interactive_with_env(current_dir, input, None)
+}
+
+fn run_interactive_with_env(current_dir: &Path, input: &str, config_path: Option<&Path>) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
         .current_dir(current_dir)
+        .envs(config_path.map(|path| ("TERMINAL_RUST_CONFIG", path)))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -62,6 +67,34 @@ fn run_interactive(current_dir: &Path, input: &str) -> Output {
     child
         .wait_with_output()
         .expect("the terminal_rust binary should finish")
+}
+
+#[test]
+fn interactive_shell_loads_icon_mode_from_toml() {
+    let directory = TestDirectory::new("configured prompt");
+    let config = directory.path().join("config.toml");
+    fs::write(&config, "version = 1\n[prompt]\nicons = \"always\"\n")
+        .expect("configuration should be written");
+
+    let output = run_interactive_with_env(directory.path(), "exit\n", Some(&config));
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(stdout(&output).starts_with('\u{f07b}'));
+}
+
+#[test]
+fn invalid_toml_reports_its_path_and_uses_defaults() {
+    let directory = TestDirectory::new("invalid config");
+    let config = directory.path().join("broken config.toml");
+    fs::write(&config, "version = [").expect("invalid configuration should be written");
+
+    let output = run_interactive_with_env(directory.path(), "exit\n", Some(&config));
+    let error = stderr(&output);
+
+    assert!(output.status.success());
+    assert!(error.contains("broken config.toml"), "stderr: {error}");
+    assert!(error.contains("invalid TOML"), "stderr: {error}");
+    assert!(error.contains("using defaults"), "stderr: {error}");
 }
 
 fn stdout(output: &Output) -> String {
