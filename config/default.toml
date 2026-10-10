@@ -3,6 +3,7 @@ theme = "default"
 
 [prompt]
 segments = ["path", "git", "symbol"]
+# auto | always | never; auto keeps ASCII unless Nerd Font support is confirmed
 icons = "auto"
 separator = "  "
 newline = false

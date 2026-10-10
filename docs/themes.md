@@ -77,3 +77,16 @@ C:\workspace\terminal_rust  git:main* >
 Le thème ne suppose ni police particulière, ni palette 24 bits, ni terminal
 Unix. Les séparateurs Powerline et les palettes avancées pourront enrichir le
 schéma sans changer les fournisseurs de données.
+
+## Icônes et repli ASCII
+
+Le registre `render::icons` centralise les glyphes `folder`, `git_branch`,
+`error`, `user` et `time`. Les thèmes référencent ces noms symboliques au lieu
+de copier des caractères Unicode. Une Nerd Font, par exemple MesloLGS NF, est
+nécessaire pour le rendu enrichi.
+
+Avec `icons = "always"`, le prompt affiche les glyphes du registre. Avec
+`icons = "never"`, il concatène le `fallback` ASCII du thème à la valeur. Le
+mode `auto` reste sans icônes lorsqu'il ne peut pas confirmer la présence d'une
+Nerd Font. Une icône inconnue utilise aussi son fallback : le prompt demeure
+donc lisible dans tous les terminaux Windows, macOS et Linux.

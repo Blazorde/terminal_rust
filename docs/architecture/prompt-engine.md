@@ -21,7 +21,7 @@ Le rendu actuel compose :
 Exemple enrichi :
 
 ```text
-~/project  main* >
+~/project  git:main* >
 ```
 
 Exemple de repli :
@@ -74,6 +74,11 @@ un terminal, lorsque `NO_COLOR` est défini ou lorsque `TERM=dumb`. Sous Windows
 la couleur n'est activée que lorsqu'un terminal ANSI connu est détecté (Windows
 Terminal, VS Code, ConEmu, ANSICON ou un environnement qui expose `TERM`) ; la
 console historique conserve ainsi un prompt lisible.
+
+Le module `render::icons` contient tous les glyphes Nerd Font. Le renderer choisit
+entre le glyphe et le fallback ASCII porté par `SegmentIcon`. Les modes `always`,
+`never` et `auto` sont indépendants de la couleur ; le mode automatique reste
+prudent et exige une confirmation explicite de la police configurée.
 
 La commande mesurée sur le dépôt du projet sous Windows prend environ 50 ms à
 froid. Le cache évite de répéter ce coût lors de rendus rapprochés tout en
