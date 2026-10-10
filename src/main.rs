@@ -3,6 +3,7 @@ mod cache;
 mod commands;
 mod errors;
 pub mod git;
+mod prompt;
 mod render;
 mod utils;
 

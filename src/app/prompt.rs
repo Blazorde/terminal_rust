@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::cache::GitPromptCache;
 use crate::git::{self, PromptGitInfo};
+use crate::prompt::segment::{PromptSegment, SegmentKind};
 use crate::render;
 
 const GIT_CACHE_TTL: Duration = Duration::from_millis(250);
@@ -36,13 +37,58 @@ impl Prompt {
 }
 
 fn render_for_path(path: &Path, git: Option<&PromptGitInfo>) -> String {
-    match git {
-        Some(info) => {
-            let dirty_marker = if info.dirty { "*" } else { "" };
-            format!("{}  {}{} > ", path.display(), info.branch, dirty_marker)
-        }
-        None => format!("{}> ", path.display()),
+    let segments = segments_for_path(path, git);
+    let path = segments[0]
+        .value
+        .as_deref()
+        .expect("the path segment always has a value");
+    let symbol = segments
+        .last()
+        .and_then(|segment| segment.value.as_deref())
+        .expect("the symbol segment always has a value");
+
+    match segments
+        .get(1)
+        .filter(|segment| segment.kind == SegmentKind::Git)
+    {
+        Some(git) => format!(
+            "{path}  {} {symbol} ",
+            git.value
+                .as_deref()
+                .expect("a visible Git segment has a value")
+        ),
+        None => format!("{path}{symbol} "),
     }
+}
+
+fn segments_for_path(path: &Path, git: Option<&PromptGitInfo>) -> Vec<PromptSegment> {
+    let mut segments = vec![PromptSegment::new(
+        SegmentKind::Path,
+        path.display().to_string(),
+        "path",
+    )];
+
+    let git_segment = PromptSegment::optional(
+        SegmentKind::Git,
+        git.map(|info| {
+            let dirty_marker = if info.dirty { "*" } else { "" };
+            format!("{}{dirty_marker}", info.branch)
+        }),
+        if git.is_some_and(|info| info.dirty) {
+            "git_dirty"
+        } else {
+            "git_clean"
+        },
+    )
+    .with_label("Git")
+    .with_icon("git_branch", "git:");
+
+    if git_segment.is_visible() {
+        segments.push(git_segment);
+    }
+
+    segments.push(PromptSegment::new(SegmentKind::Symbol, ">", "symbol"));
+    segments
 }
 
 #[cfg(test)]
@@ -73,5 +119,27 @@ mod tests {
             render_for_path(Path::new("project"), Some(&dirty)),
             "project  feature/prompt* > "
         );
+    }
+
+    #[test]
+    fn builds_typed_segments_without_ansi_codes() {
+        let git = PromptGitInfo {
+            branch: "main".to_string(),
+            dirty: true,
+        };
+
+        let segments = segments_for_path(Path::new("workspace"), Some(&git));
+
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0].kind, SegmentKind::Path);
+        assert_eq!(segments[1].kind, SegmentKind::Git);
+        assert_eq!(segments[1].style_key, "git_dirty");
+        assert_eq!(segments[2].kind, SegmentKind::Symbol);
+        assert!(segments.iter().all(|segment| {
+            segment
+                .value
+                .as_ref()
+                .is_none_or(|value| !value.contains("\u{1b}["))
+        }));
     }
 }

@@ -13,6 +13,8 @@ and macOS.
 
 - Defined the versioned prompt customization and theme contracts with default
   TOML examples and icon-free fallbacks.
+- Added a reusable prompt segment model that keeps data, semantic styles, and
+  optional icons independent from ANSI rendering.
 - Verified user-level installers for Windows x86_64, Linux x86_64, and macOS
   Apple Silicon, with authenticated private-release support.
 
