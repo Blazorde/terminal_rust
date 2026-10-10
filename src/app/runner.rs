@@ -174,7 +174,13 @@ fn handle_input(input: &str, state: &mut ShellState) -> CommandResult {
 
 fn load_prompt() -> Prompt {
     match config::load_user_config() {
-        Ok(config) => Prompt::from_config(&config),
+        Ok(config) => match Prompt::from_config(&config) {
+            Ok(prompt) => prompt,
+            Err(error) => {
+                let _ = render::stderr_line(format_args!("theme: {error}; using defaults"));
+                Prompt::default()
+            }
+        },
         Err(error) => {
             let _ = render::stderr_line(format_args!("config: {error}; using defaults"));
             Prompt::default()

@@ -12,6 +12,7 @@ use crate::render;
 use crate::render::ansi;
 use crate::render::icons::{self, IconMode};
 use crate::render::palette::Palette;
+use crate::theme::{self, ThemeError};
 
 const GIT_CACHE_TTL: Duration = Duration::from_millis(250);
 
@@ -34,19 +35,24 @@ impl Default for Prompt {
 }
 
 impl Prompt {
-    pub fn from_config(config: &AppConfig) -> Self {
-        let icon_mode = match config.prompt.icons {
+    pub fn from_config(config: &AppConfig) -> Result<Self, ThemeError> {
+        let theme = theme::load_builtin(&config.theme)?;
+        let icon_setting = match config.prompt.icons {
+            IconSetting::Auto => theme.icons,
+            explicit => explicit,
+        };
+        let icon_mode = match icon_setting {
             IconSetting::Auto => IconMode::from_environment(),
             IconSetting::Always => IconMode::Always,
             IconSetting::Never => IconMode::Never,
         };
 
-        Self {
+        Ok(Self {
             git_cache: GitPromptCache::new(GIT_CACHE_TTL),
-            palette: Palette::default(),
+            palette: theme.palette,
             icon_mode,
             config: config.clone(),
-        }
+        })
     }
 
     pub fn render(&mut self) -> io::Result<String> {
@@ -251,5 +257,23 @@ mod tests {
             ),
             "git:main | project\n> "
         );
+    }
+
+    #[test]
+    fn applies_minimal_theme_defaults_and_explicit_icon_override() {
+        let mut config = AppConfig {
+            theme: "minimal".into(),
+            ..AppConfig::default()
+        };
+        let prompt = Prompt::from_config(&config).expect("minimal theme should load");
+        assert_eq!(prompt.icon_mode, IconMode::Never);
+        assert_eq!(
+            prompt.palette.color("primary"),
+            Some(ansi::AnsiColor::White)
+        );
+
+        config.prompt.icons = IconSetting::Always;
+        let prompt = Prompt::from_config(&config).expect("minimal theme should load");
+        assert_eq!(prompt.icon_mode, IconMode::Always);
     }
 }
