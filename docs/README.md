@@ -9,6 +9,7 @@ vivent ici.
 | Besoin | Document |
 | --- | --- |
 | Comprendre le système | [Vue d'ensemble](architecture/overview.md) |
+| Préparer l'interface desktop | [Architecture GUI](architecture/desktop-gui.md) |
 | Concevoir le futur prompt | [Moteur de prompt](architecture/prompt-engine.md) |
 | Vérifier la portabilité | [Compatibilité multiplateforme](architecture/cross-platform.md) |
 | Comprendre une décision | [Registre des ADR](decisions/README.md) |
