@@ -42,6 +42,8 @@ preserving graceful fallbacks on Windows, Linux, and macOS.
 - Added copyable onboarding, a supported-platform matrix, and the complete
   contributor validation workflow to the README.
 - Added installer syntax validation to the cross-platform CI matrix.
+- Removed duplicate CI matrices for work-branch pushes; the full matrix remains
+  required on pull requests and protected-branch updates.
 - Centralized prompt rendering so the interactive shell and theme previews use
   the same ANSI, icon, separator, and fallback behavior.
 

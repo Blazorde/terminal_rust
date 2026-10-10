@@ -38,7 +38,9 @@ Feat/autocomplete
 
 File: `.github/workflows/ci.yml`
 
-Runs on pull requests and pushes. It checks:
+Runs on pull requests targeting `main` or `develop`, and on direct updates to
+those two protected branches. Work branches are validated through their pull
+request so the same commit does not consume a duplicate CI matrix. It checks:
 
 ```bash
 cargo fmt --all -- --check
