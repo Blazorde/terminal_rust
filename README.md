@@ -428,7 +428,7 @@ Elle couvre notamment :
 
 - l'architecture actuelle et l'architecture cible ;
 - la compatibilité Windows, macOS et Linux ;
-- le futur moteur de prompt à segments inspiré d'Oh My Posh ;
+- le moteur de prompt configurable à segments inspiré d'Oh My Posh ;
 - les décisions d'architecture (ADR) ;
 - les règles de contribution, de tests et de traitement des tickets.
 
@@ -566,10 +566,10 @@ Chaque archive est nommée avec son système et l'architecture du runner. Le
 guide de téléchargement et de validation se trouve dans
 [docs/release.md](docs/release.md).
 
-La version stable actuelle est `0.2.0` et la prochaine version mineure prévue
-est `0.3.0`. Les changements à venir sont regroupés sous `Unreleased` dans le
-[changelog](CHANGELOG.md). La stratégie SemVer et la checklist de publication
-sont détaillées dans le [guide de release](docs/release.md#publier-une-version).
+La version préparée pour publication est `0.3.0`. Les changements à venir sont
+regroupés sous `Unreleased` dans le [changelog](CHANGELOG.md). La stratégie
+SemVer et la checklist de publication sont détaillées dans le
+[guide de release](docs/release.md#publier-une-version).
 
 ## Roadmap
 
@@ -583,7 +583,7 @@ Idées de commandes ou fonctionnalités à ajouter plus tard:
 - redirections
 - pipes
 - meilleure gestion des permissions
-- moteur de prompt à segments configurables inspiré d'Oh My Posh
+- chargement de thèmes personnalisés depuis des fichiers externes
 - interface terminal graphique dédiée
 
 Les changements livrés sont recensés dans le [changelog](CHANGELOG.md). Les
@@ -592,4 +592,4 @@ prévus dans la roadmap.
 
 ## Licence
 
-Ce projet est sous licence MIT.
+Ce projet est distribué sous [licence MIT](LICENSE).

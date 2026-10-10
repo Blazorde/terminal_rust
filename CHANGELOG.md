@@ -5,9 +5,10 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
-The next planned minor release is **0.3.0**. It will focus on the configurable,
-segmented prompt engine while preserving graceful fallbacks on Windows, Linux,
-and macOS.
+## [0.3.0] - 2026-10-10
+
+This release introduces the configurable, segmented prompt engine while
+preserving graceful fallbacks on Windows, Linux, and macOS.
 
 ### Added
 
@@ -25,16 +26,33 @@ and macOS.
   defaults and actionable file-specific diagnostics.
 - Added configurable prompt segment selection and ordering, including separator,
   newline, path style, Git status marker, and symbol options.
+- Added selectable `default`, `minimal`, `git-focus`, and `powerline` theme
+  presets, including automatic ASCII fallback without a Nerd Font.
+- Added `theme list` and `theme preview <name>` commands for safe theme
+  discovery without changing the user configuration.
 - Verified user-level installers for Windows x86_64, Linux x86_64, and macOS
   Apple Silicon, with authenticated private-release support.
 
 ### Improved
 
+- Added the repository's MIT license file and bundled the license, README,
+  changelog, and configuration examples in release archives.
 - Added end-to-end CLI coverage and a reproducible MVP quality checklist for
   public commands and terminal fallbacks.
 - Added copyable onboarding, a supported-platform matrix, and the complete
   contributor validation workflow to the README.
 - Added installer syntax validation to the cross-platform CI matrix.
+- Centralized prompt rendering so the interactive shell and theme previews use
+  the same ANSI, icon, separator, and fallback behavior.
+
+### Known limitations
+
+- Custom theme files are not loaded yet; this release provides four built-in
+  presets.
+- Powerline glyphs and prompt icons require a compatible Nerd Font and explicit
+  capability confirmation; ASCII fallbacks remain available everywhere.
+- Terminal Rust remains a pedagogical mini-shell and does not replace Bash,
+  PowerShell, or Zsh.
 
 ## [0.2.0] - 2026-10-09
 
