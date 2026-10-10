@@ -62,8 +62,11 @@ Une valeur absente ou vide rend le segment invisible. Le modèle couvre le
 chemin, Git et le symbole dans la version actuelle ; sa structure commune pourra
 être réutilisée pour l'utilisateur, l'heure ou le statut de sortie.
 
-Le module `render::ansi` traduit ensuite les clés de style en séquences ANSI
-portables. Chaque segment stylé se termine par un reset, afin qu'une couleur ne
+Le module `render::palette` centralise les rôles sémantiques `primary`,
+`secondary`, `success`, `warning`, `error` et `muted`. Les segments ne connaissent
+que ces noms : la palette injectée décide de leur couleur sans modifier la logique
+du chemin ou de Git. Le module `render::ansi` traduit ensuite la palette en
+séquences ANSI portables. Chaque segment stylé se termine par un reset, afin qu'une couleur ne
 déborde jamais sur la saisie ou la sortie suivante. Le renderer propose les huit
 couleurs ANSI de base, le foreground, le background, le gras et le mode atténué.
 Il produit automatiquement du texte brut lorsque la sortie standard n'est pas
