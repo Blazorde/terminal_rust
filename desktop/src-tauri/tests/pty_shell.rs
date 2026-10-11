@@ -1,0 +1,87 @@
+use std::io::{Read, Write};
+use std::time::{Duration, Instant};
+
+use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+
+#[test]
+fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows: 24,
+            cols: 100,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .expect("native PTY should open");
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .expect("PTY output should be readable");
+    let mut writer = pair
+        .master
+        .take_writer()
+        .expect("PTY input should be writable");
+
+    let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    command.arg("--pty-shell");
+    let mut child = pair
+        .slave
+        .spawn_command(command)
+        .expect("desktop shell mode should start");
+    drop(pair.slave);
+
+    // Let rustyline switch the PTY into raw mode before reproducing xterm's
+    // keyboard stream. Sending bytes during process bootstrap is racy on
+    // Windows ConPTY and does not model an interactive user.
+    std::thread::sleep(Duration::from_millis(300));
+    // On Windows, rustyline asks an ANSI terminal for its cursor position
+    // during startup. xterm answers this query; the headless test PTY must do
+    // the same before sending key presses. Unix obtains the position from its
+    // terminal interface and must not receive this synthetic response.
+    let input: &[u8] = if cfg!(windows) {
+        b"\x1b[1;1Rhelp\rexit\r"
+    } else {
+        b"help\rexit\r"
+    };
+    writer
+        .write_all(input)
+        .and_then(|()| writer.flush())
+        .expect("commands should reach the PTY");
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut timed_out = false;
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("shell status should be readable") {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            timed_out = true;
+            child.kill().expect("timed out shell should stop");
+            break child
+                .wait()
+                .expect("stopped shell status should be readable");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+
+    drop(writer);
+    drop(pair.master);
+    let mut output = Vec::new();
+    reader
+        .read_to_end(&mut output)
+        .expect("PTY output should remain readable until exit");
+    let output = String::from_utf8_lossy(&output);
+
+    assert!(
+        !timed_out,
+        "desktop shell did not exit after receiving the exit command: {output}"
+    );
+    assert!(
+        status.success(),
+        "desktop shell exited unsuccessfully: {output}"
+    );
+    assert!(
+        output.contains("Available commands:"),
+        "real shell help was missing from PTY output: {output}"
+    );
+}

@@ -36,7 +36,7 @@ fn run_once(args: &[String]) -> ExitCode {
     }
 }
 
-fn run_interactive() -> ExitCode {
+pub fn run_interactive() -> ExitCode {
     if io::stdin().is_terminal() {
         run_interactive_editor()
     } else {
