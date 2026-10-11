@@ -10,6 +10,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 - Added a reusable `ShellEngine` library API with typed execution status,
   captured standard streams, errors, and directory-change metadata for CLI and
   future desktop consumers.
+- Added the first Tauri desktop window backed by a native Rust-owned PTY, with
+  real shell input and output, keyboard focus, resize handling, session restart,
+  an xterm.js renderer, and an Atelier-inspired responsive interface.
+- Added desktop build and native PTY integration checks to the cross-platform
+  CI matrix.
 
 ### Changed
 

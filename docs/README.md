@@ -11,6 +11,7 @@ vivent ici.
 | Comprendre le système | [Vue d'ensemble](architecture/overview.md) |
 | Utiliser le moteur partagé | [API du moteur de shell](architecture/shell-engine.md) |
 | Préparer l'interface desktop | [Architecture GUI](architecture/desktop-gui.md) |
+| Développer et valider l'interface desktop | [Guide desktop](development/desktop.md) |
 | Concevoir le futur prompt | [Moteur de prompt](architecture/prompt-engine.md) |
 | Vérifier la portabilité | [Compatibilité multiplateforme](architecture/cross-platform.md) |
 | Comprendre une décision | [Registre des ADR](decisions/README.md) |

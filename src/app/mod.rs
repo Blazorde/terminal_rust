@@ -5,4 +5,4 @@ pub(crate) mod parser;
 mod prompt;
 mod runner;
 
-pub use runner::run;
+pub use runner::{run, run_interactive};

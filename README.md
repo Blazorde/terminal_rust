@@ -41,6 +41,7 @@ sources reste possible avec une toolchain Rust compatible.
 - [Fonctionnalités](#fonctionnalités)
 - [Installation](#installation)
 - [Lancement](#lancement)
+- [Interface desktop](#interface-desktop)
 - [Commandes disponibles](#commandes-disponibles)
 - [Historique interactif](#historique-interactif)
 - [Détection Git](#détection-git)
@@ -148,6 +149,33 @@ Sur Windows, le binaire release se trouve ici:
 ```powershell
 .\target\release\terminal_rust.exe
 ```
+
+## Interface desktop
+
+Le prototype desktop Tauri ouvre une vraie session PTY pilotée par Rust. La
+WebView affiche le flux avec xterm.js, mais ne lance aucune commande et ne
+dispose d'aucun accès générique au système de fichiers. La saisie, les signaux,
+le redimensionnement et l'historique passent donc par le même shell Rust que le
+mode CLI.
+
+Prérequis supplémentaires : Node.js 24 et les dépendances système Tauri 2 de
+la plateforme. Installer le frontend puis démarrer la fenêtre :
+
+```bash
+npm ci --prefix desktop
+npm run tauri --prefix desktop -- dev
+```
+
+Le build frontend autonome sert uniquement à vérifier la présentation :
+
+```bash
+npm run build --prefix desktop
+```
+
+Dans un navigateur ordinaire, l'interface affiche explicitement un aperçu et
+ne simule pas de commandes. La session réelle est disponible uniquement dans
+la fenêtre Tauri. Les instructions et limites par système sont détaillées dans
+[`docs/development/desktop.md`](docs/development/desktop.md).
 
 ## Commandes disponibles
 
