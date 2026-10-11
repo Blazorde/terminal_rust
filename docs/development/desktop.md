@@ -106,6 +106,7 @@ Avant une PR :
 
 ```bash
 npm ci --prefix desktop
+npm run audit:ui --prefix desktop
 npm run build --prefix desktop
 cargo fmt --all -- --check
 cargo check --all-targets --all-features
@@ -115,6 +116,17 @@ cargo check -p terminal-rust-desktop --all-targets --all-features
 cargo clippy -p terminal-rust-desktop --all-targets --all-features -- -D warnings
 cargo test -p terminal-rust-desktop --all-targets --all-features
 ```
+
+Le probe manuel de latence PTY produit trois essais comparables sans ralentir
+la suite standard :
+
+```bash
+cargo test -p terminal-rust-desktop --test pty_shell \
+  desktop_performance_probe_reports_three_trials -- --ignored --nocapture
+```
+
+Les résultats courants et la matrice des preuves sont consignés dans
+[l'audit qualité GUI](gui-quality-audit.md).
 
 La CI répète ces contrôles sous Ubuntu, Windows et macOS. Une exécution locale
 sur un seul système prouve le comportement de ce système uniquement ; T121 ne

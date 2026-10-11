@@ -1,4 +1,4 @@
-import type { ChangeEvent, RefObject } from 'react'
+import { useRef, type ChangeEvent, type KeyboardEvent, type RefObject } from 'react'
 
 import type { ConnectionState } from './terminal-types'
 import type { DesktopSettings } from './settings'
@@ -34,24 +34,44 @@ export default function SettingsDrawer({
   settings,
   settingsPath,
 }: SettingsDrawerProps) {
+  const drawer = useRef<HTMLElement>(null)
   const update = <Key extends keyof DesktopSettings>(key: Key, value: DesktopSettings[Key]) => {
     onChange({ ...settings, [key]: value })
   }
   const updateNumber = (key: 'fontSize') => (event: ChangeEvent<HTMLInputElement>) => {
     update(key, Number(event.target.value))
   }
+  const keepFocusInside = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Tab' || !drawer.current) return
+    const controls = Array.from(drawer.current.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    )).filter((control) => control.offsetParent !== null)
+    const first = controls[0]
+    const last = controls.at(-1)
+    if (!first || !last) return
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
 
   return (
     <aside
+      ref={drawer}
       id="session-drawer"
       className={`session-drawer ${detailsOpen ? 'session-drawer--open' : ''}`}
+      role="dialog"
+      aria-modal={detailsOpen ? true : undefined}
       aria-hidden={!detailsOpen}
       aria-labelledby="settings-heading"
       inert={!detailsOpen}
+      onKeyDown={keepFocusInside}
     >
       <div className="drawer-heading">
         <div>
-          <p className="eyebrow">Atelier local</p>
           <h2 id="settings-heading">Réglages</h2>
           <p>Le rendu change immédiatement. L’enregistrement reste validé côté Rust.</p>
         </div>

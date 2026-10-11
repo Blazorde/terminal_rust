@@ -10,12 +10,12 @@ decorative blur, remote fonts and simulated content.
 
 ## First viewport
 
-A near-full-window terminal sits inside a restrained 32-pixel workspace margin.
-The title bar names Terminal Rust, exposes live connection state and keeps a
-single settings action. The PTY fills the central surface immediately. A slim
-footer reports the native shell, dimensions and platform. The memorable detail
-is a calibrated orange activity rail that responds to live PTY traffic without
-competing with terminal text.
+The terminal occupies the complete native window without an outer canvas or
+decorative margin. The title bar names Terminal Rust, exposes live connection
+state, session tabs and a single settings action. The PTY fills the central
+surface immediately. A slim footer reports the native context and dimensions.
+The memorable detail is a calibrated orange activity rail that responds to
+live PTY traffic without competing with terminal text.
 
 ## Tokens
 
@@ -26,7 +26,7 @@ competing with terminal text.
   --surface-raised: #1a1e22;
   --ink: #e7e2d8;
   --muted: #969ca3;
-  --faint: #626970;
+  --faint: #818991;
   --accent: #ff6b3d;
   --success: #91c99b;
   --danger: #ff8178;
@@ -34,7 +34,6 @@ competing with terminal text.
   --focus: #ffb199;
   --radius-window: 0;
   --radius-control: 8px;
-  --shadow-window: 0 24px 64px rgb(0 0 0 / 45%);
 }
 ```
 

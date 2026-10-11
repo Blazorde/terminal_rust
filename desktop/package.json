@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 1420",
-    "build": "tsc -b && vite build",
+    "audit:ui": "node scripts/check-ui-contract.mjs",
+    "dev": "vite --config vite.config.ts --host 127.0.0.1 --port 1420",
+    "build": "tsc -b && vite build --config vite.config.ts",
     "preview": "vite preview",
     "tauri": "tauri"
   },

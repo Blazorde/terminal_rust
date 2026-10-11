@@ -93,10 +93,10 @@ const terminalThemes: Record<DesktopTheme, ITheme> = {
   },
 }
 
-export function applyTerminalSettings(terminal: Terminal, settings: DesktopSettings) {
+export function applyTerminalSettings(terminal: Terminal, settings: DesktopSettings, reduceMotion = false) {
   terminal.options.theme = terminalThemes[settings.theme]
   terminal.options.fontFamily = fontStacks[settings.fontFamily]
   terminal.options.fontSize = settings.fontSize
   terminal.options.cursorStyle = settings.cursorStyle
-  terminal.options.cursorBlink = settings.cursorBlink
+  terminal.options.cursorBlink = settings.cursorBlink && !reduceMotion
 }

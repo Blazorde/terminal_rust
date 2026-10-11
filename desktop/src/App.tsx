@@ -41,6 +41,8 @@ function labelFromLayout(tab: TerminalTab, layout: PromptLayout): string {
 
 export default function App() {
   const closeButton = useRef<HTMLButtonElement>(null)
+  const settingsButton = useRef<HTMLButtonElement>(null)
+  const settingsWasOpen = useRef(false)
   const nextOrdinal = useRef(2)
   const [desktopHost, setDesktopHost] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -60,12 +62,19 @@ export default function App() {
   }, [])
 
   const patchTab = useCallback((tabId: string, patch: TerminalTabPatch) => {
-    setTabs((current) => current.map((tab) => {
-      if (tab.id !== tabId) return tab
-      const next = { ...tab, ...patch }
-      if (patch.promptLayout) next.label = labelFromLayout(tab, patch.promptLayout)
-      return next
-    }))
+    setTabs((current) => {
+      let changed = false
+      const nextTabs = current.map((tab) => {
+        if (tab.id !== tabId) return tab
+        const unchanged = Object.entries(patch).every(([key, value]) => tab[key as keyof TerminalTab] === value)
+        if (unchanged) return tab
+        changed = true
+        const next = { ...tab, ...patch }
+        if (patch.promptLayout) next.label = labelFromLayout(tab, patch.promptLayout)
+        return next
+      })
+      return changed ? nextTabs : current
+    })
   }, [])
 
   const addTab = useCallback(() => {
@@ -166,7 +175,14 @@ export default function App() {
   }, [activeTabId, addTab, closeTab, cycleTab])
 
   useEffect(() => {
-    if (detailsOpen) closeButton.current?.focus()
+    if (detailsOpen) {
+      closeButton.current?.focus()
+    } else if (settingsWasOpen.current) {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => settingsButton.current?.focus())
+      })
+    }
+    settingsWasOpen.current = detailsOpen
   }, [detailsOpen])
 
   const restart = () => {
@@ -200,7 +216,7 @@ export default function App() {
         className={`terminal-window ${activeTab?.error ? 'terminal-window--error' : ''} ${settings.showStatusBar ? '' : 'terminal-window--status-hidden'}`}
         aria-label="Terminal Rust"
       >
-        <header className="titlebar">
+        <header className="titlebar" inert={detailsOpen}>
           <div className="brand-lockup">
             <span className={`activity activity--${activeTab?.connection ?? 'connecting'}`} aria-hidden="true" />
             <strong>Terminal Rust</strong>
@@ -236,6 +252,7 @@ export default function App() {
               {activeTab?.connection === 'error' && 'Connexion impossible'}
             </span>
             <button
+              ref={settingsButton}
               type="button"
               className="quiet-button"
               onClick={() => setDetailsOpen((open) => !open)}
@@ -248,13 +265,13 @@ export default function App() {
         </header>
 
         {activeTab?.error && (
-          <div className="error-strip" role="alert">
+          <div className="error-strip" role="alert" inert={detailsOpen}>
             <span>{activeTab.error}</span>
             <button type="button" onClick={restart}>Réessayer</button>
           </div>
         )}
 
-        <div className="terminal-stage">
+        <div className="terminal-stage" inert={detailsOpen}>
           {tabs.map((tab) => (
             <TerminalPane
               key={tab.id}
@@ -274,7 +291,11 @@ export default function App() {
         </div>
 
         {settings.showStatusBar && (
-          <PromptSegments layout={activeTab?.promptLayout ?? emptyPromptLayout} dimensions={activeTab?.dimensions ?? '80 × 24'} />
+          <PromptSegments
+            backgroundInert={detailsOpen}
+            layout={activeTab?.promptLayout ?? emptyPromptLayout}
+            dimensions={activeTab?.dimensions ?? '80 × 24'}
+          />
         )}
 
         <SettingsDrawer

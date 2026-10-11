@@ -31,6 +31,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   intended for the desktop adapter.
 - The desktop terminal surface now fills the native window without an outer
   decorative canvas, redundant border, or shadow.
+- Desktop themes now meet WCAG AA text contrast, the settings dialog traps and
+  restores keyboard focus, reduced motion has targeted fallbacks, and frontend
+  dependencies are emitted as bounded chunks.
 
 ## [0.3.0] - 2026-10-10
 
