@@ -65,11 +65,19 @@ function SegmentGroup({ segments, side }: { segments: PromptSegment[]; side: 'le
   )
 }
 
-export default function PromptSegments({ layout, dimensions }: { layout: PromptLayout; dimensions: string }) {
+export default function PromptSegments({
+  backgroundInert,
+  layout,
+  dimensions,
+}: {
+  backgroundInert: boolean
+  layout: PromptLayout
+  dimensions: string
+}) {
   const hasSegments = layout.left.length > 0 || layout.right.length > 0
 
   return (
-    <footer className="statusbar" aria-label="Contexte du prompt Rust">
+    <footer className="statusbar" aria-label="Contexte du prompt Rust" inert={backgroundInert}>
       {hasSegments ? (
         <>
           <SegmentGroup segments={layout.left} side="left" />

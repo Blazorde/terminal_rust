@@ -1,9 +1,45 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
+use std::sync::mpsc::{self, Receiver};
+use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+
+fn wait_for_prompt_frame(
+    receiver: &Receiver<Vec<u8>>,
+    output: &mut Vec<u8>,
+    prompt_count: usize,
+    writer: &mut dyn Write,
+    cursor_answered: &mut bool,
+) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
+            output.extend(chunk);
+        }
+        if cfg!(windows) && !*cursor_answered && output.windows(4).any(|bytes| bytes == b"\x1b[6n")
+        {
+            writer
+                .write_all(b"\x1b[1;1R")
+                .and_then(|()| writer.flush())
+                .expect("headless PTY should answer the cursor position query");
+            *cursor_answered = true;
+        }
+        if String::from_utf8_lossy(output)
+            .matches("\u{1b}]777;")
+            .count()
+            >= prompt_count
+        {
+            return;
+        }
+    }
+    panic!(
+        "desktop shell did not render prompt frame {prompt_count}: {}",
+        String::from_utf8_lossy(output)
+    );
+}
 
 #[test]
 fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
@@ -158,4 +194,104 @@ fn concurrent_desktop_sessions_keep_their_working_directories_isolated() {
     assert!(!second_stdout.contains(&first_dir.display().to_string()));
 
     fs::remove_dir_all(root).expect("session fixtures should be removed");
+}
+
+#[test]
+#[ignore = "manual cross-platform performance probe"]
+fn desktop_performance_probe_reports_three_trials() {
+    for trial in 1..=3 {
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 100,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("native PTY should open");
+        let mut reader = pair
+            .master
+            .try_clone_reader()
+            .expect("PTY output should be readable");
+        let mut writer = pair
+            .master
+            .take_writer()
+            .expect("PTY input should be writable");
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let mut buffer = [0; 4096];
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) | Err(_) => break,
+                    Ok(length) => {
+                        if sender.send(buffer[..length].to_vec()).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+        command.arg("--pty-shell");
+        command.env("TERMINAL_RUST_GUI", "1");
+        let started_at = Instant::now();
+        let mut child = pair
+            .slave
+            .spawn_command(command)
+            .expect("desktop shell mode should start");
+        drop(pair.slave);
+
+        let mut output = Vec::new();
+        let mut cursor_answered = false;
+        wait_for_prompt_frame(
+            &receiver,
+            &mut output,
+            1,
+            writer.as_mut(),
+            &mut cursor_answered,
+        );
+        let startup = started_at.elapsed();
+
+        let command_at = Instant::now();
+        writer
+            .write_all(b"pwd\r")
+            .and_then(|()| writer.flush())
+            .expect("performance command should reach the PTY");
+        wait_for_prompt_frame(
+            &receiver,
+            &mut output,
+            2,
+            writer.as_mut(),
+            &mut cursor_answered,
+        );
+        let round_trip = command_at.elapsed();
+
+        writer
+            .write_all(b"exit\r")
+            .and_then(|()| writer.flush())
+            .expect("performance session should exit");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if child
+                .try_wait()
+                .expect("performance shell status should be readable")
+                .is_some()
+            {
+                break;
+            }
+            if Instant::now() >= deadline {
+                child
+                    .kill()
+                    .expect("timed out performance shell should stop");
+                panic!("performance shell did not exit");
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        println!(
+            "trial={trial} prompt_startup_us={} command_round_trip_us={}",
+            startup.as_micros(),
+            round_trip.as_micros()
+        );
+    }
 }

@@ -9,7 +9,7 @@
   --surface-raised: #1a1e22;
   --ink: #e7e2d8;
   --muted: #969ca3;
-  --faint: #626970;
+  --faint: #818991;
   --accent: #ff6b3d;
   --success: #91c99b;
   --danger: #ff8178;
@@ -46,7 +46,7 @@ button:focus-visible {
   --surface-raised: #151e2e;
   --ink: #dce7f5;
   --muted: #91a0b6;
-  --faint: #56647a;
+  --faint: #7989a0;
   --accent: #67d7c4;
   --success: #8ad6a3;
   --danger: #ff8290;
@@ -62,7 +62,7 @@ button:focus-visible {
   --surface-raised: #e7e0d4;
   --ink: #25231f;
   --muted: #69635a;
-  --faint: #91897d;
+  --faint: #716a61;
   --accent: #b94725;
   --success: #3d7650;
   --danger: #b13d45;
@@ -255,7 +255,6 @@ kbd { border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color
 .drawer-heading { display: flex; justify-content: space-between; gap: 16px; }
 .drawer-heading h2 { margin: 0 0 6px; color: var(--ink); font-size: 22px; letter-spacing: -.02em; }
 .drawer-heading p { max-width: 28ch; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.drawer-heading .eyebrow { margin-bottom: 5px; color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
 .close-button { align-self: flex-start; padding: 5px 8px; }
 
 .settings-diagnostic {
@@ -329,5 +328,6 @@ kbd { border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .activity--connecting, .traffic-rail--active { animation: none; }
+  .session-drawer { transition: none; }
 }

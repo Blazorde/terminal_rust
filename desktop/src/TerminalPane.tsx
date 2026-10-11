@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 
 import { emptyPromptLayout, parsePromptLayout, type PromptLayout } from './PromptSegments'
 import { applyTerminalSettings, type DesktopSettings } from './settings'
@@ -32,7 +32,7 @@ interface TerminalPaneProps {
 
 const encoder = new TextEncoder()
 
-export default function TerminalPane({
+function TerminalPane({
   active,
   desktopHost,
   focusEnabled,
@@ -44,6 +44,14 @@ export default function TerminalPane({
   const host = useRef<HTMLDivElement>(null)
   const terminal = useRef<Terminal | null>(null)
   const fitAddon = useRef<FitAddon | null>(null)
+  const [reduceMotion, setReduceMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const update = ({ matches }: MediaQueryListEvent) => setReduceMotion(matches)
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
 
   useEffect(() => {
     const element = host.current
@@ -57,7 +65,7 @@ export default function TerminalPane({
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
-    applyTerminalSettings(term, settings)
+    applyTerminalSettings(term, settings, reduceMotion)
     term.open(element)
     terminal.current = term
     fitAddon.current = fit
@@ -167,9 +175,9 @@ export default function TerminalPane({
     const term = terminal.current
     const fit = fitAddon.current
     if (!term || !fit) return
-    applyTerminalSettings(term, settings)
+    applyTerminalSettings(term, settings, reduceMotion)
     window.requestAnimationFrame(() => fit.fit())
-  }, [settings])
+  }, [settings, reduceMotion])
 
   useEffect(() => {
     if (!active || !focusEnabled) return
@@ -194,3 +202,5 @@ export default function TerminalPane({
     </div>
   )
 }
+
+export default memo(TerminalPane)
