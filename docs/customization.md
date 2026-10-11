@@ -42,7 +42,8 @@ version = 1
 theme = "default"
 
 [prompt]
-segments = ["path", "git", "symbol"]
+segments = ["user", "host", "path", "git", "symbol"]
+right_segments = ["status", "runtime", "duration", "time"]
 icons = "auto"
 separator = "  "
 newline = false
@@ -63,7 +64,8 @@ Options personnalisables :
 | --- | --- | --- | --- |
 | `version` | entier | Version du schéma | obligatoire |
 | `theme` | texte | Thème intégré ou chemin TOML | `default` |
-| `prompt.segments` | liste | Segments et ordre d'affichage | path, git, symbol |
+| `prompt.segments` | liste | Segments à gauche et ordre d'affichage | user, host, path, git, symbol |
+| `prompt.right_segments` | liste | Segments alignés à droite dans la GUI | status, runtime, duration, time |
 | `prompt.icons` | `auto`, `always`, `never` | Politique d'icônes | `auto` |
 | `prompt.separator` | texte | Espace entre segments | deux espaces |
 | `prompt.newline` | booléen | Symbole final sur une nouvelle ligne | `false` |
@@ -75,13 +77,21 @@ revenir à la valeur par défaut concernée, sans empêcher le démarrage du she
 
 | Identifiant | Données | Options | Repli |
 | --- | --- | --- | --- |
+| `user` | utilisateur du processus | — | segment omis si les variables système manquent |
+| `host` | nom d'hôte fourni par le système | — | segment omis si indisponible |
 | `path` | dossier courant | `style = full|folder` | chemin fourni par `Path::display` |
 | `git` | branche, état modifié | `show_status` | segment omis hors dépôt ou sans Git |
+| `status` | résultat de la commande précédente | — | omis avant la première commande |
+| `runtime` | marqueur local Cargo, Node, Python ou Go | — | omis sans marqueur reconnu |
+| `duration` | durée de la commande précédente | — | omis avant la première commande |
+| `time` | heure locale de collecte | — | texte sans dépendance réseau |
 | `symbol` | symbole final | `value` | `>` |
 
-L'ordre de `prompt.segments` est conservé exactement. Un segment absent de la
-liste n'est ni collecté ni affiché. Les doublons et identifiants inconnus sont
-refusés avec un diagnostic clair. `prompt.separator` sépare les segments visibles
+L'ordre de chaque tableau est conservé exactement. `prompt.segments` forme le
+côté gauche et le prompt CLI ; `prompt.right_segments` forme le côté droit de
+la barre desktop. Un segment absent des deux listes n'est pas affiché. Les
+doublons, y compris entre les deux côtés, et les identifiants inconnus sont
+refusés avec un diagnostic clair. `prompt.separator` sépare les segments du CLI
 et `prompt.newline = true` place le symbole sur une nouvelle ligne lorsqu'il est
 précédé d'un autre segment.
 

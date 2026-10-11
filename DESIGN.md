@@ -32,7 +32,7 @@ competing with terminal text.
   --danger: #ff8178;
   --line: #30353a;
   --focus: #ffb199;
-  --radius-window: 14px;
+  --radius-window: 0;
   --radius-control: 8px;
   --shadow-window: 0 24px 64px rgb(0 0 0 / 45%);
 }
@@ -48,10 +48,10 @@ competing with terminal text.
 
 ## Layout and behavior
 
-- Desktop margin scales from 12 to 32 pixels; the terminal always keeps useful
-  height in a small window.
-- The grid belongs to the workshop canvas and stays below 4% visual contrast.
-- Borders define structure; shadow is reserved for the main window.
+- The terminal surface fills the native window; no decorative canvas may remain
+  visible around it.
+- Internal borders define the title, terminal and status regions; the native
+  window has no redundant outer border or shadow.
 - Settings use a persistent side drawer on wide windows and an overlay drawer
   on narrow windows.
 - Motion is limited to the live activity rail and drawer transition, both

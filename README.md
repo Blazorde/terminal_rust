@@ -183,6 +183,11 @@ enregistrés dans le dossier de configuration natif de l'application. Le chemin
 exact est affiché dans le panneau ; une configuration illisible ou invalide est
 signalée et remplacée par des valeurs sûres.
 
+La barre d'état desktop reçoit directement du moteur Rust les segments du
+prompt : utilisateur, hôte, chemin, Git, statut précédent, runtime du projet,
+durée et heure. Les tableaux `prompt.segments` et `prompt.right_segments` du
+fichier TOML contrôlent leur ordre, leur côté et leur visibilité.
+
 ## Commandes disponibles
 
 | Commande | Description |

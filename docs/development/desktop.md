@@ -57,6 +57,19 @@ affichée dans le tiroir, puis relancer. Le diagnostic doit apparaître sans
 empêcher l'ouverture du terminal ; un nouvel enregistrement doit réparer le
 fichier.
 
+## Segments de prompt
+
+Le processus PTY reçoit `TERMINAL_RUST_GUI=1`. À chaque prompt, Rust ajoute une
+séquence OSC privée `777` contenant le `PromptLayout` JSON. xterm la consomme et
+React affiche les segments gauche/droite dans la barre d'état sans écrire le
+JSON à l'écran. Le test d'intégration PTY vérifie à la fois une vraie commande
+et la présence de cette métadonnée.
+
+Modifier `prompt.segments` et `prompt.right_segments` dans la configuration TOML
+du shell permet de vérifier l'ordre, le côté et la visibilité. Git et runtime
+sont optionnels : quitter un dépôt ou un projet reconnu doit seulement retirer
+le segment concerné.
+
 ## Frontière de sécurité
 
 - La WebView appelle seulement les commandes bornées de session et les deux

@@ -1,7 +1,7 @@
 # Moteur de prompt
 
-Statut : modèle et renderer ANSI implémentés, contrat de configuration défini,
-chargement et thèmes dynamiques à venir.
+Statut : modèle, collecte enrichie, renderer ANSI et partage desktop
+implémentés.
 
 ## Objectif
 
@@ -59,8 +59,10 @@ rendu n'affiche le segment que lorsque ces données sont disponibles.
 `PromptSegment` est le contrat commun entre collecte et rendu. Il transporte une
 valeur et des références sémantiques de style ou d'icône, jamais un code ANSI.
 Une valeur absente ou vide rend le segment invisible. Le modèle couvre le
-chemin, Git et le symbole dans la version actuelle ; sa structure commune pourra
-être réutilisée pour l'utilisateur, l'heure ou le statut de sortie.
+chemin, Git, le symbole, l'utilisateur, l'hôte, le statut de sortie, le runtime
+local, la durée et l'heure. Un `PromptContext` collecte ces valeurs sans code de
+présentation ; le même `PromptLayout` typé alimente le renderer CLI et la barre
+d'état desktop.
 
 Le module `render::palette` centralise les rôles sémantiques `primary`,
 `secondary`, `success`, `warning`, `error` et `muted`. Les segments ne connaissent
@@ -105,18 +107,24 @@ theme = "default"
 
 [prompt]
 icons = "auto"
-segments = ["path", "git", "symbol"]
+segments = ["user", "host", "path", "git", "symbol"]
+right_segments = ["status", "runtime", "duration", "time"]
 ```
 
 Les exemples canoniques sont `config/default.toml` et
-`config/themes/default.toml`. Le chargement est volontairement reporté aux
-tickets d'implémentation suivants.
+`config/themes/default.toml`. Le chargeur valide l'ordre, l'unicité et la
+position de chaque segment.
+
+Dans la session desktop uniquement, le processus enfant sérialise le layout en
+JSON dans l'OSC privé `777`. xterm intercepte cette séquence avant affichage et
+met à jour la barre d'état ; la WebView ne recalcule donc ni Git, ni le runtime,
+ni la durée. Une session CLI ordinaire n'émet jamais cette métadonnée.
 
 ## Étapes recommandées
 
-1. Charger et valider la configuration TOML versionnée.
-2. Connecter les styles du thème au renderer ANSI.
-3. Ajouter une limite de durée aux commandes externes.
+1. Ajouter des fournisseurs de contexte uniquement lorsqu'ils restent bornés.
+2. Étendre les thèmes sans coupler les segments aux couleurs terminal.
+3. Garder le contrat OSC versionnable avant d'ajouter un second consommateur.
 
 Chaque étape doit rester fusionnable et testable seule. L'ADR-0003 fixe la
 direction par segments ; les interfaces pourront évoluer avec la configuration.

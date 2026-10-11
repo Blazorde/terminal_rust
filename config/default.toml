@@ -2,7 +2,8 @@ version = 1
 theme = "default"
 
 [prompt]
-segments = ["path", "git", "symbol"]
+segments = ["user", "host", "path", "git", "symbol"]
+right_segments = ["status", "runtime", "duration", "time"]
 # auto | always | never; auto keeps ASCII unless Nerd Font support is confirmed
 icons = "auto"
 separator = "  "
