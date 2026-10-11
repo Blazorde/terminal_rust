@@ -43,6 +43,9 @@ accès disque restent dans l'adaptateur Rust.
   ou au système de fichiers.
 - Les segments de prompt proviennent d'un `PromptLayout` Rust transmis par une
   séquence OSC privée consommée par xterm ; la GUI ne sonde pas Git ni le disque.
+- Un onglet possède une seule session PTY et une session PTY n'appartient qu'à
+  un onglet. L'identifiant natif est vérifié sur chaque événement pour empêcher
+  tout mélange d'entrée, de sortie ou de contexte entre onglets.
 - Les préférences partagées utilisent le schéma versionné existant ou une
   extension rétrocompatible ; une donnée invalide garde un fallback sûr.
 - Les polices et assets livrés sont locaux. Une police système monospace reste
@@ -58,7 +61,9 @@ accès disque restent dans l'adaptateur Rust.
    validation multiplateforme portée par la matrice et T124).
 5. **T123** — enrichir les segments de prompt partagés (implémenté : layout
    gauche/droite typé et transport OSC local).
-6. **T124** — vérifier accessibilité, responsive, performance et trois OS.
+6. **T125** — ajouter de vrais onglets de sessions terminal isolées (implémenté
+   localement ; validation multiplateforme portée par la matrice et T124).
+7. **T124** — vérifier accessibilité, responsive, performance et trois OS.
 
 Chaque étape possède sa propre branche et sa propre PR. Une fonctionnalité GUI
 ne peut pas être déclarée multiplateforme sur la seule preuve d'un poste local ;

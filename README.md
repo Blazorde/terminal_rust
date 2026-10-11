@@ -188,6 +188,12 @@ prompt : utilisateur, hôte, chemin, Git, statut précédent, runtime du projet,
 durée et heure. Les tableaux `prompt.segments` et `prompt.right_segments` du
 fichier TOML contrôlent leur ordre, leur côté et leur visibilité.
 
+Chaque onglet possède sa propre session PTY, son dossier courant, son historique
+et son contexte de prompt. `Ctrl+T`/`Cmd+T` ouvre un onglet,
+`Ctrl+W`/`Cmd+W` ferme l'onglet actif et `Ctrl+Tab` passe au suivant. Lorsque la
+barre d'onglets a le focus, les flèches gauche/droite, `Home`, `End` et `Delete`
+permettent aussi de la piloter sans souris.
+
 ## Commandes disponibles
 
 | Commande | Description |

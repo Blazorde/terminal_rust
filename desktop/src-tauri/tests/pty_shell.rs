@@ -1,5 +1,7 @@
+use std::fs;
 use std::io::{Read, Write};
-use std::time::{Duration, Instant};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
@@ -99,4 +101,61 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
             "{kind} prompt segment was missing from PTY output: {output}"
         );
     }
+}
+
+#[test]
+fn concurrent_desktop_sessions_keep_their_working_directories_isolated() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock should follow the Unix epoch")
+        .as_nanos();
+    let root =
+        std::env::temp_dir().join(format!("terminal-rust-tabs-{}-{nonce}", std::process::id()));
+    let first_dir = root.join("first session");
+    let second_dir = root.join("second session");
+    fs::create_dir_all(&first_dir).expect("first session directory should be created");
+    fs::create_dir_all(&second_dir).expect("second session directory should be created");
+
+    let spawn = |directory: &std::path::Path| {
+        Command::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"))
+            .arg("--pty-shell")
+            .current_dir(directory)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("desktop session should start")
+    };
+    let mut first = spawn(&first_dir);
+    let mut second = spawn(&second_dir);
+    first
+        .stdin
+        .as_mut()
+        .expect("first session stdin should be open")
+        .write_all(b"pwd\nexit\n")
+        .expect("first session should receive commands");
+    second
+        .stdin
+        .as_mut()
+        .expect("second session stdin should be open")
+        .write_all(b"pwd\nexit\n")
+        .expect("second session should receive commands");
+
+    let first_output = first.wait_with_output().expect("first session should exit");
+    let second_output = second
+        .wait_with_output()
+        .expect("second session should exit");
+    let first_stdout =
+        String::from_utf8(first_output.stdout).expect("first output should be UTF-8");
+    let second_stdout =
+        String::from_utf8(second_output.stdout).expect("second output should be UTF-8");
+
+    assert!(first_output.status.success());
+    assert!(second_output.status.success());
+    assert!(first_stdout.contains(&first_dir.display().to_string()));
+    assert!(!first_stdout.contains(&second_dir.display().to_string()));
+    assert!(second_stdout.contains(&second_dir.display().to_string()));
+    assert!(!second_stdout.contains(&first_dir.display().to_string()));
+
+    fs::remove_dir_all(root).expect("session fixtures should be removed");
 }
