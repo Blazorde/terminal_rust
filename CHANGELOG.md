@@ -15,6 +15,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   an xterm.js renderer, and an Atelier-inspired responsive interface.
 - Added desktop build and native PTY integration checks to the cross-platform
   CI matrix.
+- Added a keyboard-accessible desktop settings drawer with three local themes,
+  terminal typography and cursor controls, compact density, optional status
+  bar, and versioned persistence with validated safe fallbacks.
 
 ### Changed
 
