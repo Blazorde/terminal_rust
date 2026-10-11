@@ -41,6 +41,8 @@ accès disque restent dans l'adaptateur Rust.
   courant et les accès au disque.
 - La WebView ne reçoit aucun secret et n'obtient pas d'accès générique au shell
   ou au système de fichiers.
+- Les segments de prompt proviennent d'un `PromptLayout` Rust transmis par une
+  séquence OSC privée consommée par xterm ; la GUI ne sonde pas Git ni le disque.
 - Les préférences partagées utilisent le schéma versionné existant ou une
   extension rétrocompatible ; une donnée invalide garde un fallback sûr.
 - Les polices et assets livrés sont locaux. Une police système monospace reste
@@ -54,7 +56,8 @@ accès disque restent dans l'adaptateur Rust.
    implémenté ; validation finale dans la matrice des trois OS).
 4. **T122** — ajouter réglages, thèmes et persistance (implémenté localement ;
    validation multiplateforme portée par la matrice et T124).
-5. **T123** — enrichir les segments de prompt partagés.
+5. **T123** — enrichir les segments de prompt partagés (implémenté : layout
+   gauche/droite typé et transport OSC local).
 6. **T124** — vérifier accessibilité, responsive, performance et trois OS.
 
 Chaque étape possède sa propre branche et sa propre PR. Une fonctionnalité GUI
@@ -64,8 +67,10 @@ la matrice et les captures des trois systèmes sont nécessaires.
 ## Référence Atelier
 
 L'archive `Terminal de ligne de commande.zip` fournie par le propriétaire est
-une référence de composition : fond quadrillé, fenêtre translucide, barre de
-titre, zone terminal, pied de contexte et tiroir de réglages. Son code React,
+une référence de composition : fenêtre translucide, barre de titre, zone
+terminal, pied de contexte et tiroir de réglages. Le fond quadrillé extérieur a
+été retiré pour que la surface terminal remplisse exactement la fenêtre native,
+conformément au retour produit du 11 octobre 2026. Son code React,
 ses commandes simulées et ses données fictives ne sont pas importés. Les écarts
 nécessaires seront consignés au fil des tickets GUI.
 

@@ -2,6 +2,7 @@ use std::env;
 use std::io::{self, BufRead, IsTerminal};
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::Instant;
 
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -89,7 +90,7 @@ fn run_interactive_editor() -> ExitCode {
                 if !trimmed.is_empty() {
                     let _ = editor.add_history_entry(trimmed);
                 }
-                if handle_input(&input, &mut engine) == ExecutionStatus::Exit {
+                if handle_input(&input, &mut engine, &mut shell_prompt) == ExecutionStatus::Exit {
                     break ExitCode::SUCCESS;
                 }
             }
@@ -145,14 +146,16 @@ fn run_interactive_plain() -> ExitCode {
             }
         }
 
-        if handle_input(&input, &mut engine) == ExecutionStatus::Exit {
+        if handle_input(&input, &mut engine, &mut shell_prompt) == ExecutionStatus::Exit {
             return ExitCode::SUCCESS;
         }
     }
 }
 
-fn handle_input(input: &str, engine: &mut ShellEngine) -> ExecutionStatus {
+fn handle_input(input: &str, engine: &mut ShellEngine, prompt: &mut Prompt) -> ExecutionStatus {
+    let started = Instant::now();
     let result = engine.execute_line(input);
+    prompt.record_execution(result.status, started.elapsed());
     emit_result(&result);
     result.status
 }

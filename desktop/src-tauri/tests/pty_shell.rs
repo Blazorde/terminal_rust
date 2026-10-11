@@ -24,6 +24,7 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
 
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
     command.arg("--pty-shell");
+    command.env("TERMINAL_RUST_GUI", "1");
     let mut child = pair
         .slave
         .spawn_command(command)
@@ -84,4 +85,18 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
         output.contains("Available commands:"),
         "real shell help was missing from PTY output: {output}"
     );
+    assert!(
+        output.contains("\u{1b}]777;")
+            && output.contains("\"left\"")
+            && output.contains("\"right\""),
+        "typed prompt metadata was missing from PTY output: {output}"
+    );
+    for kind in [
+        "user", "host", "path", "status", "runtime", "duration", "time",
+    ] {
+        assert!(
+            output.contains(&format!("\"kind\":\"{kind}\"")),
+            "{kind} prompt segment was missing from PTY output: {output}"
+        );
+    }
 }

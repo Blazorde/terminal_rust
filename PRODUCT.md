@@ -50,9 +50,9 @@ input, command history, selection and focus are primary interactions.
 ## Brand Commitments
 
 The product name is Terminal Rust. The supplied Atelier prototype is the
-binding composition reference: a focused terminal window on a measured grid,
-with a compact title bar, contextual footer and dense settings drawer. Its fake
-commands and remote fonts are not product behavior.
+binding composition reference: a focused terminal surface that fills its
+native window, with a compact title bar, contextual footer and dense settings
+drawer. Its fake commands and remote fonts are not product behavior.
 
 ## Evidence on Hand
 

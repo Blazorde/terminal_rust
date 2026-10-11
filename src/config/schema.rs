@@ -24,6 +24,7 @@ impl Default for AppConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct PromptConfig {
     pub segments: Vec<String>,
+    pub right_segments: Vec<String>,
     pub icons: IconSetting,
     pub separator: String,
     pub newline: bool,
@@ -32,7 +33,19 @@ pub struct PromptConfig {
 impl Default for PromptConfig {
     fn default() -> Self {
         Self {
-            segments: vec!["path".to_string(), "git".to_string(), "symbol".to_string()],
+            segments: vec![
+                "user".to_string(),
+                "host".to_string(),
+                "path".to_string(),
+                "git".to_string(),
+                "symbol".to_string(),
+            ],
+            right_segments: vec![
+                "status".to_string(),
+                "runtime".to_string(),
+                "duration".to_string(),
+                "time".to_string(),
+            ],
             icons: IconSetting::Auto,
             separator: "  ".to_string(),
             newline: false,

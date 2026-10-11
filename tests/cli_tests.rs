@@ -79,7 +79,15 @@ fn interactive_shell_loads_icon_mode_from_toml() {
     let output = run_interactive_with_env(directory.path(), "exit\n", Some(&config));
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert!(stdout(&output).starts_with('\u{f07b}'));
+    let rendered = stdout(&output);
+    assert!(
+        rendered.contains('\u{f007}'),
+        "user icon missing: {rendered}"
+    );
+    assert!(
+        rendered.contains('\u{f07b}'),
+        "path icon missing: {rendered}"
+    );
 }
 
 #[test]
@@ -115,14 +123,14 @@ fn powerline_theme_uses_ascii_separator_without_terminal_font_capability() {
 
     let output = run_interactive_with_env(directory.path(), "exit\n", Some(&config));
     let rendered = stdout(&output);
-    let rendered_path = rendered
-        .strip_suffix(" | > ")
-        .expect("powerline should use its ASCII fallback when output is piped");
-
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert_eq!(
-        fs::canonicalize(rendered_path).expect("rendered path should exist"),
-        fs::canonicalize(directory.path()).expect("fixture path should exist")
+    assert!(
+        rendered.ends_with(" | > "),
+        "powerline should use its ASCII fallback: {rendered}"
+    );
+    assert!(
+        rendered.contains(&directory.path().display().to_string()),
+        "prompt should contain the current path: {rendered}"
     );
 }
 
@@ -327,14 +335,14 @@ fn interactive_prompt_stays_simple_outside_git() {
     let directory = TestDirectory::new("prompt outside git");
     let output = run_interactive(directory.path(), "exit\n");
     let rendered = stdout(&output);
-    let rendered_path = rendered
-        .strip_suffix("  > ")
-        .expect("the simple prompt should end with its symbol");
-
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert_eq!(
-        fs::canonicalize(rendered_path).expect("the rendered directory should exist"),
-        fs::canonicalize(directory.path()).expect("the fixture directory should exist")
+    assert!(
+        rendered.ends_with("  > "),
+        "prompt should end with its symbol"
+    );
+    assert!(
+        rendered.contains(&directory.path().display().to_string()),
+        "prompt should contain the current path: {rendered}"
     );
 }
 
@@ -371,13 +379,13 @@ fn interactive_prompt_shows_a_dirty_git_branch() {
 
     let output = run_interactive(directory.path(), "exit\n");
     let rendered = stdout(&output);
-    let rendered_path = rendered
-        .strip_suffix("  git:main*  > ")
-        .expect("the Git prompt should contain its branch and dirty marker");
-
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert_eq!(
-        fs::canonicalize(rendered_path).expect("the rendered directory should exist"),
-        fs::canonicalize(directory.path()).expect("the fixture directory should exist")
+    assert!(
+        rendered.ends_with("  git:main*  > "),
+        "the Git prompt should contain its branch and dirty marker: {rendered}"
+    );
+    assert!(
+        rendered.contains(&directory.path().display().to_string()),
+        "prompt should contain the current path: {rendered}"
     );
 }

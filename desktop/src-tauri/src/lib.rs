@@ -87,6 +87,7 @@ fn start_session(
         .map_err(|error| format!("cannot locate desktop executable: {error}"))?;
     let mut command = CommandBuilder::new(executable);
     command.arg("--pty-shell");
+    command.env("TERMINAL_RUST_GUI", "1");
 
     let mut child = pair
         .slave

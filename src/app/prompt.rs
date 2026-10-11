@@ -1,12 +1,18 @@
 use std::env;
 use std::io::{self, IsTerminal};
-use std::path::Path;
 use std::time::Duration;
+
+#[cfg(test)]
+use std::path::Path;
 
 use crate::cache::GitPromptCache;
 use crate::config::{AppConfig, IconSetting};
-use crate::git::{self, PromptGitInfo};
+use crate::core::ExecutionStatus;
+use crate::git;
+#[cfg(test)]
+use crate::git::PromptGitInfo;
 use crate::prompt::builder;
+use crate::prompt::context::PromptContext;
 use crate::render;
 use crate::render::ansi;
 use crate::render::icons::IconMode;
@@ -15,6 +21,8 @@ use crate::render::separators::Separator;
 use crate::theme::{self, ThemeError};
 
 const GIT_CACHE_TTL: Duration = Duration::from_millis(250);
+const GUI_PROMPT_ENV: &str = "TERMINAL_RUST_GUI";
+const GUI_PROMPT_OSC: u16 = 777;
 
 pub struct Prompt {
     git_cache: GitPromptCache,
@@ -22,6 +30,8 @@ pub struct Prompt {
     icon_mode: IconMode,
     separator: Option<Separator>,
     config: AppConfig,
+    last_status: Option<ExecutionStatus>,
+    last_duration: Option<Duration>,
 }
 
 impl Default for Prompt {
@@ -32,6 +42,8 @@ impl Default for Prompt {
             icon_mode: IconMode::from_environment(),
             separator: None,
             config: AppConfig::default(),
+            last_status: None,
+            last_duration: None,
         }
     }
 }
@@ -55,7 +67,14 @@ impl Prompt {
             icon_mode,
             separator: theme.separator,
             config: config.clone(),
+            last_status: None,
+            last_duration: None,
         })
+    }
+
+    pub fn record_execution(&mut self, status: ExecutionStatus, duration: Duration) {
+        self.last_status = Some(status);
+        self.last_duration = Some(duration);
     }
 
     pub fn render(&mut self) -> io::Result<String> {
@@ -66,15 +85,27 @@ impl Prompt {
         let is_terminal = io::stdout().is_terminal();
         let color = ansi::color_enabled(is_terminal);
         let icons = self.icon_mode.enabled(is_terminal);
-        Ok(render_for_path(
-            &current_dir,
-            git.as_ref(),
+        let context = PromptContext::collect(
+            current_dir.clone(),
+            git.clone(),
+            self.last_status,
+            self.last_duration,
+        );
+        let layout = builder::build_layout(&context, &self.config);
+        let rendered = render_segments(
+            &layout.left,
             color,
             icons,
             self.separator.as_ref(),
             &self.palette,
             &self.config,
-        ))
+        );
+
+        if env::var_os(GUI_PROMPT_ENV).is_some() {
+            Ok(format!("{}{}", gui_metadata(&layout)?, rendered))
+        } else {
+            Ok(rendered)
+        }
     }
 
     pub fn print(&mut self) -> io::Result<()> {
@@ -82,6 +113,7 @@ impl Prompt {
     }
 }
 
+#[cfg(test)]
 fn render_for_path(
     path: &Path,
     git: Option<&PromptGitInfo>,
@@ -92,8 +124,19 @@ fn render_for_path(
     config: &AppConfig,
 ) -> String {
     let segments = builder::build(path, git, config);
+    render_segments(&segments, color, icons, separator, palette, config)
+}
+
+fn render_segments(
+    segments: &[crate::prompt::segment::PromptSegment],
+    color: bool,
+    icons: bool,
+    separator: Option<&Separator>,
+    palette: &Palette,
+    config: &AppConfig,
+) -> String {
     render::prompt_segments(
-        &segments,
+        segments,
         color,
         icons,
         separator,
@@ -101,6 +144,11 @@ fn render_for_path(
         config.prompt.newline,
         palette,
     )
+}
+
+fn gui_metadata(layout: &builder::PromptLayout) -> io::Result<String> {
+    let payload = serde_json::to_string(layout).map_err(io::Error::other)?;
+    Ok(format!("\u{1b}]{GUI_PROMPT_OSC};{payload}\u{7}"))
 }
 
 #[cfg(test)]

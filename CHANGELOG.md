@@ -18,11 +18,16 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 - Added a keyboard-accessible desktop settings drawer with three local themes,
   terminal typography and cursor controls, compact density, optional status
   bar, and versioned persistence with validated safe fallbacks.
+- Added Rust-owned prompt context for user, host, path, Git, last status,
+  project runtime, command duration, and local time, with configurable left and
+  right layouts shared with the desktop status bar.
 
 ### Changed
 
 - The CLI now executes built-in commands through the same public Rust engine
   intended for the desktop adapter.
+- The desktop terminal surface now fills the native window without an outer
+  decorative canvas, redundant border, or shadow.
 
 ## [0.3.0] - 2026-10-10
 

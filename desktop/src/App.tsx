@@ -5,6 +5,7 @@ import { Terminal } from '@xterm/xterm'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import SettingsDrawer from './SettingsDrawer'
+import PromptSegments, { emptyPromptLayout, parsePromptLayout, type PromptLayout } from './PromptSegments'
 import { applyTerminalSettings, defaultSettings, type DesktopSettings, type SettingsLoad } from './settings'
 import type { ConnectionState } from './terminal-types'
 
@@ -42,6 +43,7 @@ export default function App() {
   const [settingsDiagnostic, setSettingsDiagnostic] = useState<string | null>(null)
   const [settingsPath, setSettingsPath] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [promptLayout, setPromptLayout] = useState<PromptLayout>(emptyPromptLayout)
 
   const startSession = useCallback(async () => {
     const term = terminal.current
@@ -116,6 +118,11 @@ export default function App() {
       applyTerminalSettings(term, loaded.settings)
       fit.fit()
       disposables = [
+        term.parser.registerOscHandler(777, (payload) => {
+          const layout = parsePromptLayout(payload)
+          if (layout) setPromptLayout(layout)
+          return true
+        }),
         term.onData((data) => {
           const id = sessionId.current
           if (id === null) return
@@ -287,10 +294,7 @@ export default function App() {
         </div>
 
         {settings.showStatusBar && (
-          <footer className="statusbar">
-            <span>moteur Rust · PTY natif</span>
-            <span className="status-metrics">{dimensions} · UTF-8 · historique actif</span>
-          </footer>
+          <PromptSegments layout={promptLayout} dimensions={dimensions} />
         )}
 
         <SettingsDrawer
