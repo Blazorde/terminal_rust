@@ -33,6 +33,13 @@ La fenêtre doit recevoir le focus terminal après la connexion. Vérifier :
 5. redimensionner la fenêtre et confirmer que la grille PTY suit ;
 6. ouvrir les réglages avec `Ctrl+,` (`Cmd+,` sur macOS), les fermer avec
    `Échap`, puis redémarrer la session.
+7. ouvrir deux onglets avec `Ctrl+T` (`Cmd+T` sur macOS), changer de dossier
+   dans l'un et vérifier que le dossier et l'historique de l'autre ne changent
+   pas ;
+8. parcourir les onglets avec `Ctrl+Tab`, puis placer le focus sur leur barre et
+   vérifier les flèches, `Home`, `End` et `Delete` ;
+9. fermer le dernier onglet avec `Ctrl+W` (`Cmd+W` sur macOS) et confirmer
+   qu'une nouvelle session vide le remplace.
 
 Dans un navigateur classique, Vite rend uniquement un aperçu visuel portant un
 message explicite. Aucune sortie de commande n'est simulée.
@@ -70,6 +77,19 @@ du shell permet de vérifier l'ordre, le côté et la visibilité. Git et runtim
 sont optionnels : quitter un dépôt ou un projet reconnu doit seulement retirer
 le segment concerné.
 
+## Onglets et cycle de vie
+
+Chaque `TerminalPane` React possède exactement une instance xterm, un identifiant
+de session Tauri et un processus enfant PTY. Tous les événements natifs portent
+cet identifiant : un onglet ignore donc les sorties, erreurs et fins de session
+des autres. Masquer un panneau conserve sa session ; le fermer démonte le
+composant, désabonne ses événements et demande à Rust d'arrêter son enfant.
+
+Le test d'intégration `concurrent_desktop_sessions_keep_their_working_directories_isolated`
+démarre deux processus simultanés dans des chemins distincts contenant des
+espaces. Il prouve l'isolation des dossiers côté Rust sans dépendre de la
+WebView. La navigation et le focus de la barre suivent le modèle ARIA `tablist`.
+
 ## Frontière de sécurité
 
 - La WebView appelle seulement les commandes bornées de session et les deux
@@ -91,6 +111,9 @@ cargo fmt --all -- --check
 cargo check --all-targets --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
+cargo check -p terminal-rust-desktop --all-targets --all-features
+cargo clippy -p terminal-rust-desktop --all-targets --all-features -- -D warnings
+cargo test -p terminal-rust-desktop --all-targets --all-features
 ```
 
 La CI répète ces contrôles sous Ubuntu, Windows et macOS. Une exécution locale
