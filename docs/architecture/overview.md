@@ -11,13 +11,14 @@ rendu.
 flowchart LR
     User[Utilisateur] --> Runner[app/runner]
     Runner --> Engine[core/ShellEngine]
-    GUI[Future GUI Tauri] --> Engine
+    GUI[Desktop GUI Tauri] --> Engine
     Engine --> Parser[app/parser]
     Parser --> Dispatcher[app/command]
     Dispatcher --> Commands[commands/*]
     Commands --> Render[render]
     Runner --> Prompt[app/prompt]
-    Prompt -. contexte futur .-> Git[git]
+    Prompt --> Context[prompt/context]
+    Context --> Git[git]
     Runner --> Completion[app/completion]
 ```
 
@@ -38,6 +39,8 @@ flowchart LR
 | `git/` | Détection, contexte Git et raccourcis en lecture seule | Un passthrough Git sans liste blanche |
 | `render/` | Sorties standard et erreurs | De la logique métier |
 | `utils/` | Helpers génériques et limités | Un dossier fourre-tout |
+| `desktop/src-tauri/` | Adaptateur Tauri, sessions PTY et réglages natifs | Un second moteur de shell |
+| `desktop/src/` | Présentation xterm, onglets et contrôles accessibles | Un accès générique au système |
 
 ## Flux d'une commande
 
@@ -60,14 +63,28 @@ immédiate. `cache` contient désormais le cache court du contexte Git du prompt
 Une évolution doit entrer dans ces dossiers uniquement quand une responsabilité
 concrète le justifie.
 
-Le moteur de prompt cible suivra le pipeline suivant :
+Le moteur de prompt suit le pipeline suivant :
 
 ```text
 configuration -> collecte du contexte -> segments -> rendu -> terminal
 ```
 
-La collecte et le rendu resteront séparés afin de tester les segments sans
+La collecte et le rendu restent séparés afin de tester les segments sans
 terminal réel et de désactiver proprement les fonctions indisponibles.
+
+## Évolution vers un terminal extensible
+
+Le moteur pourra accueillir des fournisseurs externes uniquement derrière une
+frontière versionnée et à permissions explicites. Les commandes, segments,
+complétions et thèmes sont des points d'extension possibles ; `ShellEngine`,
+les handles PTY et les objets Tauri ne font pas partie de l'API publique.
+
+La progression commence par des formats déclaratifs, puis un registre local et
+un plugin officiel. Le choix d'un runtime de code isolé vient après la
+stabilisation des contrats. Une bibliothèque dynamique Rust chargée directement
+dans le processus n'est pas la cible par défaut, car elle couple l'ABI et le
+risque de crash à l'hôte. La [vision détaillée](../vision-plugins.md) fixe les
+capacités, les interdictions et les preuves attendues avant cette étape.
 
 ## Contraintes
 
