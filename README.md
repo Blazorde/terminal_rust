@@ -177,6 +177,12 @@ ne simule pas de commandes. La session réelle est disponible uniquement dans
 la fenêtre Tauri. Les instructions et limites par système sont détaillées dans
 [`docs/development/desktop.md`](docs/development/desktop.md).
 
+`Ctrl+,` (ou `Cmd+,` sur macOS) ouvre les réglages de thème, police, curseur,
+densité et barre d'état. Les changements sont prévisualisés immédiatement puis
+enregistrés dans le dossier de configuration natif de l'application. Le chemin
+exact est affiché dans le panneau ; une configuration illisible ou invalide est
+signalée et remplacée par des valeurs sûres.
+
 ## Commandes disponibles
 
 | Commande | Description |

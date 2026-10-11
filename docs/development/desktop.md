@@ -31,16 +31,36 @@ La fenêtre doit recevoir le focus terminal après la connexion. Vérifier :
 3. lancer `dashboard`, `clear` et `git status --short --branch` ;
 4. utiliser `Ctrl+C` puis continuer la session ;
 5. redimensionner la fenêtre et confirmer que la grille PTY suit ;
-6. ouvrir le panneau Session avec `Ctrl+,`, le fermer avec `Échap`, puis
-   redémarrer la session.
+6. ouvrir les réglages avec `Ctrl+,` (`Cmd+,` sur macOS), les fermer avec
+   `Échap`, puis redémarrer la session.
 
 Dans un navigateur classique, Vite rend uniquement un aperçu visuel portant un
 message explicite. Aucune sortie de commande n'est simulée.
 
+## Réglages persistants
+
+Le tiroir applique immédiatement le thème, la famille et la taille de police,
+le curseur, la densité et la visibilité de la barre d'état. Le bouton
+**Enregistrer** appelle Rust, qui valide un schéma JSON versionné avant une
+écriture temporaire puis un remplacement du fichier. Le chemin natif exact est
+affiché dans le tiroir et ne dépend donc ni de `HOME` ni d'une convention de
+séparateur propre à un système.
+
+Les familles proposées utilisent uniquement les polices locales et finissent
+toujours par une police monospace système. Aucune Nerd Font ni ressource réseau
+n'est obligatoire. Si le fichier manque, les valeurs par défaut s'appliquent
+silencieusement. S'il est illisible, inconnu ou hors limites, l'interface
+affiche le diagnostic renvoyé par Rust et utilise les mêmes valeurs sûres.
+
+Pour tester le repli, fermer l'application, rendre le JSON invalide à l'adresse
+affichée dans le tiroir, puis relancer. Le diagnostic doit apparaître sans
+empêcher l'ouverture du terminal ; un nouvel enregistrement doit réparer le
+fichier.
+
 ## Frontière de sécurité
 
-- La WebView appelle seulement `start_session`, `write_session`,
-  `resize_session` et `close_session`.
+- La WebView appelle seulement les commandes bornées de session et les deux
+  commandes typées de chargement/enregistrement des réglages.
 - Le processus Rust possède les handles PTY et les processus enfants.
 - La capacité Tauri de la fenêtre reste limitée à `core:default`.
 - La politique CSP n'autorise aucune ressource distante en production.

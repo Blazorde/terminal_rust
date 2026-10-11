@@ -2,8 +2,9 @@
 
 Ce document décrit les frontières introduites par T118. Tauri 2 est retenu par
 l'[ADR-0005](../decisions/0005-desktop-gui-stack.md). Le prototype T121
-implémente désormais cette frontière avec `portable-pty` côté Rust et xterm.js
-côté présentation.
+implémente cette frontière avec `portable-pty` côté Rust et xterm.js côté
+présentation. T122 ajoute une persistance versionnée dont la validation et les
+accès disque restent dans l'adaptateur Rust.
 
 ## Frontières
 
@@ -51,7 +52,8 @@ côté présentation.
 2. **T120** — extraire `terminal-core` sans modifier le comportement CLI.
 3. **T121** — ouvrir une fenêtre et connecter une session PTY réelle (prototype
    implémenté ; validation finale dans la matrice des trois OS).
-4. **T122** — ajouter réglages, thèmes et persistance.
+4. **T122** — ajouter réglages, thèmes et persistance (implémenté localement ;
+   validation multiplateforme portée par la matrice et T124).
 5. **T123** — enrichir les segments de prompt partagés.
 6. **T124** — vérifier accessibilité, responsive, performance et trois OS.
 

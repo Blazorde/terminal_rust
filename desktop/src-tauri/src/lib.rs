@@ -7,6 +7,10 @@ use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_s
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+mod settings;
+
+use settings::{DesktopSettings, SettingsLoad, SettingsState};
+
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
@@ -53,6 +57,19 @@ fn pty_size(cols: u16, rows: u16) -> PtySize {
 #[tauri::command]
 fn is_terminal_rust_desktop() -> bool {
     true
+}
+
+#[tauri::command]
+fn load_desktop_settings(state: State<'_, SettingsState>) -> SettingsLoad {
+    settings::load(&state)
+}
+
+#[tauri::command]
+fn save_desktop_settings(
+    state: State<'_, SettingsState>,
+    settings: DesktopSettings,
+) -> Result<(), String> {
+    settings::save(&state, &settings)
 }
 
 #[tauri::command]
@@ -224,8 +241,15 @@ fn close_session(state: State<'_, PtyState>, session_id: u64) -> Result<(), Stri
 pub fn run() {
     tauri::Builder::default()
         .manage(PtyState::default())
+        .setup(|app| {
+            let config_directory = app.path().app_config_dir()?;
+            app.manage(SettingsState::new(config_directory));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             is_terminal_rust_desktop,
+            load_desktop_settings,
+            save_desktop_settings,
             start_session,
             write_session,
             resize_session,

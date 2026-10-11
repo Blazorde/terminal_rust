@@ -4,7 +4,9 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-type ConnectionState = 'connecting' | 'ready' | 'closed' | 'error'
+import SettingsDrawer from './SettingsDrawer'
+import { applyTerminalSettings, defaultSettings, type DesktopSettings, type SettingsLoad } from './settings'
+import type { ConnectionState } from './terminal-types'
 
 interface PtyOutput {
   sessionId: number
@@ -36,6 +38,10 @@ export default function App() {
   const [dimensions, setDimensions] = useState('80 × 24')
   const [trafficActive, setTrafficActive] = useState(false)
   const [desktopHost, setDesktopHost] = useState(false)
+  const [settings, setSettings] = useState<DesktopSettings>(defaultSettings)
+  const [settingsDiagnostic, setSettingsDiagnostic] = useState<string | null>(null)
+  const [settingsPath, setSettingsPath] = useState<string | null>(null)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   const startSession = useCallback(async () => {
     const term = terminal.current
@@ -67,30 +73,10 @@ export default function App() {
     const term = new Terminal({
       allowProposedApi: false,
       convertEol: true,
-      cursorBlink: true,
-      cursorStyle: 'block',
-      fontFamily: "'Cascadia Mono', 'SFMono-Regular', 'DejaVu Sans Mono', monospace",
-      fontSize: 14,
       lineHeight: 1.45,
       scrollback: 5000,
-      theme: {
-        background: '#14171a',
-        foreground: '#e7e2d8',
-        cursor: '#ff6b3d',
-        cursorAccent: '#14171a',
-        selectionBackground: '#ff6b3d55',
-        black: '#14171a',
-        red: '#ff8178',
-        green: '#91c99b',
-        yellow: '#e6c66f',
-        blue: '#82aaff',
-        magenta: '#c099ff',
-        cyan: '#79c9c5',
-        white: '#e7e2d8',
-        brightBlack: '#626970',
-        brightWhite: '#fffaf0',
-      },
     })
+    applyTerminalSettings(term, defaultSettings)
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(host)
@@ -122,6 +108,13 @@ export default function App() {
 
       if (disposed) return
       setDesktopHost(true)
+      const loaded = await invoke<SettingsLoad>('load_desktop_settings')
+      if (disposed) return
+      setSettings(loaded.settings)
+      setSettingsDiagnostic(loaded.diagnostic)
+      setSettingsPath(loaded.path)
+      applyTerminalSettings(term, loaded.settings)
+      fit.fit()
       disposables = [
         term.onData((data) => {
           const id = sessionId.current
@@ -192,6 +185,14 @@ export default function App() {
   }, [startSession])
 
   useEffect(() => {
+    const term = terminal.current
+    const fit = fitAddon.current
+    if (!term || !fit) return
+    applyTerminalSettings(term, settings)
+    window.requestAnimationFrame(() => fit.fit())
+  }, [settings])
+
+  useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === ',') {
         event.preventDefault()
@@ -221,9 +222,30 @@ export default function App() {
     await startSession()
   }
 
+  const updateSettings = (nextSettings: DesktopSettings) => {
+    setSettings(nextSettings)
+    setSaveState('idle')
+  }
+
+  const saveSettings = async () => {
+    if (!desktopHost) return
+    setSaveState('saving')
+    try {
+      await invoke('save_desktop_settings', { settings })
+      setSettingsDiagnostic(null)
+      setSaveState('saved')
+    } catch (reason) {
+      setSettingsDiagnostic(String(reason))
+      setSaveState('error')
+    }
+  }
+
   return (
-    <main className="workspace">
-      <section className={`terminal-window ${error ? 'terminal-window--error' : ''}`} aria-label="Terminal Rust">
+    <main className="workspace" data-theme={settings.theme} data-density={settings.windowDensity}>
+      <section
+        className={`terminal-window ${error ? 'terminal-window--error' : ''} ${settings.showStatusBar ? '' : 'terminal-window--status-hidden'}`}
+        aria-label="Terminal Rust"
+      >
         <header className="titlebar">
           <div className="brand-lockup">
             <span className={`activity activity--${connection}`} aria-hidden="true" />
@@ -244,7 +266,7 @@ export default function App() {
               aria-expanded={detailsOpen}
               aria-controls="session-drawer"
             >
-              Session <kbd>Ctrl ,</kbd>
+              Réglages <kbd>Ctrl/⌘ ,</kbd>
             </button>
           </div>
         </header>
@@ -264,53 +286,28 @@ export default function App() {
           />
         </div>
 
-        <footer className="statusbar">
-          <span>moteur Rust · PTY natif</span>
-          <span className="status-metrics">{dimensions} · UTF-8 · historique actif</span>
-        </footer>
+        {settings.showStatusBar && (
+          <footer className="statusbar">
+            <span>moteur Rust · PTY natif</span>
+            <span className="status-metrics">{dimensions} · UTF-8 · historique actif</span>
+          </footer>
+        )}
 
-        <aside
-          id="session-drawer"
-          className={`session-drawer ${detailsOpen ? 'session-drawer--open' : ''}`}
-          aria-hidden={!detailsOpen}
-          aria-labelledby="session-heading"
-        >
-          <div className="drawer-heading">
-            <div>
-              <h2 id="session-heading">Session</h2>
-              <p>Le processus et les entrées restent côté Rust.</p>
-            </div>
-            <button
-              ref={closeButton}
-              type="button"
-              className="close-button"
-              onClick={() => setDetailsOpen(false)}
-              aria-label="Fermer le panneau"
-            >
-              Fermer
-            </button>
-          </div>
-          <dl className="session-facts">
-            <div><dt>Transport</dt><dd>PTY natif</dd></div>
-            <div><dt>Moteur</dt><dd>Terminal Rust 0.3</dd></div>
-            <div><dt>Taille</dt><dd>{dimensions}</dd></div>
-            <div><dt>État</dt><dd>{connection}</dd></div>
-          </dl>
-          <div className="shortcut-list">
-            <h3>Raccourcis</h3>
-            <p><kbd>↑</kbd><kbd>↓</kbd><span>Historique</span></p>
-            <p><kbd>Ctrl C</kbd><span>Interrompre</span></p>
-            <p><kbd>Ctrl L</kbd><span>Effacer</span></p>
-          </div>
-          <button
-            type="button"
-            className="restart-button"
-            onClick={() => void restart()}
-            disabled={!desktopHost || connection === 'connecting'}
-          >
-            {desktopHost ? 'Redémarrer la session' : 'Disponible dans la fenêtre Tauri'}
-          </button>
-        </aside>
+        <SettingsDrawer
+          closeButton={closeButton}
+          connection={connection}
+          detailsOpen={detailsOpen}
+          desktopHost={desktopHost}
+          diagnostic={settingsDiagnostic}
+          dimensions={dimensions}
+          onChange={updateSettings}
+          onClose={() => setDetailsOpen(false)}
+          onRestart={() => void restart()}
+          onSave={() => void saveSettings()}
+          saveState={saveState}
+          settings={settings}
+          settingsPath={settingsPath}
+        />
       </section>
     </main>
   )
