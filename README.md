@@ -629,7 +629,15 @@ Idées de commandes ou fonctionnalités à ajouter plus tard:
 - pipes
 - meilleure gestion des permissions
 - chargement de thèmes personnalisés depuis des fichiers externes
-- interface terminal graphique dédiée
+- panneaux et splits avancés dans l'interface graphique
+
+La GUI dédiée est désormais disponible sur `develop`. À plus long terme, le
+projet explore une plateforme inspirée de Neovim : commandes, segments de
+prompt, complétions, thèmes et raccourcis pourront devenir des points
+d'extension versionnés. Cette trajectoire reste strictement séparée du MVP :
+aucun code tiers n'est actuellement chargé, et toute future capacité sensible
+sera refusée par défaut. La [vision des plugins](docs/vision-plugins.md) décrit
+les phases, les limites de sécurité et les décisions encore ouvertes.
 
 Les changements livrés sont recensés dans le [changelog](CHANGELOG.md). Les
 limitations propres à une version y sont distinguées des éléments encore

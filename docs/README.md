@@ -11,6 +11,7 @@ vivent ici.
 | Comprendre le système | [Vue d'ensemble](architecture/overview.md) |
 | Utiliser le moteur partagé | [API du moteur de shell](architecture/shell-engine.md) |
 | Préparer l'interface desktop | [Architecture GUI](architecture/desktop-gui.md) |
+| Comprendre la vision des plugins | [Vision d'un Terminal Rust extensible](vision-plugins.md) |
 | Développer et valider l'interface desktop | [Guide desktop](development/desktop.md) |
 | Consulter l'audit qualité GUI | [Audit accessibilité, responsive et performance](development/gui-quality-audit.md) |
 | Concevoir le futur prompt | [Moteur de prompt](architecture/prompt-engine.md) |
