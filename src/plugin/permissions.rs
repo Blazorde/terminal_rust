@@ -82,6 +82,7 @@ mod tests {
             version: Version::new(1, 0, 0),
             description: "Fixture".into(),
             host_api: VersionReq::parse("^1").unwrap(),
+            terminal_version: VersionReq::STAR,
             authors: Vec::new(),
             permissions,
             commands: Vec::new(),

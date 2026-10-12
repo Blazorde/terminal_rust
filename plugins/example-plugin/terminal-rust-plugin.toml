@@ -4,6 +4,7 @@ name = "Hello plugin"
 version = "0.1.0"
 description = "Minimal copyable Terminal Rust plugin"
 host_api = "^1.0"
+terminal_version = ">=0.3, <2.0"
 authors = ["Your name"]
 permissions = ["command.register", "output.write"]
 

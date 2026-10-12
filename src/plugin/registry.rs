@@ -5,10 +5,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use semver::Version;
-
-use super::PluginManifest;
 use super::manifest::MANIFEST_FILE;
+use super::{Compatibility, PluginManifest};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PluginStatus {
@@ -20,6 +18,7 @@ pub(crate) enum PluginStatus {
 #[derive(Debug)]
 pub(crate) enum RegistryEntry {
     Installed {
+        compatibility: Compatibility,
         manifest: Box<PluginManifest>,
         path: PathBuf,
         status: PluginStatus,
@@ -58,7 +57,8 @@ pub(crate) fn discover(
         .into_iter()
         .map(|path| match PluginManifest::load(&path) {
             Ok(manifest) => {
-                let status = if !manifest.host_api.matches(&Version::new(1, 0, 0)) {
+                let compatibility = manifest.compatibility();
+                let status = if !compatibility.is_compatible() {
                     PluginStatus::Incompatible
                 } else if enabled.iter().any(|id| id == &manifest.id) {
                     PluginStatus::Enabled
@@ -66,6 +66,7 @@ pub(crate) fn discover(
                     PluginStatus::Disabled
                 };
                 RegistryEntry::Installed {
+                    compatibility,
                     manifest: Box::new(manifest),
                     path,
                     status,
@@ -178,24 +179,26 @@ mod tests {
             .unwrap()
             .as_nanos();
         let root = env::temp_dir().join(format!("terminal-rust-registry-{nonce}"));
-        for (id, version, host_api) in [
-            ("one", "1.0.0", "^1"),
-            ("two", "2.0.0", "^1"),
-            ("future", "1.0.0", "^2"),
+        for (id, version, host_api, terminal_version) in [
+            ("one", "1.0.0", "^1", ">=0.3, <2.0"),
+            ("two", "2.0.0", "^1", ">=0.3, <2.0"),
+            ("future", "1.0.0", "^2", ">=0.3, <2.0"),
+            ("future-terminal", "1.0.0", "^1", ">=9"),
         ] {
             let directory = root.join(id).join(version);
             fs::create_dir_all(&directory).unwrap();
-            fs::write(directory.join(MANIFEST_FILE), format!("schema_version = 1\nid = \"{id}\"\nname = \"{id}\"\nversion = \"{version}\"\ndescription = \"fixture\"\nhost_api = \"{host_api}\"\n")).unwrap();
+            fs::write(directory.join(MANIFEST_FILE), format!("schema_version = 1\nid = \"{id}\"\nname = \"{id}\"\nversion = \"{version}\"\ndescription = \"fixture\"\nhost_api = \"{host_api}\"\nterminal_version = \"{terminal_version}\"\n")).unwrap();
         }
         let invalid = root.join("broken").join("1.0.0");
         fs::create_dir_all(&invalid).unwrap();
         fs::write(invalid.join(MANIFEST_FILE), "not = [valid").unwrap();
 
         let entries = discover(&root, &["one".into()]).unwrap();
-        assert_eq!(entries.len(), 4);
-        assert!(entries.iter().any(|entry| matches!(entry, RegistryEntry::Installed { manifest, status: PluginStatus::Enabled, .. } if manifest.id == "one")));
+        assert_eq!(entries.len(), 5);
+        assert!(entries.iter().any(|entry| matches!(entry, RegistryEntry::Installed { manifest, status: PluginStatus::Enabled, compatibility: Compatibility::Compatible, .. } if manifest.id == "one")));
         assert!(entries.iter().any(|entry| matches!(entry, RegistryEntry::Installed { manifest, status: PluginStatus::Disabled, .. } if manifest.id == "two")));
         assert!(entries.iter().any(|entry| matches!(entry, RegistryEntry::Installed { manifest, status: PluginStatus::Incompatible, .. } if manifest.id == "future")));
+        assert!(entries.iter().any(|entry| matches!(entry, RegistryEntry::Installed { manifest, status: PluginStatus::Incompatible, compatibility: Compatibility::TerminalMismatch { .. }, .. } if manifest.id == "future-terminal")));
         assert!(
             entries
                 .iter()

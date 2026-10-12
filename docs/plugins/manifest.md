@@ -1,43 +1,57 @@
-# Manifeste de plugin
+# Plugin manifest
 
-Chaque version installée fournit un fichier `terminal-rust-plugin.toml`. Le
-registre lit ce fichier sans exécuter le plugin. Le format initial est strict :
-une clé inconnue, une permission non prise en charge ou un champ obligatoire
-absent produit un diagnostic lié au chemin du manifeste.
+Every installed version provides a `terminal-rust-plugin.toml` file. The
+registry reads this file without executing the plugin. The initial format is
+strict: an unknown key, unsupported permission, missing field, or malformed
+SemVer requirement produces a diagnostic tied to the manifest path.
 
 ```toml
 schema_version = 1
 id = "acme.git-tools"
 name = "Git tools"
 version = "0.1.0"
-description = "Ajoute des diagnostics Git sans modifier le dépôt"
+description = "Adds Git diagnostics without modifying the repository"
 host_api = "^1.0"
+terminal_version = ">=0.3, <2.0"
 authors = ["Acme"]
 permissions = ["command.register", "output.write", "prompt.segment.register"]
 
 [[commands]]
 name = "git-clean-check"
-summary = "Vérifie si le dépôt est propre"
+summary = "Check whether the repository is clean"
 
 [[prompt_segments]]
 name = "git-review"
-summary = "État de la revue en cours"
+summary = "Current review state"
 timeout_ms = 20
 cache_ttl_ms = 5000
 ```
 
-`version` suit SemVer. `host_api` est une exigence SemVer comparée à l'API hôte
-`1.0.0`. `id` suit les règles de la [configuration](configuration.md). Un nom de
-commande contient uniquement des minuscules ASCII, chiffres, `-` ou `_`.
+`version` follows SemVer. `host_api` and `terminal_version` are SemVer
+requirements evaluated by the [compatibility policy](compatibility.md). `id`
+follows the rules in [plugin configuration](configuration.md). A command name
+contains only lowercase ASCII letters, digits, `-`, or `_`.
 
-Les permissions acceptées en v1 sont `context.cwd.read`, `context.env.read`,
-`config.read`, `command.register`, `completion.register`, `output.write` et
-`prompt.segment.register`. Elles déclarent une intention ; ce ticket ne charge
-ni n'exécute aucun code externe.
+For backward compatibility, an existing schema v1 manifest that omits
+`terminal_version` is interpreted as `*`. New manifests and every republished
+version should declare the narrowest range tested by the author.
 
-Une contribution exige la permission correspondante. Les segments déclarent un
-budget de 1 à 100 ms et un cache maximal de 300 000 ms. Les valeurs omises sont
-respectivement 25 ms et aucun cache.
+The accepted v1 permissions are:
 
-Un manifeste invalide reste visible avec l'état `error`. Une version dont
-`host_api` n'accepte pas l'hôte reste visible avec l'état `incompatible`.
+- `context.cwd.read`, `context.env.read`, and `config.read`;
+- `command.register`, `completion.register`, `output.write`, and
+  `prompt.segment.register`;
+- the sensitive declarations `filesystem.read`, `filesystem.write`,
+  `process.spawn`, and `network.connect`.
+
+A manifest request is not a user grant. The sensitive declarations have no host
+service yet and cannot perform an action. See the
+[security policy](security.md) for the authorization sequence.
+
+A contribution requires its matching registration permission. Declared prompt
+segments have a 1–100 ms budget and a maximum cache lifetime of 300,000 ms. The
+defaults are 25 ms and no cache.
+
+An invalid manifest remains visible with the `error` state. A version whose API
+or application requirement rejects the current host remains visible with the
+`incompatible` state and an actionable explanation.
