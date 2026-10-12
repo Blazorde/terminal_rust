@@ -1,35 +1,14 @@
-# Contrat public des plugins
+# Public plugin contract
 
-Statut : contrat de conception T102, version `1.0` proposée ; aucune
-implémentation n'est encore exportée par le crate.
+Status: design contract for API `1.0`; executable third-party code is not loaded.
 
-Ce document complète l'[architecture cible](architecture.md). Il fixe le plus
-petit contrat utile avant d'écrire `src/plugin/api.rs`, `context.rs` ou les
-erreurs correspondantes. Les noms Rust ci-dessous sont des esquisses de DTO,
-pas une promesse d'ABI Rust.
+The public API is a versioned message protocol, independent of runtime and
+language. Rust may use Serde, WebAssembly may use WIT and a process may use JSON;
+the same fields and rules apply. Major versions break required semantics; minor
+versions add optional, ignorable fields or capabilities. Activation stops before
+startup when no compatible major exists.
 
-## Promesse de stabilité
-
-L'API publique est un protocole de messages, indépendant du runtime et du
-langage. Une implémentation Rust peut utiliser `serde`, un composant WebAssembly
-peut utiliser WIT et un processus peut utiliser JSON ; les mêmes champs et
-règles s'appliquent.
-
-La version comporte un majeur et un mineur :
-
-- le majeur change lorsqu'un champ, une variante ou une sémantique obligatoire
-  devient incompatible ;
-- le mineur peut ajouter un champ optionnel, une capacité ou une variante que
-  le destinataire est autorisé à ignorer ;
-- le manifeste déclare un intervalle de versions accepté ;
-- l'activation échoue avant tout démarrage si aucun majeur commun n'existe.
-
-La version `1.0` doit rester expérimentale tant qu'un plugin officiel n'a pas
-prouvé chaque type sur Windows, macOS et Linux.
-
-## Enveloppe commune
-
-Chaque appel porte une identité et une limite explicite :
+## Common envelope
 
 ```rust
 struct PluginRequest {
@@ -47,210 +26,48 @@ struct PluginResponse {
 }
 ```
 
-`RequestId`, `PluginId`, `SessionId` et les tokens de ressources sont des
-chaînes opaques. Le plugin ne peut en déduire un PID, un chemin ou un handle.
-La réponse doit répéter le `request_id`; une réponse tardive ou inconnue est
-ignorée puis comptée comme faute du runtime.
+Identifiers and resource tokens are opaque. A response repeats its request ID;
+late or unknown responses are ignored and counted as runtime faults.
 
-## Contexte exposé
+## Context and capabilities
 
-Le contexte est une photographie immuable limitée à l'appel courant :
+Context is an immutable snapshot containing only the current session token,
+display path, explicitly granted environment names, terminal capabilities, last
+status and this plugin's settings. It exposes no history, edit buffer, other
+session, launch arguments, secret, PTY or Tauri object. Filesystem operations
+use host-issued resource tokens, never reconstructed display strings.
 
-```rust
-struct PluginContext {
-    session_id: SessionId,
-    working_directory: DisplayPath,
-    environment: Vec<EnvironmentValue>,
-    terminal: TerminalCapabilities,
-    last_status: Option<i32>,
-    plugin_config: JsonObject,
-}
+Initial capabilities are `context.cwd.read`, `context.env.read`, `config.read`,
+`command.register`, `prompt.segment.register`, `completion.register` and
+`output.write`. `filesystem.read`, `filesystem.write`, `process.spawn` and
+`network.connect` are outside API 1.0 and require a later decision, scoped
+parameters and consent UI.
 
-struct DisplayPath {
-    display: String,
-    resource: Option<ResourceToken>,
-}
+Commands receive host-parsed arguments and return typed status, bounded output
+chunks and an optional validated directory token. Prompt segments return an
+optional UTF-8 value plus semantic style/icon keys and cache duration. Completion
+returns bounded candidates. Plugins never provide executable ANSI styling.
 
-struct EnvironmentValue {
-    name: String,
-    value: String,
-}
-```
+## Errors and lifecycle
 
-- `display` est une représentation UTF-8 destinée à l'affichage. Elle ne sert
-  jamais à reconstruire un chemin par concaténation.
-- `resource` n'est présent que si une permission autorise une opération hôte
-  sur ce chemin. Le plugin renvoie le token au service concerné.
-- `environment` contient uniquement les noms demandés dans le manifeste,
-  autorisés puis jugés non sensibles par l'hôte. Il n'existe pas d'opération
-  « lire toutes les variables ».
-- `TerminalCapabilities` décrit couleurs, icônes et largeur utiles au rendu ;
-  il n'expose ni xterm, ni PTY, ni fenêtre Tauri.
-- `plugin_config` contient uniquement la section de configuration de ce plugin.
+Errors distinguish invalid request/response, denied permission, unsupported API,
+timeout, cancellation, unavailable runtime and plugin failure. User-facing
+messages contain no secrets, unauthorized paths or full traces. Plugin failures
+never become core panics; repeated faults disable the plugin with recovery help.
 
-Le contexte n'expose pas l'historique, la ligne en cours d'édition, les autres
-sessions, les arguments de lancement, les secrets ni les objets du moteur.
+Initialization negotiates the API, grants and configuration, then verifies that
+reported contributions match the manifest. Shutdown removes contributions,
+cancels calls and stops the runtime by a deadline; a plugin cannot veto removal.
 
-## Capacités de l'hôte
+The private `PluginRuntime` port may evolve and is not author-facing API. Its
+DTOs obey this contract.
 
-Une capacité doit être déclarée par le plugin et accordée avant l'appel.
+## Validation requirements
 
-| Identifiant | Donnée ou action | Règle initiale |
-| --- | --- | --- |
-| `context.cwd.read` | Dossier courant affichable | Lecture seule |
-| `context.env.read` | Variables nommées | Liste de noms obligatoire |
-| `config.read` | Configuration propre au plugin | Lecture seule |
-| `command.register` | Contribution de commande | Nom sans conflit natif |
-| `prompt.segment.register` | Contribution de segment | Budget court, résultat sans ANSI |
-| `completion.register` | Candidats de complétion | Aucun accès disque implicite |
-| `output.write` | Sortie contrôlée | Texte ou styles sémantiques uniquement |
-
-`filesystem.read`, `filesystem.write`, `process.spawn` et `network.connect` ne
-font pas partie de l'API `1.0`. Leur ajout nécessiterait une nouvelle décision,
-des paramètres de portée et une interface utilisateur de consentement.
-
-## Contributions et retours
-
-### Commande
-
-```rust
-struct CommandDescriptor {
-    id: ContributionId,
-    name: String,
-    summary: String,
-    arguments: Vec<ArgumentDescriptor>,
-}
-
-struct ExecuteCommand {
-    contribution_id: ContributionId,
-    arguments: Vec<String>,
-    context: PluginContext,
-}
-
-struct CommandResult {
-    status: CommandStatus,
-    output: Vec<OutputChunk>,
-    directory_change: Option<ResourceToken>,
-}
-```
-
-Les arguments sont déjà parsés par l'hôte. `OutputChunk` distingue sortie
-standard et erreur, contient du texte UTF-8 et éventuellement un style
-sémantique connu. Les séquences ANSI fournies par un plugin sont traitées comme
-du texte. Un changement de dossier utilise un token validé par l'hôte ; le
-plugin ne modifie jamais directement le processus.
-
-### Segment de prompt
-
-```rust
-struct RenderPromptSegment {
-    contribution_id: ContributionId,
-    context: PromptPluginContext,
-}
-
-struct PromptSegmentResult {
-    value: Option<String>,
-    style_key: Option<String>,
-    icon_key: Option<String>,
-    cache_for_ms: Option<u64>,
-}
-```
-
-Le contexte du prompt est plus petit que `PluginContext` et n'inclut que les
-données autorisées demandées par le segment. `None` masque le segment. Le cœur
-choisit la palette, l'icône de repli, le séparateur et les codes ANSI.
-
-### Complétion
-
-```rust
-struct CompleteInput {
-    contribution_id: ContributionId,
-    command: String,
-    arguments: Vec<String>,
-    active_prefix: String,
-}
-
-struct CompletionResult {
-    candidates: Vec<CompletionCandidate>,
-    is_complete: bool,
-}
-```
-
-Le nombre de candidats, leur longueur et le temps d'appel sont bornés. Un
-résultat invalide est rejeté sans supprimer les candidats du cœur.
-
-## Erreurs
-
-```rust
-enum PluginErrorKind {
-    InvalidRequest,
-    PermissionDenied,
-    UnsupportedApi,
-    InvalidResponse,
-    Timeout,
-    Cancelled,
-    RuntimeUnavailable,
-    PluginFailure,
-}
-
-struct PluginError {
-    kind: PluginErrorKind,
-    message: String,
-    retryable: bool,
-    diagnostic_code: Option<String>,
-}
-```
-
-`message` est sûr pour l'utilisateur : il ne contient ni secret, ni trace
-complète, ni chemin non autorisé. L'hôte ajoute l'identifiant du plugin et le
-contexte d'opération à son propre diagnostic. Une erreur de plugin ne devient
-jamais un panic du cœur.
-
-| Erreur | Effet hôte |
-| --- | --- |
-| Requête ou réponse invalide | Refuser l'appel et compter une faute |
-| Permission refusée | Ne pas appeler le service ; contribution conservée |
-| Délai ou annulation | Ignorer la réponse tardive ; interrompre si possible |
-| Runtime indisponible | Masquer les contributions exécutables concernées |
-| Échecs répétés | Désactiver le plugin et expliquer la récupération |
-
-## Initialisation et arrêt
-
-Le plugin reçoit d'abord `Initialize` avec la version négociée, ses permissions
-accordées et sa configuration. Il retourne la liste exacte de ses contributions
-déclarées ; l'hôte vérifie qu'elle correspond au manifeste avant de les rendre
-visibles.
-
-`Shutdown` indique une échéance, puis le superviseur annule les requêtes et
-arrête le runtime. Un plugin ne peut pas refuser sa désactivation. Aucune
-contribution n'est invoquée après son retrait du registre.
-
-## Trait interne de runtime
-
-Le seul trait lié au choix technique reste privé au crate :
-
-```rust
-trait PluginRuntime {
-    fn start(&mut self, init: Initialize) -> Result<Initialized, RuntimeError>;
-    fn call(&mut self, request: PluginRequest) -> Result<PluginResponse, RuntimeError>;
-    fn cancel(&mut self, request_id: &RequestId) -> Result<(), RuntimeError>;
-    fn stop(&mut self, deadline_ms: u64) -> Result<(), RuntimeError>;
-}
-```
-
-Ce trait n'est pas l'API des auteurs de plugins et peut évoluer. Les DTO qu'il
-transporte, eux, suivent les règles de version ci-dessus.
-
-## Règles de validation de l'implémentation future
-
-- Sérialisation aller-retour de chaque DTO, y compris champs optionnels inconnus.
-- Rejet d'un majeur incompatible avant `start`.
-- Aucun type de `core`, `tauri`, `portable-pty` ou `rustyline` dans l'API.
-- Délai, annulation et taille maximale testés sans horloge réelle fragile.
-- Chemins avec espaces, Unicode, LF et CRLF couverts.
-- Messages identiques sur Windows, macOS et Linux.
-- Fuzzing du parseur de messages et aucune utilisation de `unwrap` sur une
-  donnée fournie par un plugin.
-
-T102 s'arrête à ce contrat. T107 définira le manifeste qui demande ces
-capacités ; T117 sera la première preuve d'implémentation bout en bout.
+- Round-trip every DTO, including unknown optional fields.
+- Reject incompatible majors before runtime start.
+- Expose no `core`, Tauri, PTY or `rustyline` type.
+- Test deadline, cancellation and maximum sizes with deterministic clocks.
+- Cover spaces, Unicode, LF and CRLF.
+- Keep messages equivalent across Windows, macOS and Linux.
+- Fuzz message parsing and never `unwrap` plugin-controlled data.

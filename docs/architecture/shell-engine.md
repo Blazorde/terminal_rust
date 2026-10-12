@@ -1,9 +1,8 @@
-# API du moteur de shell
+# Shell engine API
 
-`ShellEngine` est la frontière Rust partagée entre le binaire CLI et les futurs
-adaptateurs desktop. Il reçoit une ligne déjà saisie ou une liste d'arguments,
-exécute le registre de commandes existant et retourne un résultat sans imposer
-la manière de l'afficher.
+`ShellEngine` is the Rust boundary shared by the CLI and desktop adapters. It
+accepts an entered line or argument list, dispatches through the command
+registry and returns data without imposing a presentation layer.
 
 ```rust
 use terminal_rust::{ExecutionStatus, ShellEngine};
@@ -18,24 +17,19 @@ if result.status == ExecutionStatus::Failed {
 }
 ```
 
-## Contrat
+## Contract
 
-- `status` distingue la poursuite, la sortie demandée et l'échec récupérable.
-- `stdout` et `stderr` sont séparés et ne sont pas écrits par le moteur.
-- `error` contient le diagnostic de dispatch ou de commande lorsque le statut
-  vaut `Failed`.
-- `current_dir` reflète le dossier courant après l'exécution lorsqu'il est
-  accessible.
-- `directory_change` contient les chemins avant et après un `cd` réussi.
+- `status` distinguishes continue, requested exit and recoverable failure.
+- `stdout` and `stderr` remain separate and are not written by the engine.
+- `error` contains dispatch or command diagnostics for failed results.
+- `current_dir` reports the accessible directory after execution.
+- `directory_change` reports the paths before and after a successful `cd`.
 
-Le moteur conserve l'état de session nécessaire à `cd -`. Une instance doit
-donc appartenir à une seule session et ne doit pas être partagée entre deux
-terminaux concurrents. La future couche PTY reste responsable des commandes
-externes, des confirmations interactives et du cycle de vie des processus.
+The engine retains session state for `cd -`. Each instance therefore belongs
+to one session and must not be shared between concurrent terminals. The PTY
+adapter owns external commands, interactive confirmations and process lifetime.
 
-## Compatibilité
+## Compatibility
 
-L'API utilise `PathBuf` pour les chemins et ne dépend d'aucune commande Unix ou
-PowerShell. Les consommateurs ne doivent pas analyser la sortie textuelle pour
-détecter un changement de dossier : `directory_change` est le contrat prévu à
-cet effet.
+The API uses `PathBuf` and does not depend on Unix or PowerShell commands.
+Consumers must use `directory_change` instead of parsing output to detect `cd`.

@@ -1,17 +1,16 @@
 # Architecture
 
-## Vue d'ensemble
+## Overview
 
-Terminal Rust fournit une bibliothèque Rust et un binaire CLI mince. Son
-architecture sépare la boucle interactive, l'API de moteur réutilisable,
-l'analyse des entrées, le dispatch des commandes, la logique métier et le
-rendu.
+Terminal Rust ships a Rust library and a thin CLI binary. The architecture
+separates the interactive lifecycle, reusable engine API, parsing, dispatch,
+business logic and rendering.
 
 ```mermaid
 flowchart LR
-    User[Utilisateur] --> Runner[app/runner]
+    User[User] --> Runner[app/runner]
     Runner --> Engine[core/ShellEngine]
-    GUI[Desktop GUI Tauri] --> Engine
+    GUI[Tauri desktop GUI] --> Engine
     Engine --> Parser[app/parser]
     Parser --> Dispatcher[app/command]
     Dispatcher --> Commands[commands/*]
@@ -22,74 +21,58 @@ flowchart LR
     Runner --> Completion[app/completion]
 ```
 
-## Responsabilités actuelles
+## Current responsibilities
 
-| Module | Responsabilité | Ne doit pas devenir |
+| Module | Responsibility | Must not become |
 | --- | --- | --- |
-| `lib.rs` | Frontière de bibliothèque et exports publics stables | Une copie du moteur |
-| `main.rs` | Appel minimal du runner CLI | Un second runner |
-| `app/runner.rs` | Modes interactif/non interactif, historique, cycle de vie | Un catalogue de commandes |
-| `core/engine.rs` | Contrat d'exécution partagé, sorties, erreurs et changement de dossier | Une interface terminal ou GUI |
-| `app/parser.rs` | Transformation d'une ligne en arguments | Un exécuteur |
-| `app/command.rs` | Registre, validation simple et dispatch | Un module métier géant |
-| `app/completion.rs` | Complétion des commandes et chemins | Une copie du registre |
-| `app/prompt.rs` | Construction et affichage du prompt | Un client Git monolithique |
-| `commands/` | Comportement des commandes internes | Du code d'interface interactive |
-| `errors/` | Erreurs métier affichables | Des effets de bord |
-| `git/` | Détection, contexte Git et raccourcis en lecture seule | Un passthrough Git sans liste blanche |
-| `render/` | Sorties standard et erreurs | De la logique métier |
-| `utils/` | Helpers génériques et limités | Un dossier fourre-tout |
-| `desktop/src-tauri/` | Adaptateur Tauri, sessions PTY et réglages natifs | Un second moteur de shell |
-| `desktop/src/` | Présentation xterm, onglets et contrôles accessibles | Un accès générique au système |
+| `lib.rs` | Stable library boundary and public exports | A duplicate engine |
+| `main.rs` | Minimal CLI runner call | A second runner |
+| `app/runner.rs` | Interactive/non-interactive modes, history and lifecycle | A command catalog |
+| `core/engine.rs` | Shared execution contract, output, errors and directory changes | A terminal UI |
+| `app/parser.rs` | Convert a line into arguments | An executor |
+| `app/command.rs` | Registry, basic validation and dispatch | A large domain module |
+| `app/completion.rs` | Command and path completion | A duplicate registry |
+| `app/prompt.rs` | Prompt construction | A monolithic Git client |
+| `commands/` | Built-in command behavior | Interactive UI code |
+| `errors/` | Presentable domain errors | Side effects |
+| `git/` | Git context and read-only shortcuts | An unrestricted Git passthrough |
+| `render/` | Standard and error output | Business logic |
+| `desktop/src-tauri/` | Tauri adapter, PTY sessions and native settings | A second shell engine |
+| `desktop/src/` | xterm presentation, tabs and accessible controls | Generic system access |
 
-## Flux d'une commande
+## Command flow
 
-1. `runner` lit une ligne avec `rustyline` ou depuis l'entrée standard.
-2. `ShellEngine` reçoit la ligne et capture séparément stdout et stderr.
-3. `parser` produit une liste d'arguments.
-4. `command` cherche la commande dans son registre et valide le nombre maximal
-   d'arguments.
-5. Le module métier exécute l'opération.
-6. Le moteur retourne un `ExecutionResult` avec statut typé, sorties, erreur,
-   dossier courant et éventuel changement de dossier.
-7. Le consommateur CLI ou GUI décide comment présenter ce résultat ; le runner
-   CLI garde la session active après une erreur récupérable.
+1. `runner` reads a line through `rustyline` or standard input.
+2. `ShellEngine` captures standard output and error separately.
+3. `parser` produces arguments.
+4. `command` resolves the registry entry and validates the argument limit.
+5. The domain module performs the operation.
+6. The engine returns a typed `ExecutionResult` with output, error, current
+   directory and any directory change.
+7. The CLI or GUI chooses presentation; recoverable errors keep the session alive.
 
-## Architecture cible
+## Target direction
 
-Les dossiers encore vides (`core`, `platform`, `config`, `diagnostics`, `cli`)
-représentent des frontières possibles, pas une obligation de migration
-immédiate. `cache` contient désormais le cache court du contexte Git du prompt.
-Une évolution doit entrer dans ces dossiers uniquement quand une responsabilité
-concrète le justifie.
-
-Le moteur de prompt suit le pipeline suivant :
+New module boundaries are introduced only when a concrete responsibility needs
+them. The prompt pipeline is:
 
 ```text
-configuration -> collecte du contexte -> segments -> rendu -> terminal
+configuration -> context collection -> segments -> rendering -> terminal
 ```
 
-La collecte et le rendu restent séparés afin de tester les segments sans
-terminal réel et de désactiver proprement les fonctions indisponibles.
+Collection and rendering remain separate so segments can be tested without a
+real terminal and unavailable capabilities can disappear safely.
 
-## Évolution vers un terminal extensible
+Extensions stay behind a versioned, permission-based boundary. Commands,
+segments, completions and themes may be extension points; `ShellEngine`, PTY
+handles and Tauri objects are not public plugin API. Declarative formats and a
+local registry come before any isolated code runtime. In-process Rust dynamic
+libraries are not the default because they couple ABI and crash risk to the host.
 
-Le moteur pourra accueillir des fournisseurs externes uniquement derrière une
-frontière versionnée et à permissions explicites. Les commandes, segments,
-complétions et thèmes sont des points d'extension possibles ; `ShellEngine`,
-les handles PTY et les objets Tauri ne font pas partie de l'API publique.
+## Constraints
 
-La progression commence par des formats déclaratifs, puis un registre local et
-un plugin officiel. Le choix d'un runtime de code isolé vient après la
-stabilisation des contrats. Une bibliothèque dynamique Rust chargée directement
-dans le processus n'est pas la cible par défaut, car elle couple l'ABI et le
-risque de crash à l'hôte. La [vision détaillée](../vision-plugins.md) fixe les
-capacités, les interdictions et les preuves attendues avant cette étape.
-
-## Contraintes
-
-- Démarrage et commandes de base fonctionnels sans Git.
-- Aucun chemin ou shell propre à un OS dans la logique partagée.
-- Pas de lecture réseau dans le prompt.
-- Une commande externe lente ne doit pas bloquer durablement chaque affichage.
-- Les erreurs de décoration ne doivent jamais rendre le shell inutilisable.
+- Startup and core commands work without Git.
+- Shared logic contains no OS-specific shell or path assumptions.
+- Prompt rendering performs no network reads.
+- Slow external commands cannot block every prompt indefinitely.
+- Decoration failures never make the shell unusable.

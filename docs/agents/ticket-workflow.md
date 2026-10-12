@@ -1,62 +1,45 @@
-# Workflow ticket → pull request
+# Ticket-to-pull-request workflow
 
-Ce guide définit le déroulé attendu lorsqu'un contributeur prend un ticket en
-charge de manière autonome.
+This guide defines the expected autonomous contribution flow.
 
-## 1. Qualifier le ticket
+## 1. Qualify the ticket
 
-- Lire l'objectif, les fichiers suggérés et tous les critères d'acceptation.
-- Vérifier l'état réel de `develop` : le ticket peut déjà être partiellement ou
-  totalement implémenté.
-- Repérer les dépendances et les tickets voisins.
-- Poser une question uniquement si deux réponses changent réellement le produit
-  ou la compatibilité.
+- Read the goal, suggested files and every acceptance criterion.
+- Inspect the real state of `develop`; the work may already be partly complete.
+- Identify dependencies and neighboring tickets.
+- Ask only when different answers materially change the product or compatibility.
 
-## 2. Définir le lot
+## 2. Define the batch
 
-Un ticket correspond normalement à une branche. Plusieurs tickets peuvent être
-groupés si :
+One ticket normally maps to one branch. Group tickets only when they share the
+same technical boundary, cannot be validated usefully in isolation, and remain
+easy to review and revert. Do not mix unrelated documentation, optional
+refactors and product features.
 
-- ils touchent la même frontière technique ;
-- aucun ne peut être validé utilement sans l'autre ;
-- la PR reste facile à relire et à annuler.
+## 3. Implement
 
-Ne pas mélanger documentation générale, refactor non requis et feature métier
-dans une même branche.
+- Branch from an up-to-date `develop`.
+- Add tests with behavior.
+- Preserve Windows, macOS and Linux compatibility.
+- Update affected user and technical documentation.
+- Add an ADR when a decision constrains later tickets.
 
-## 3. Implémenter
+## 4. Verify
 
-- Créer la branche depuis `develop` à jour.
-- Ajouter les tests en même temps que le comportement.
-- Préserver la compatibilité Windows, macOS et Linux.
-- Mettre à jour la documentation utilisateur et technique concernée.
-- Ajouter un ADR pour une décision qui engage les tickets suivants.
+Run the suite in [testing.md](../development/testing.md), then review the diff
+for secrets or generated files, out-of-scope changes, consistent errors and
+alignment between code and documentation.
 
-## 4. Vérifier
+## 5. Deliver
 
-Exécuter la suite définie dans
-[`docs/development/testing.md`](../development/testing.md), puis relire le diff :
+- Use an English Conventional Commit.
+- Push the branch and open a pull request against `develop`.
+- Include a summary and validation evidence.
+- After merge, update local `develop` with `--ff-only`.
 
-- aucun secret ni fichier généré ;
-- aucune modification hors périmètre ;
-- messages d'erreur cohérents ;
-- documentation et code alignés.
+## 6. Update project tracking
 
-## 5. Livrer
-
-- Commit Conventional Commits en anglais.
-- Push de la branche.
-- PR vers `develop` avec résumé et preuves de validation.
-- Après fusion, mettre `develop` local à jour avec `--ff-only`.
-
-## 6. Tenir le suivi projet
-
-Le ticket doit refléter la réalité :
-
-- `Not started` avant prise en charge ;
-- `In progress` dès le début du travail ;
-- `Done` après fusion et synchronisation de `develop` ;
-- lien de PR et note courte sur les décisions ou limites.
-
-Créer un ticket séparé pour une suite utile découverte pendant le travail plutôt
-que d'étendre silencieusement le périmètre.
+Use `Not started` before work, `In progress` while active and `Done` only after
+merge and synchronization. Record the pull-request link, decisions and limits.
+Create a separate ticket for discovered follow-up work instead of silently
+expanding scope.

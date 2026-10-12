@@ -1,62 +1,51 @@
-# Guide de contribution automatisée
+# Automated contribution guide
 
-Ce fichier s'applique à tout le dépôt.
+This file applies to the entire repository.
 
-## Objectif du projet
+## Project goal
 
-Terminal Rust est un mini-shell pédagogique, fiable et multiplateforme. Toute
-évolution doit rester compatible avec Windows, macOS et Linux. Le futur moteur
-de prompt s'inspire d'Oh My Posh : segments indépendants, configuration lisible
-et dégradation propre lorsque Git ou une capacité du terminal manque.
+Terminal Rust is a reliable, educational, cross-platform mini-shell. Every
+change must remain compatible with Windows, macOS and Linux. Its prompt engine
+is inspired by Oh My Posh: independent segments, readable configuration and
+graceful degradation when Git or a terminal capability is unavailable.
 
-## Source de vérité
+## Sources of truth
 
-- Le ticket Notion définit le périmètre fonctionnel et les critères
-  d'acceptation.
-- `docs/architecture/` décrit les frontières techniques actuelles et cibles.
-- `docs/decisions/` contient les décisions structurantes et leurs compromis.
-- Le code et les tests priment si la documentation décrit un état ancien ; la
-  documentation doit alors être corrigée dans la même PR.
+- The Notion ticket defines scope and acceptance criteria.
+- `docs/architecture/` defines current and target technical boundaries.
+- `docs/decisions/` records structural decisions and trade-offs.
+- Code and tests win when documentation is stale; update the documentation in
+  the same pull request.
 
-## Méthode de travail
+## Workflow
 
-1. Partir de `develop` à jour.
-2. Utiliser une branche `feat/*`, `fix/*`, `chore/*`, `refractor/*` ou
-   `hotfix/*` selon la nature du changement.
-3. Limiter une branche à un ensemble cohérent de tickets. Ne grouper plusieurs
-   tickets que s'ils partagent la même frontière technique et se valident
-   ensemble.
-4. Préserver les changements locaux qui ne concernent pas le ticket.
-5. Ajouter ou adapter les tests avec le code.
-6. Mettre à jour le README, les guides ou un ADR lorsqu'un comportement public
-   ou une décision d'architecture change.
-7. Ouvrir la PR vers `develop` et reporter son lien dans le ticket.
+1. Start from an up-to-date `develop` branch.
+2. Use `feat/*`, `fix/*`, `chore/*`, `refractor/*` or `hotfix/*` as appropriate.
+3. Keep one coherent group of tickets per branch. Group tickets only when they
+   share a technical boundary and can be validated together.
+4. Preserve unrelated local changes.
+5. Add or update tests with the implementation.
+6. Update the README, guides or an ADR when public behavior or architecture changes.
+7. Open the pull request against `develop` and record its link in the ticket.
 
-## Règles Rust
+## Rust rules
 
-- Garder `runner` concentré sur le cycle de vie du shell.
-- Enregistrer les commandes internes dans la table de `app/command.rs`.
-- Isoler la logique métier dans `commands/`, `git/` ou un module spécialisé.
-- Centraliser l'affichage dans `render` afin de faciliter les tests et les
-  adaptations de terminal.
-- Préférer des erreurs typées et des messages utiles à des `unwrap` ou `panic!`.
-- Traiter l'absence d'un outil externe comme une capacité indisponible lorsque
-  ce n'est pas une erreur fatale.
-- Utiliser `Path` et `PathBuf`, jamais une concaténation manuelle avec `/` ou
-  `\\`.
-- Ne pas dépendre d'une commande Unix ou PowerShell pour une opération que la
-  bibliothèque standard Rust sait réaliser.
+- Keep `runner` focused on the shell lifecycle.
+- Register built-in commands in `app/command.rs`.
+- Keep business logic in `commands/`, `git/` or a dedicated module.
+- Centralize output in `render` for testability and terminal adaptation.
+- Prefer typed errors and useful messages over `unwrap` or `panic!`.
+- Treat a missing external tool as an unavailable capability when it is not fatal.
+- Use `Path` and `PathBuf`, never manual `/` or `\\` concatenation.
+- Do not call Unix or PowerShell commands for work available in the Rust standard library.
 
-## Compatibilité
+## Compatibility
 
-- Ne pas supposer que `HOME`, Git, une Nerd Font ou les séquences ANSI avancées
-  sont disponibles.
-- Tester les chemins contenant des espaces et les fins de ligne `LF`/`CRLF`
-  lorsque le changement les manipule.
-- Toute dépendance spécifique à un OS doit rester derrière `cfg(...)` et offrir
-  un comportement de repli documenté.
+- Do not assume `HOME`, Git, a Nerd Font or advanced ANSI sequences exist.
+- Test paths containing spaces and both LF and CRLF when relevant.
+- Keep OS-specific dependencies behind `cfg(...)` with a documented fallback.
 
-## Validation obligatoire
+## Required validation
 
 ```bash
 cargo fmt --all -- --check
@@ -65,13 +54,12 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
 
-Documenter explicitement toute vérification impossible dans l'environnement
-local. Ne jamais déclarer un ticket terminé sans preuve correspondant à ses
-critères d'acceptation.
+Document checks that cannot run locally. Never mark a ticket complete without
+evidence for its acceptance criteria.
 
 ## Git
 
-Les commits suivent Conventional Commits, en anglais :
+Use English Conventional Commits:
 
 ```text
 feat(git): expose repository status
@@ -79,5 +67,4 @@ fix(prompt): handle missing home directory
 chore(docs): document architecture decisions
 ```
 
-Les détails de branches, PR et protections sont dans
-`docs/workflows/README.md`.
+See `docs/workflows/README.md` for branch, pull-request and protection details.

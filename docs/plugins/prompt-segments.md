@@ -1,56 +1,49 @@
-# Segments de prompt des plugins
+# Plugin prompt segments
 
-Un plugin peut déclarer un futur segment de prompt dans son manifeste. Cette
-déclaration réserve une identité et des budgets ; elle ne charge ni n'exécute le
-plugin. La contribution devient visible seulement lorsque le plugin est activé,
-compatible, démarré et autorisé par `prompt.segment.register`.
+A plugin can declare a future prompt segment in its manifest. The declaration
+reserves an identity and resource budgets; it does not load or execute code. A
+contribution becomes visible only when the plugin is enabled, compatible,
+started and granted `prompt.segment.register`.
 
 ```toml
 permissions = ["prompt.segment.register"]
 
 [[prompt_segments]]
 name = "node"
-summary = "Version Node du projet courant"
+summary = "Node version for the current project"
 timeout_ms = 20
 cache_ttl_ms = 30000
 ```
 
-`name` suit les règles des identifiants de plugin. `summary` est obligatoire et
-ne contient pas de caractère de contrôle. `timeout_ms` vaut 25 par défaut et
-reste compris entre 1 et 100 ms. `cache_ttl_ms` vaut zéro par défaut et ne peut
-pas dépasser cinq minutes.
+`name` follows plugin identifier rules. `summary` is required and cannot contain
+control characters. `timeout_ms` defaults to 25 and stays between 1 and 100 ms.
+`cache_ttl_ms` defaults to zero and cannot exceed five minutes.
 
-## Cycle d'une évaluation
+## Evaluation lifecycle
 
 ```text
-PromptContext filtré -> cache valide ? -> requête avec échéance -> valeur typée
-                                                    |
-                                              délai ou erreur
-                                                    v
-                                            segment simplement omis
+filtered PromptContext -> valid cache? -> deadline-bound request -> typed value
+                                                  |
+                                            timeout or error
+                                                  v
+                                           omit the segment
 ```
 
-Le contexte contient uniquement les données autorisées : dossier sous forme de
-token, dernier statut, durée et variables explicitement accordées. Le plugin ne
-reçoit ni historique, ni environnement complet, ni handle de terminal.
+The context contains only authorized data: an opaque directory token, last
+status, duration and explicitly granted variables. Plugins receive no history,
+complete environment or terminal handle.
 
-Un timeout, un crash ou une valeur invalide masque le segment pour ce rendu et
-produit un diagnostic limité en fréquence. Le shell ne bloque pas. Le cache est
-indexé par plugin, segment, configuration et contexte pertinent ; la
-désactivation, un changement de configuration ou un changement de dossier
-invalide les entrées concernées.
+A timeout, crash or invalid value hides the segment for that render and emits a
+rate-limited diagnostic. Cache keys include plugin, segment, configuration and
+relevant context. Disabling the plugin or changing configuration or directory
+invalidates related entries.
 
-## Configuration et visibilité
+## Configuration and rendering
 
-Les options propres au segment restent dans `[plugins.<id>]`. Le plugin les
-valide à son démarrage. Le futur ordre du prompt pourra référencer une identité
-qualifiée `<plugin-id>.<segment>` ; une référence absente est ignorée avec un
-diagnostic, comme une capacité indisponible.
+Segment settings live under `[plugins.<id>]` and are validated by the plugin at
+startup. Prompt order can eventually reference `<plugin-id>.<segment>`; missing
+references degrade like unavailable capabilities.
 
-## Rendu séparé
-
-Le résultat transporte une valeur UTF-8 et des rôles sémantiques bornés, jamais
-des séquences ANSI, couleurs brutes ou glyphes obligatoires. Le moteur de rendu
-choisit la palette, les séparateurs, l'icône ASCII ou Nerd Font et le repli texte.
-Le même segment peut ainsi fonctionner dans le CLI, la GUI, un terminal sans
-couleurs et les tests de capture.
+Results carry UTF-8 text and bounded semantic roles, never ANSI sequences, raw
+colors or mandatory glyphs. The renderer selects palette, separators, ASCII or
+Nerd Font icons and text fallbacks for CLI, GUI, no-color terminals and tests.

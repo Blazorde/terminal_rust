@@ -1,47 +1,32 @@
-# ADR-0001 — Registre central des commandes internes
+# ADR-0001 — Central built-in command registry
 
-- Statut : Acceptée
-- Date : 2026-10-09
-- Décideurs : équipe Terminal Rust
+- Status: Accepted
+- Date: 2026-10-09
+- Decision makers: Terminal Rust team
 
-## Contexte
+## Context
 
-Le shell doit ajouter régulièrement des commandes tout en alimentant le
-dispatcher et l'autocomplétion. Des listes indépendantes finiraient par diverger.
+Commands must feed dispatch, help and completion without separate lists drifting.
 
-## Décision
+## Decision
 
-Les commandes internes sont déclarées dans la table `COMMANDS` de
-`src/app/command.rs`. Chaque entrée associe un nom, une syntaxe, un résumé, une
-limite d'arguments et un handler. `command_names()` expose cette source à
-l'autocomplétion et `command_help()` génère l'aide depuis les mêmes entrées.
+Declare built-ins in `COMMANDS` in `src/app/command.rs`. Each entry defines a
+name, syntax, summary, argument limit and handler. `command_names()` feeds
+completion and `command_help()` generates help from the same source. Domain logic
+stays in `src/commands/`; handlers only adapt arguments, state and errors.
 
-La logique métier reste dans `src/commands/`; les handlers du registre adaptent
-seulement les arguments, l'état du shell et les erreurs.
+## Options considered
 
-## Options considérées
+- One large runner `match`: initially simple but mixes lifecycle and commands.
+- Separate execution/help/completion registries: explicit but easy to desynchronize.
+- Dynamic plugins: premature for the MVP.
 
-- Grand `match` dans le runner : simple au départ mais mélange le cycle de vie et
-  les commandes.
-- Registres séparés pour exécution, aide et complétion : explicites mais faciles
-  à désynchroniser.
-- Système de plugins dynamique : prématuré pour le MVP.
+## Consequences
 
-## Conséquences
-
-### Positives
-
-- Le runner reste stable lors de l'ajout d'une commande.
-- La complétion réutilise les noms réellement exécutables.
-- La validation commune des arguments est centralisée.
-
-### Négatives
-
-- Les signatures de handlers doivent s'adapter au type commun.
-- Les contributions externes devront passer par un adaptateur isolé avant de
-  rejoindre cette vue du registre.
+The runner remains stable, completion exposes executable names and shared
+argument validation is centralized. Handlers must fit a shared signature, and
+external contributions require an isolated adapter.
 
 ## Validation
 
-Une nouvelle commande doit être exécutable, proposée par la complétion et
-documentée par `help`. Des tests de complétion protègent les commandes ajoutées.
+A new command must execute, appear in completion and be documented by `help`.

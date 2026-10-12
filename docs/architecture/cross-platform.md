@@ -1,50 +1,44 @@
-# Compatibilité multiplateforme
+# Cross-platform compatibility
 
-Le projet vise Windows, macOS et Linux dès la conception. « Compile partout »
-ne suffit pas : les chemins, terminaux et outils disponibles diffèrent.
+Terminal Rust targets Windows, macOS and Linux by design. Compiling everywhere
+is not enough: paths, terminals and available tools differ.
 
-## Règles communes
+## Shared rules
 
-- Construire les chemins avec `Path` et `PathBuf`.
-- Utiliser `env::current_dir`, `env::var_os` et les API `std::fs` plutôt que des
-  commandes système.
-- Accepter `HOME` sur Unix et `USERPROFILE` sur Windows.
-- Ne pas analyser une sortie localisée quand un code de retour ou un format
-  stable existe.
-- Masquer les erreurs attendues des outils optionnels ; conserver les erreurs
-  utiles pour les actions demandées explicitement par l'utilisateur.
+- Build paths with `Path` and `PathBuf`.
+- Prefer `env::current_dir`, `env::var_os` and `std::fs` to system commands.
+- Support `HOME` on Unix and `USERPROFILE` on Windows.
+- Prefer exit codes and stable formats over localized output.
+- Hide expected failures from optional tools while preserving actionable errors
+  for explicit user operations.
 
-## Terminaux
+## Terminals
 
-Les séquences ANSI simples sont utilisables sur les terminaux modernes des trois
-plateformes. Toute fonctionnalité avancée devra toutefois prévoir :
+Simple ANSI sequences work in modern terminals on all three platforms. Advanced
+features must still provide:
 
-- un mode sans couleur ;
-- une alternative sans icône ou Nerd Font ;
-- une largeur calculée sans supposer qu'un octet vaut une colonne ;
-- un repli texte si la capacité du terminal n'est pas connue.
+- a no-color mode;
+- an ASCII alternative to icons and Nerd Fonts;
+- display-width calculation that does not equate bytes with columns;
+- a text fallback when terminal capabilities are unknown.
 
-## Processus externes
+## External processes
 
-Git est une dépendance optionnelle. Un appel externe doit :
+Git is optional. External calls must pass separate arguments to `Command`, avoid
+shell command strings, set a working directory or use `git -C`, bound repeated
+work through caching or timeouts, and treat a missing executable as an
+unavailable capability for prompt enrichment.
 
-1. transmettre les arguments séparément à `Command` ;
-2. éviter de construire une ligne destinée à un shell ;
-3. fixer explicitement le dossier de travail ou utiliser `git -C` ;
-4. borner à terme son coût par un cache ou un délai ;
-5. convertir « exécutable absent » en capacité indisponible quand l'appel sert
-   uniquement à enrichir le prompt.
+## Validation matrix
 
-## Matrice de validation
-
-| Risque | Test attendu |
+| Risk | Required evidence |
 | --- | --- |
-| Séparateurs de chemins | chemins construits avec `PathBuf` |
-| Espaces dans un chemin | dossier temporaire contenant un espace |
-| Git absent | programme inexistant, aucun panic |
-| Hors dépôt | résultat négatif silencieux |
-| CRLF/LF | parsing indépendant de la fin de ligne |
-| ANSI indisponible | futur mode texte sans décoration |
+| Path separators | paths constructed with `PathBuf` |
+| Spaces in paths | temporary directory containing a space |
+| Missing Git | nonexistent executable and no panic |
+| Outside a repository | quiet negative result |
+| CRLF and LF | line-ending-independent parsing |
+| Missing ANSI | plain-text rendering |
 
-La CI doit au minimum garder des jobs Windows et Ubuntu. Un job macOS est une
-étape de roadmap prioritaire avant la première version du moteur de prompt.
+CI should retain Windows, Ubuntu and macOS jobs. A job that does not execute any
+step is not platform evidence.
