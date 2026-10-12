@@ -58,6 +58,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 - Added a live cross-platform system dashboard that refreshes in place until
   `q`, `Escape` or `Ctrl+C`, with static fallbacks for redirected, dumb and
   undersized terminals.
+- Added dim inline history suggestions accepted with `Right Arrow`, circular
+  `Tab`/`Shift+Tab` completion and tested quoted Unicode path handling.
 - Added keyboard-accessible desktop tabs backed by independent native PTY
   sessions, with isolated input, output, working directory, history and prompt
   context.
