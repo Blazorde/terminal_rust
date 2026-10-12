@@ -63,6 +63,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 - Expanded the desktop palette to Graphite, Bone, Nord, Amber, Moss and Dusk,
   while migrating the previous Paper and Midnight settings automatically.
+- The desktop terminal now refreshes xterm font metrics and dimensions after
+  font, density, tab, viewport and window changes so typed text stays aligned
+  with every cursor style.
 - Standardized contributor, architecture, configuration, desktop, plugin,
   installation, release and troubleshooting documentation in concise English.
 - The CLI now executes built-in commands through the same public Rust engine

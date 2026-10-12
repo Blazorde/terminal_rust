@@ -44,6 +44,7 @@ function TerminalPane({
   const host = useRef<HTMLDivElement>(null)
   const terminal = useRef<Terminal | null>(null)
   const fitAddon = useRef<FitAddon | null>(null)
+  const refitTerminal = useRef<(() => void) | null>(null)
   const [reduceMotion, setReduceMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
 
   useEffect(() => {
@@ -60,7 +61,9 @@ function TerminalPane({
     const term = new Terminal({
       allowProposedApi: false,
       convertEol: true,
-      lineHeight: 1.45,
+      letterSpacing: 0,
+      lineHeight: 1.2,
+      rescaleOverlappingGlyphs: true,
       scrollback: 5000,
     })
     const fit = new FitAddon()
@@ -74,20 +77,40 @@ function TerminalPane({
     let listeners: UnlistenFn[] = []
     let terminalDisposables: Array<{ dispose: () => void }> = []
     let trafficTimer: number | null = null
+    let fitFrame: number | null = null
     let disposed = false
 
-    const resize = () => {
+    const fitToHost = () => {
+      if (disposed || element.clientWidth === 0 || element.clientHeight === 0) return
       fit.fit()
       onPatch(tabId, { dimensions: `${term.cols} × ${term.rows}` })
-      if (sessionId !== null) {
-        void invoke('resize_session', { sessionId, cols: term.cols, rows: term.rows }).catch(() => undefined)
-      }
     }
-    const resizeObserver = new ResizeObserver(resize)
+
+    const scheduleFit = () => {
+      if (fitFrame !== null) window.cancelAnimationFrame(fitFrame)
+      fitFrame = window.requestAnimationFrame(() => {
+        fitFrame = window.requestAnimationFrame(() => {
+          fitFrame = null
+          fitToHost()
+        })
+      })
+    }
+
+    const refreshFontMetrics = () => {
+      if (disposed) return
+      term.clearTextureAtlas()
+      scheduleFit()
+    }
+
+    refitTerminal.current = scheduleFit
+    const resizeObserver = new ResizeObserver(scheduleFit)
     resizeObserver.observe(element)
+    window.visualViewport?.addEventListener('resize', scheduleFit)
+    document.fonts.addEventListener('loadingdone', refreshFontMetrics)
+    void document.fonts.ready.then(refreshFontMetrics)
 
     const connect = async () => {
-      resize()
+      fitToHost()
       if (!desktopHost) {
         onPatch(tabId, { connection: 'closed', promptLayout: emptyPromptLayout })
         term.writeln('\x1b[38;2;255;107;61mTerminal Rust — aperçu interface\x1b[0m')
@@ -161,6 +184,9 @@ function TerminalPane({
     return () => {
       disposed = true
       resizeObserver.disconnect()
+      window.visualViewport?.removeEventListener('resize', scheduleFit)
+      document.fonts.removeEventListener('loadingdone', refreshFontMetrics)
+      if (fitFrame !== null) window.cancelAnimationFrame(fitFrame)
       terminalDisposables.forEach((disposable) => disposable.dispose())
       listeners.forEach((unlisten) => unlisten())
       if (trafficTimer !== null) window.clearTimeout(trafficTimer)
@@ -168,6 +194,7 @@ function TerminalPane({
       term.dispose()
       terminal.current = null
       fitAddon.current = null
+      if (refitTerminal.current === scheduleFit) refitTerminal.current = null
     }
   }, [desktopHost, restartToken, tabId, onPatch])
 
@@ -176,15 +203,15 @@ function TerminalPane({
     const fit = fitAddon.current
     if (!term || !fit) return
     applyTerminalSettings(term, settings, reduceMotion)
-    window.requestAnimationFrame(() => fit.fit())
+    term.clearTextureAtlas()
+    refitTerminal.current?.()
   }, [settings, reduceMotion])
 
   useEffect(() => {
     if (!active || !focusEnabled) return
-    const fit = fitAddon.current
     const term = terminal.current
     window.requestAnimationFrame(() => {
-      fit?.fit()
+      refitTerminal.current?.()
       term?.focus()
     })
   }, [active, focusEnabled])

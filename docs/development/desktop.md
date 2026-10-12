@@ -30,6 +30,11 @@ The appearance selector exposes Graphite, Bone, Nord, Amber, Moss and Dusk.
 Older persisted `paper` and `midnight` values migrate to Bone and Nord when
 loaded, so existing users keep a close visual equivalent.
 
+Terminal glyph metrics use integer letter spacing and a stable line height.
+The desktop waits for local fonts to settle, clears xterm's glyph cache, and
+refits after font, density, tab, viewport or window changes. This keeps the
+cursor aligned with typed text without platform-specific pixel offsets.
+
 ## Frontend-only preview
 
 ```bash
