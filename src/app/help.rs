@@ -2,23 +2,10 @@ use std::io;
 
 use crate::render;
 
-pub fn print_help() -> io::Result<()> {
-    render::stdout_lines(&[
-        "Available commands:",
-        "  pwd                  print current directory",
-        "  cd [path]            change current directory",
-        "  ls [-1aAdFhlpRrSt] [path...]",
-        "  mkdir [directory]    create a new directory",
-        "  touch [file]         create an empty file",
-        "  cat [file]           print file content",
-        "  rm [-dfirRv] [path...]",
-        "  clear                clear the terminal screen",
-        "  dashboard            show system performance and context",
-        "  git <status|branch|log> [options]",
-        "  theme <list|preview NAME>",
-        "  plugins list         list locally installed plugins",
-        "  help                 show this help",
-        "  exit                 close the terminal",
-        "  quit                 close the terminal",
-    ])
+pub fn print_help<'a>(commands: impl Iterator<Item = (&'a str, &'a str)>) -> io::Result<()> {
+    let mut output = String::from("Available commands:\n");
+    for (usage, summary) in commands {
+        output.push_str(&format!("  {usage:<28} {summary}\n"));
+    }
+    render::stdout(output)
 }

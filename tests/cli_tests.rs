@@ -230,6 +230,7 @@ fn help_lists_every_public_command() {
         "dashboard",
         "git",
         "theme",
+        "plugins",
         "help",
         "exit",
         "quit",

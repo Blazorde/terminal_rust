@@ -23,6 +23,8 @@ type CommandHandler = fn(&[String], &mut ShellState) -> CommandResult;
 
 struct CommandSpec {
     name: &'static str,
+    usage: &'static str,
+    summary: &'static str,
     max_args: Option<usize>,
     handler: CommandHandler,
 }
@@ -30,76 +32,106 @@ struct CommandSpec {
 const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         name: "pwd",
+        usage: "pwd",
+        summary: "print current directory",
         max_args: Some(0),
         handler: run_pwd,
     },
     CommandSpec {
         name: "cd",
+        usage: "cd [path]",
+        summary: "change current directory",
         max_args: Some(1),
         handler: run_cd,
     },
     CommandSpec {
         name: "ls",
+        usage: "ls [-1aAdFhlpRrSt] [path...]",
+        summary: "list directory contents",
         max_args: None,
         handler: run_ls,
     },
     CommandSpec {
         name: "mkdir",
+        usage: "mkdir [directory]",
+        summary: "create a new directory",
         max_args: Some(1),
         handler: run_mkdir,
     },
     CommandSpec {
         name: "touch",
+        usage: "touch [file]",
+        summary: "create an empty file",
         max_args: Some(1),
         handler: run_touch,
     },
     CommandSpec {
         name: "cat",
+        usage: "cat [file]",
+        summary: "print file content",
         max_args: Some(1),
         handler: run_cat,
     },
     CommandSpec {
         name: "rm",
+        usage: "rm [-dfirRv] [path...]",
+        summary: "remove files or directories",
         max_args: None,
         handler: run_rm,
     },
     CommandSpec {
         name: "clear",
+        usage: "clear",
+        summary: "clear the terminal screen",
         max_args: Some(0),
         handler: run_clear,
     },
     CommandSpec {
         name: "dashboard",
+        usage: "dashboard",
+        summary: "show system performance and context",
         max_args: Some(0),
         handler: run_dashboard,
     },
     CommandSpec {
         name: "git",
+        usage: "git <status|branch|log> [options]",
+        summary: "run a safe read-only Git command",
         max_args: None,
         handler: run_git,
     },
     CommandSpec {
         name: "theme",
+        usage: "theme <list|preview NAME>",
+        summary: "list or preview built-in themes",
         max_args: None,
         handler: run_theme,
     },
     CommandSpec {
         name: "plugins",
+        usage: "plugins list",
+        summary: "list locally installed plugins",
         max_args: None,
         handler: run_plugins,
     },
     CommandSpec {
         name: "help",
+        usage: "help",
+        summary: "show this help",
         max_args: Some(0),
         handler: run_help,
     },
     CommandSpec {
         name: "exit",
+        usage: "exit",
+        summary: "close the terminal",
         max_args: Some(0),
         handler: run_exit,
     },
     CommandSpec {
         name: "quit",
+        usage: "quit",
+        summary: "close the terminal",
         max_args: Some(0),
         handler: run_exit,
     },
@@ -107,6 +139,12 @@ const COMMANDS: &[CommandSpec] = &[
 
 pub fn command_names() -> impl Iterator<Item = &'static str> {
     COMMANDS.iter().map(|command| command.name)
+}
+
+pub(crate) fn command_help() -> impl Iterator<Item = (&'static str, &'static str)> {
+    COMMANDS
+        .iter()
+        .map(|command| (command.usage, command.summary))
 }
 
 pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
@@ -207,7 +245,9 @@ fn run_plugins(args: &[String], _state: &mut ShellState) -> CommandResult {
 }
 
 fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_result(help::print_help(), |error| format!("help: {error}"))
+    map_result(help::print_help(command_help()), |error| {
+        format!("help: {error}")
+    })
 }
 
 fn run_exit(_args: &[String], _state: &mut ShellState) -> CommandResult {
@@ -236,4 +276,20 @@ where
     E: std::fmt::Display,
 {
     map_result(result, |error| format!("{prefix}: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn command_metadata_is_complete_and_unique() {
+        let mut names = HashSet::new();
+        for command in COMMANDS {
+            assert!(names.insert(command.name), "duplicate command name");
+            assert!(command.usage.starts_with(command.name));
+            assert!(!command.summary.trim().is_empty());
+        }
+    }
 }

@@ -17,6 +17,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   explicit activation and preserved plugin-owned settings.
 - Added a cross-platform local plugin registry, validated versioned manifests,
   and a read-only `plugins list` command with explicit health states.
+- Centralized native command syntax and summaries so dispatch, generated help,
+  and completion can share the same future plugin-aware registry boundary.
 - Added a reusable `ShellEngine` library API with typed execution status,
   captured standard streams, errors, and directory-change metadata for CLI and
   future desktop consumers.

@@ -1,3 +1,4 @@
+mod command;
 mod manifest;
 pub(crate) mod registry;
 

@@ -12,8 +12,9 @@ dispatcher et l'autocomplétion. Des listes indépendantes finiraient par diverg
 ## Décision
 
 Les commandes internes sont déclarées dans la table `COMMANDS` de
-`src/app/command.rs`. Chaque entrée associe un nom, une limite d'arguments et un
-handler. `command_names()` expose cette source à l'autocomplétion.
+`src/app/command.rs`. Chaque entrée associe un nom, une syntaxe, un résumé, une
+limite d'arguments et un handler. `command_names()` expose cette source à
+l'autocomplétion et `command_help()` génère l'aide depuis les mêmes entrées.
 
 La logique métier reste dans `src/commands/`; les handlers du registre adaptent
 seulement les arguments, l'état du shell et les erreurs.
@@ -36,8 +37,9 @@ seulement les arguments, l'état du shell et les erreurs.
 
 ### Négatives
 
-- L'aide textuelle reste encore maintenue séparément.
 - Les signatures de handlers doivent s'adapter au type commun.
+- Les contributions externes devront passer par un adaptateur isolé avant de
+  rejoindre cette vue du registre.
 
 ## Validation
 
