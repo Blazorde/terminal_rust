@@ -11,6 +11,7 @@ product-oriented; design and contribution details live here.
 | Use the shared engine | [Shell engine API](architecture/shell-engine.md) |
 | Understand the desktop boundary | [Desktop GUI architecture](architecture/desktop-gui.md) |
 | Configure the shell | [User configuration](configuration.md) |
+| Use the live system dashboard | [Dashboard](dashboard.md) |
 | Customize the prompt | [Prompt customization](customization.md) |
 | Create user commands | [Custom commands](custom-commands.md) |
 | Create a theme | [Theme format](themes.md) |

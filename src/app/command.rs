@@ -113,7 +113,7 @@ const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         name: "dashboard",
         usage: "dashboard",
-        summary: "show system performance and context",
+        summary: "open a live system performance dashboard",
         max_args: Some(0),
         handler: run_dashboard,
     },
