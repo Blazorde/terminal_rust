@@ -78,6 +78,10 @@ The built-in `ls` supports `-1`, `-a`, `-A`, `-d`, `-F`, `-h`, `-l`, `-p`,
 cautious than common Unix shells: recursive removal asks for confirmation even
 when combined with `--force`.
 
+In an interactive terminal, `dashboard` refreshes in place once per second
+until you press `q`, `Escape` or `Ctrl+C`. Redirected output and small or dumb
+terminals receive one stable snapshot instead. See the [dashboard guide](docs/dashboard.md).
+
 ## Desktop workspace
 
 The desktop app opens real native PTY sessions managed by Rust. The WebView

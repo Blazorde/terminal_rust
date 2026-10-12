@@ -88,6 +88,7 @@ fn start_session(
     let mut command = CommandBuilder::new(executable);
     command.arg("--pty-shell");
     command.env("TERMINAL_RUST_GUI", "1");
+    command.env("TERM", "xterm-256color");
 
     let mut child = pair
         .slave

@@ -17,7 +17,7 @@ required-features = ["tui-prototype"]
 
 [features]
 default = []
-tui-prototype = ["dep:crossterm", "dep:ratatui"]
+tui-prototype = ["dep:ratatui"]
 
 [workspace]
 members = [
@@ -28,7 +28,7 @@ members = [
 resolver = "2"
 
 [dependencies]
-crossterm = { version = "0.29", optional = true }
+crossterm = "0.29"
 jiff = "0.2.38"
 ratatui = { version = "0.30.2", optional = true, default-features = false, features = ["crossterm"] }
 rustyline = "18.0.0"
