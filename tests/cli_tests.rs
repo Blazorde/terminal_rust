@@ -43,6 +43,15 @@ fn run_cli(current_dir: &Path, args: &[&str]) -> Output {
         .expect("the terminal_rust binary should start")
 }
 
+fn run_cli_with_config(current_dir: &Path, args: &[&str], config_path: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+        .args(args)
+        .current_dir(current_dir)
+        .env("TERMINAL_RUST_CONFIG", config_path)
+        .output()
+        .expect("the terminal_rust binary should start")
+}
+
 fn run_interactive(current_dir: &Path, input: &str) -> Output {
     run_interactive_with_env(current_dir, input, None)
 }
@@ -231,6 +240,7 @@ fn help_lists_every_public_command() {
         "git",
         "theme",
         "plugins",
+        "commands",
         "help",
         "exit",
         "quit",
@@ -242,6 +252,51 @@ fn help_lists_every_public_command() {
             "help should list {command}:\n{rendered}"
         );
     }
+}
+
+#[test]
+fn configured_builtin_command_executes_and_is_listed() {
+    let directory = TestDirectory::new("custom command");
+    let config = directory.path().join("config.toml");
+    fs::write(
+        &config,
+        r#"version = 1
+[commands.assistance]
+kind = "builtin"
+target = "help"
+append_args = false
+description = "Show shell help"
+"#,
+    )
+    .expect("configuration should be written");
+
+    let executed = run_cli_with_config(directory.path(), &["assistance"], &config);
+    assert!(executed.status.success(), "stderr: {}", stderr(&executed));
+    assert!(stdout(&executed).contains("Available commands:"));
+
+    let listed = run_cli_with_config(directory.path(), &["commands", "list"], &config);
+    assert!(listed.status.success(), "stderr: {}", stderr(&listed));
+    assert!(stdout(&listed).contains("assistance"));
+    assert!(stdout(&listed).contains("[builtin] help"));
+}
+
+#[test]
+fn configured_process_command_executes_without_a_system_shell() {
+    let directory = TestDirectory::new("custom process command");
+    let config = directory.path().join("config.toml");
+    fs::write(
+        &config,
+        format!(
+            "version = 1\n[commands.self-help]\nkind = \"process\"\ntarget = {:?}\nargs = [\"help\"]\nappend_args = false\n",
+            env!("CARGO_BIN_EXE_terminal_rust")
+        ),
+    )
+    .expect("configuration should be written");
+
+    let output = run_cli_with_config(directory.path(), &["self-help"], &config);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(stdout(&output).contains("Available commands:"));
 }
 
 #[test]

@@ -26,3 +26,12 @@ enabled = []
 # [plugins.git]
 # show_branch = true
 # show_dirty = true
+
+[commands]
+# Custom commands use structured arguments and never invoke a system shell.
+# [commands.git-summary]
+# kind = "builtin" # builtin | process
+# target = "git"
+# args = ["status", "--short", "--branch"]
+# append_args = false
+# description = "Show a concise Git summary"

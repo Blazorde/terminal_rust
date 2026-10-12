@@ -3,6 +3,8 @@ use std::path::PathBuf;
 
 use crate::app::command::{self, CommandResult, ShellState};
 use crate::app::parser::parse_input;
+use crate::commands::user::UserCommandRegistry;
+use crate::config::AppConfig;
 use crate::render;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -34,14 +36,29 @@ impl ExecutionResult {
     }
 }
 
-#[derive(Default)]
 pub struct ShellEngine {
     state: ShellState,
 }
 
 impl ShellEngine {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            state: ShellState::new(UserCommandRegistry::default()),
+        }
+    }
+
+    pub(crate) fn from_config(config: &AppConfig) -> Result<Self, String> {
+        let user_commands = UserCommandRegistry::new(&config.commands, command::command_names())?;
+        Ok(Self {
+            state: ShellState::new(user_commands),
+        })
+    }
+
+    pub(crate) fn command_names(&self) -> Vec<String> {
+        command::command_names()
+            .map(str::to_string)
+            .chain(self.state.user_command_names().map(str::to_string))
+            .collect()
     }
 
     pub fn execute_line(&mut self, input: &str) -> ExecutionResult {
@@ -104,6 +121,12 @@ impl ShellEngine {
     }
 }
 
+impl Default for ShellEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,5 +183,27 @@ mod tests {
 
         env::set_current_dir(&original_dir).expect("test should restore current directory");
         fs::remove_dir(target_dir).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn expands_builtin_custom_commands_and_appends_arguments() {
+        let mut config = AppConfig::default();
+        config.commands.insert(
+            "show-theme".into(),
+            crate::config::UserCommandConfig {
+                kind: crate::config::UserCommandKind::Builtin,
+                target: "theme".into(),
+                args: vec!["preview".into()],
+                description: "Preview a theme".into(),
+                ..Default::default()
+            },
+        );
+        let mut engine = ShellEngine::from_config(&config).unwrap();
+
+        let result = engine.execute_line("show-theme minimal");
+
+        assert_eq!(result.status, ExecutionStatus::Continue);
+        assert!(result.stdout.contains("Theme: minimal"));
+        assert!(engine.command_names().contains(&"show-theme".into()));
     }
 }

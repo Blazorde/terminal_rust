@@ -229,4 +229,34 @@ context = "desktop-linux"
         assert!(error.to_string().contains("invalid TOML"));
         assert!(error.to_string().contains("invalid-plugin-settings.toml"));
     }
+
+    #[test]
+    fn loads_structured_user_commands() {
+        let path = fixture(
+            "commands.toml",
+            r#"
+version = 1
+
+[commands.git-summary]
+kind = "builtin"
+target = "git"
+args = ["status", "--short", "--branch"]
+append_args = false
+description = "Show a concise Git summary"
+
+[commands.serve]
+kind = "process"
+target = "npm"
+args = ["run", "dev"]
+"#,
+        );
+        let config = load_from_path(&path).expect("custom commands should load");
+
+        assert_eq!(
+            config.commands["git-summary"].kind,
+            super::super::schema::UserCommandKind::Builtin
+        );
+        assert_eq!(config.commands["serve"].target, "npm");
+        assert!(config.commands["serve"].append_args);
+    }
 }

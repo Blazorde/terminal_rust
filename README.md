@@ -25,6 +25,7 @@ cargo run -- dashboard
 cargo run -- theme list
 cargo run -- theme preview minimal
 cargo run -- plugins list
+cargo run -- commands list
 ```
 
 | Plateforme | Archive publiée | Installateur | CI |
@@ -213,6 +214,7 @@ permettent aussi de la piloter sans souris.
 | `theme list` | Liste les thèmes intégrés |
 | `theme preview <name>` | Prévisualise un thème avec des données de démonstration |
 | `plugins list` | Liste les manifestes de plugins installés et leur état |
+| `commands list` | Liste les commandes utilisateur chargées depuis la configuration |
 | `help` | Affiche l'aide |
 | `exit` | Ferme le shell |
 | `quit` | Ferme le shell |
