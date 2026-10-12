@@ -8,6 +8,7 @@
 [![Rust](https://img.shields.io/badge/Rust-2024-edition?style=flat-square&logo=rust&logoColor=white&color=30353a)](Cargo.toml)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-30353a?style=flat-square)](#platform-support)
 [![License](https://img.shields.io/badge/license-MIT-30353a?style=flat-square)](LICENSE)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20project-ff6b3d?style=flat-square&logo=kofi&logoColor=white)](https://ko-fi.com/blazorde)
 
 Real commands. Native PTY sessions. Git-aware prompts. No simulated terminal.
 
@@ -83,10 +84,19 @@ The desktop app opens real native PTY sessions managed by Rust. The WebView
 renders terminal output and settings but cannot spawn arbitrary processes or
 access the filesystem directly.
 
+### Launch the native window from source
+
+Install the [Tauri prerequisites for your platform](docs/development/desktop.md#prerequisites),
+then run these commands from the repository root:
+
 ```bash
 npm ci --prefix desktop
 npm run tauri --prefix desktop -- dev
 ```
+
+The second command opens the real Terminal Rust application window. Keep that
+process running while using the terminal. `npm run dev --prefix desktop` is only
+a browser preview: it cannot start a PTY or execute commands.
 
 Each tab owns its PTY, working directory, history and prompt context.
 
@@ -251,3 +261,7 @@ See [CHANGELOG.md](CHANGELOG.md) for delivered changes and documented limits.
 ## License
 
 Terminal Rust is available under the [MIT License](LICENSE).
+
+## Support
+
+If Terminal Rust is useful to you, you can [support the project on Ko-fi](https://ko-fi.com/blazorde).

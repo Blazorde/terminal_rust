@@ -68,6 +68,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   with every cursor style.
 - Standardized contributor, architecture, configuration, desktop, plugin,
   installation, release and troubleshooting documentation in concise English.
+- Clarified the source commands that open the native Tauri terminal window and
+  added the project's optional Ko-fi support link.
 - The CLI now executes built-in commands through the same public Rust engine
   intended for the desktop adapter.
 - The desktop terminal surface now fills the native window without an outer

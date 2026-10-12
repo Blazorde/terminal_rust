@@ -13,12 +13,20 @@ does not reimplement input, history, commands or prompt behavior.
 Debian/Ubuntu needs WebKitGTK 4.1, `libayatana-appindicator3-dev`,
 `librsvg2-dev` and `libxdo-dev`. Windows uses WebView2 and macOS uses WKWebView.
 
-## Run
+## Launch the native window
+
+From the repository root, install the frontend dependencies once, then start
+Tauri in development mode:
 
 ```bash
 npm ci --prefix desktop
 npm run tauri --prefix desktop -- dev
 ```
+
+The second command builds the Rust adapter and opens the real native Terminal
+Rust window with PTY-backed sessions. Keep it running while testing. If the
+command stops before a window appears, confirm the platform prerequisites above
+and use the [troubleshooting guide](../troubleshooting.md).
 
 Verify real `pwd`, history, `dashboard`, `clear`, safe Git, `Ctrl+C`, resize,
 settings (`Ctrl/⌘+,`, `Escape`) and tabs (`Ctrl/⌘+T`, `Ctrl/⌘+W`, `Ctrl+Tab`).
@@ -44,7 +52,9 @@ npm run build --prefix desktop
 ```
 
 The browser preview explicitly reports that no native session exists. It must
-never fabricate command output.
+never fabricate command output. Use it for layout work only; use
+`npm run tauri --prefix desktop -- dev` whenever terminal input, commands, tabs
+or native settings need to be tested.
 
 ## Rust validation
 
