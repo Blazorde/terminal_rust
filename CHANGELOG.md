@@ -37,6 +37,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   actionable API/application compatibility diagnostics in the registry.
 - Defined a local-first plugin catalog, transactional installation lifecycle,
   command surface, and security boundary for future discovery work.
+- Added an English beginner plugin tutorial covering the template, manifest,
+  typed command, tests, local discovery, debugging, and responsible sharing.
 - Added a reusable `ShellEngine` library API with typed execution status,
   captured standard streams, errors, and directory-change metadata for CLI and
   future desktop consumers.

@@ -1,23 +1,24 @@
-# SDK minimal de plugins
+# Minimal plugin SDK
 
-Le crate `terminal-rust-plugin-sdk` contient la frontière publique et portable
-utilisée par le template. Il ne dépend ni du cœur du shell, ni de Tauri, ni d'un
-runtime de plugins. Ses structures sont sérialisables afin qu'un futur adaptateur
-puisse les transporter par messages, composant WebAssembly ou processus isolé
-sans changer le contrat métier.
+The `terminal-rust-plugin-sdk` crate is the public, portable boundary used by
+the example template. It depends on neither the shell core, Tauri, nor a plugin
+runtime. Its structures are serializable so a future adapter can transport
+messages through WebAssembly or an isolated process without changing the
+business contract.
 
-Le SDK expose :
+The SDK exposes:
 
-- `HOST_API_VERSION` et `ApiVersion` ;
-- `CommandRequest`, des arguments déjà parsés et un `PluginContext` filtré ;
-- `CommandResponse`, `CommandStatus` et des `OutputChunk` stdout/stderr ;
-- `ResourceToken`, qui évite d'exposer directement un chemin hôte ;
-- `PluginError`, avec code stable et caractère réessayable ;
-- le trait minimal `Plugin` pour tester une implémentation sans transport.
+- `HOST_API_VERSION` and `ApiVersion`;
+- `CommandRequest`, parsed arguments, and a filtered `PluginContext`;
+- `CommandResponse`, `CommandStatus`, and stdout/stderr `OutputChunk` values;
+- `ResourceToken`, which avoids exposing a raw host path;
+- `PluginError`, with a stable code and retryable flag;
+- the minimal `Plugin` trait for testing an implementation without a transport.
 
-Le trait n'est pas une ABI dynamique et le cœur ne charge pas le `.rlib` du
-template. Le futur runtime adapte des messages sérialisés vers cette logique.
-Cette contrainte évite de lier la sécurité et la compatibilité à l'ABI Rust.
+The trait is not a dynamic Rust ABI, and the core does not load the template's
+`.rlib`. A future runtime will adapt serialized messages to this logic. This
+keeps security and compatibility independent from Rust ABI stability.
 
-Voir le [`README` du template](../../plugins/example-plugin/README.md) pour le
-copier, le compiler, le tester et faire reconnaître son manifeste localement.
+Read the [beginner tutorial](getting-started.md) to build a plugin step by step,
+or the [template README](../../plugins/example-plugin/README.md) for the shortest
+copy/build/test path.
