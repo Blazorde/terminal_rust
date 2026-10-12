@@ -10,7 +10,7 @@ missing because no runner has executed the required steps.
 | Accessibility | 4/4 | Keyboard navigation, bounded modal focus and AA contrast |
 | Performance | 3/4 | Reproducible measurements and split bundle; WebView memory remains high |
 | Responsive | 4/4 | No overflow at 1280×720, 560×400 or 320×240 |
-| Themes | 4/4 | All three palettes exceed 4.5:1 for text |
+| Themes | 4/4 | All six palettes exceed 4.5:1 for text |
 | Integrity | 4/4 | No detector findings and no simulated data |
 | **Total** | **19/20** | **Excellent locally; two OS validations remain** |
 

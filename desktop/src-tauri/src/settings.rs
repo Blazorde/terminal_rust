@@ -54,8 +54,13 @@ impl Default for DesktopSettings {
 pub enum DesktopTheme {
     #[default]
     Graphite,
-    Midnight,
-    Paper,
+    #[serde(alias = "paper")]
+    Bone,
+    #[serde(alias = "midnight")]
+    Nord,
+    Amber,
+    Moss,
+    Dusk,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
@@ -269,7 +274,7 @@ mod tests {
     fn valid_settings_round_trip_through_the_native_path() {
         let path = fixture("desktop-settings.json");
         let settings = DesktopSettings {
-            theme: DesktopTheme::Paper,
+            theme: DesktopTheme::Dusk,
             font_family: FontFamily::Jetbrains,
             font_size: 18,
             cursor_style: CursorStyle::Underline,
@@ -286,5 +291,26 @@ mod tests {
         assert!(loaded.diagnostic.is_none());
         assert!(!path.with_extension("json.tmp").exists());
         assert!(!path.with_extension("json.bak").exists());
+    }
+
+    #[test]
+    fn legacy_theme_names_migrate_to_the_new_collection() {
+        let paper: DesktopSettings = serde_json::from_str(r#"{"version":1,"theme":"paper"}"#)
+            .expect("the previous paper theme should remain readable");
+        let midnight: DesktopSettings = serde_json::from_str(r#"{"version":1,"theme":"midnight"}"#)
+            .expect("the previous midnight theme should remain readable");
+
+        assert_eq!(paper.theme, DesktopTheme::Bone);
+        assert_eq!(midnight.theme, DesktopTheme::Nord);
+        assert!(
+            serde_json::to_string(&paper)
+                .expect("settings serialize")
+                .contains("bone")
+        );
+        assert!(
+            serde_json::to_string(&midnight)
+                .expect("settings serialize")
+                .contains("nord")
+        );
     }
 }

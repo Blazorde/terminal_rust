@@ -88,8 +88,11 @@ export default function SettingsDrawer({
           <span><strong>Thème</strong><small>Palette du terminal et de la fenêtre</small></span>
           <select value={settings.theme} onChange={(event) => update('theme', event.target.value as DesktopSettings['theme'])}>
             <option value="graphite">Graphite</option>
-            <option value="midnight">Minuit</option>
-            <option value="paper">Papier</option>
+            <option value="bone">Bone</option>
+            <option value="nord">Nord</option>
+            <option value="amber">Amber</option>
+            <option value="moss">Moss</option>
+            <option value="dusk">Dusk</option>
           </select>
         </label>
         <label className="field-row">

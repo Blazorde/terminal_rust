@@ -44,8 +44,11 @@ function contrast(first, second) {
 const base = variables(':root')
 const themes = {
   graphite: base,
-  midnight: variables(".workspace[data-theme='midnight']", base),
-  paper: variables(".workspace[data-theme='paper']", base),
+  bone: variables(".workspace[data-theme='bone']", base),
+  nord: variables(".workspace[data-theme='nord']", base),
+  amber: variables(".workspace[data-theme='amber']", base),
+  moss: variables(".workspace[data-theme='moss']", base),
+  dusk: variables(".workspace[data-theme='dusk']", base),
 }
 const ratios = {}
 
