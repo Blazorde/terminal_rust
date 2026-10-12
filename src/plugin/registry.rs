@@ -20,7 +20,7 @@ pub(crate) enum PluginStatus {
 #[derive(Debug)]
 pub(crate) enum RegistryEntry {
     Installed {
-        manifest: PluginManifest,
+        manifest: Box<PluginManifest>,
         path: PathBuf,
         status: PluginStatus,
     },
@@ -66,7 +66,7 @@ pub(crate) fn discover(
                     PluginStatus::Disabled
                 };
                 RegistryEntry::Installed {
-                    manifest,
+                    manifest: Box::new(manifest),
                     path,
                     status,
                 }
