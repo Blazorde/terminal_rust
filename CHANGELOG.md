@@ -29,6 +29,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   bounded Rhai experiment after the plugin permission model is complete.
 - Added an optional Ratatui layout prototype with two focusable panes,
   horizontal and vertical splits, keyboard shortcuts, and resize handling.
+- Prioritized future project detection and task shortcuts while preserving
+  native developer tools and the existing no-implicit-shell boundary.
 - Added a reusable `ShellEngine` library API with typed execution status,
   captured standard streams, errors, and directory-change metadata for CLI and
   future desktop consumers.
