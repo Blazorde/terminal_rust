@@ -21,6 +21,7 @@ vivent ici.
 | Concevoir un segment plugin | [Segments de prompt des plugins](plugins/prompt-segments.md) |
 | Démarrer un plugin | [SDK minimal et template](plugins/sdk.md) |
 | Étudier le scripting | [Comparatif Lua, Rhai et WebAssembly](research/scripting-runtime.md) |
+| Planifier les outils développeur | [Developer tools roadmap](research/developer-tools-roadmap.md) |
 | Développer et valider l'interface desktop | [Guide desktop](development/desktop.md) |
 | Consulter l'audit qualité GUI | [Audit accessibilité, responsive et performance](development/gui-quality-audit.md) |
 | Explorer une interface TUI à panneaux | [Prototype de layout TUI](architecture/tui-layout-prototype.md) |
