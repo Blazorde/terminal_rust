@@ -103,12 +103,6 @@ pub fn stdout_line(message: impl fmt::Display) -> io::Result<()> {
     with_stdout(|writer| write_text(writer, message))
 }
 
-pub fn stdout_lines(lines: &[&str]) -> io::Result<()> {
-    let mut message = lines.join("\n");
-    message.push('\n');
-    stdout(message)
-}
-
 pub fn stderr_line(message: impl fmt::Display) -> io::Result<()> {
     let message = format!("{message}\n");
     if capture_text(OutputStream::Stderr, &message) {

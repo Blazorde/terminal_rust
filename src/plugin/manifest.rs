@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 
+use super::command::CommandContribution;
+
 pub(crate) const MANIFEST_FILE: &str = "terminal-rust-plugin.toml";
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -42,13 +44,6 @@ pub(crate) enum Permission {
     OutputWrite,
     #[serde(rename = "prompt.segment.register")]
     PromptSegmentRegister,
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct CommandContribution {
-    pub name: String,
-    pub summary: String,
 }
 
 #[derive(Debug)]
@@ -99,7 +94,7 @@ impl PluginManifest {
             return Err(invalid("name and description must not be empty".into()));
         }
         for command in &self.commands {
-            if !is_valid_command_name(&command.name) || command.summary.trim().is_empty() {
+            if !command.is_valid() {
                 return Err(invalid(format!(
                     "command '{}' must have a lowercase name and a non-empty summary",
                     command.name
@@ -123,14 +118,6 @@ pub(crate) fn is_valid_id(value: &str) -> bool {
             .is_some_and(u8::is_ascii_alphanumeric)
         && value.bytes().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte)
-        })
-}
-
-fn is_valid_command_name(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 64
-        && value.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-' || byte == b'_'
         })
 }
 
