@@ -42,15 +42,24 @@ Create the following tree in the
 terminal-rust/plugins/example.hello/0.1.0/terminal-rust-plugin.toml
 ```
 
-Add `example.hello` to `plugins.enabled`, then run:
+Enable and authorize the declarative command, then run:
+
+```toml
+[plugins]
+enabled = ["example.hello"]
+
+[plugins.grants]
+"example.hello" = ["command.register", "output.write"]
+```
 
 ```bash
 terminal_rust plugins list
 ```
 
-The plugin should appear as `enabled` with its requested permissions. Its
-command will become executable only after the runtime milestone; the registry
-never executes a copied Rust library.
+The plugin should appear as `enabled` with its requested permissions. The static
+`hello` response is executable now. The host still never loads the copied Rust
+library; its typed implementation remains a testable contract for the future
+isolated runtime.
 
 ## Sharing checklist
 

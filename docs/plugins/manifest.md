@@ -19,6 +19,7 @@ permissions = ["command.register", "output.write", "prompt.segment.register"]
 [[commands]]
 name = "git-clean-check"
 summary = "Check whether the repository is clean"
+response = "Repository check is available.\n"
 
 [[prompt_segments]]
 name = "git-review"
@@ -51,6 +52,10 @@ service yet and cannot perform an action. See the
 A contribution requires its matching registration permission. Declared prompt
 segments have a 1–100 ms budget and a maximum cache lifetime of 300,000 ms. The
 defaults are 25 ms and no cache.
+
+An optional declarative command `response` is limited to 4 KiB, rejects NUL and
+escape characters, accepts no arguments, and requires `output.write`. It is
+rendered as static data; it does not execute the plugin library.
 
 An invalid manifest remains visible with the `error` state. A version whose API
 or application requirement rejects the current host remains visible with the

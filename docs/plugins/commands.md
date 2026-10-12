@@ -1,63 +1,67 @@
-# Commandes de plugins
+# Plugin commands
 
-Une commande de plugin est une contribution déclarée dans le manifeste, puis
-validée et publiée par l'hôte seulement si le plugin est activé, compatible et
-démarré. Le manifeste fournit aujourd'hui son nom et son résumé ; il ne rend pas
-la commande exécutable à lui seul.
+A plugin command is declared in the manifest and exposed only when its plugin is
+enabled, compatible, uniquely named, and authorized. Native commands always win
+name conflicts. User commands also remain reserved; two plugins declaring the
+same name disable that contribution instead of relying on file-system order.
 
-## Lien avec le dispatcher
+## Declarative prototype
 
-Les commandes natives restent la référence dans `src/app/command.rs`. Chaque
-entrée contient le nom utilisé par le dispatcher, la syntaxe et le résumé
-utilisés par l'aide, la limite d'arguments et le handler. L'aide et
-l'autocomplétion lisent donc la même table que l'exécution.
+T117 implements the first safe executable slice: a manifest may attach one
+static response to a command.
 
-Le futur adaptateur plugin produira une vue compatible, sans transformer une
-fonction externe en pointeur Rust :
+```toml
+permissions = ["command.register", "output.write"]
 
-```text
-entrée utilisateur
-  -> registre unifié (natif prioritaire)
-  -> validation des arguments
-  -> requête ExecuteCommand sérialisée
-  -> superviseur avec délai et annulation
-  -> résultat typé
-  -> rendu stdout/stderr par l'hôte
+[[commands]]
+name = "hello"
+summary = "Print the official plugin greeting"
+response = "Hello from the official Terminal Rust plugin!\n"
 ```
 
-Une commande native gagne toujours un conflit de nom. Deux plugins qui déclarent
-le même nom restent en erreur jusqu'à résolution explicite ; l'ordre du système
-de fichiers ne choisit jamais le gagnant.
+This response is data, not code. It is limited to 4 KiB, cannot contain NUL or
+escape characters, accepts no arguments, launches no process, reads no file,
+and performs no network operation. The host writes it through the normal render
+capture, so CLI and `ShellEngine` callers receive the same typed output.
 
-## Aide et autocomplétion
+The command becomes available only when configuration contains both activation
+and consent:
 
-Une contribution n'apparaît dans `help` et dans la complétion de premier mot
-qu'après son activation complète. La désactivation ou l'arrêt du runtime retire
-les deux vues avant toute nouvelle exécution. Les complétions d'arguments
-utiliseront la capacité `completion.register`, un préfixe borné et un délai plus
-court que l'exécution d'une commande.
+```toml
+[plugins]
+enabled = ["example.hello"]
 
-Le nom est limité à 64 caractères ASCII minuscules, chiffres, `-` ou `_`. Le
-résumé est obligatoire, sans caractères de contrôle. Les arguments sont transmis
-comme une liste déjà parsée ; le plugin ne reçoit jamais la ligne brute.
+[plugins.grants]
+"example.hello" = ["command.register", "output.write"]
+```
 
-## Résultat et sécurité
+Removing the ID from `enabled` hides the command immediately while preserving
+its grant record and plugin settings. Native shell commands continue to work.
 
-Le résultat distingue statut, blocs stdout/stderr et changement de dossier par
-token opaque. Le cœur reste seul responsable de l'affichage et du dossier du
-processus. Les séquences ANSI d'un plugin sont du texte, pas du contrôle de
-terminal.
+## Dispatcher integration
 
-Une commande n'obtient que les capacités déclarées dans son manifeste et
-accordées par l'hôte. `process.spawn`, l'accès réseau et l'accès arbitraire au
-système de fichiers ne font pas partie de l'API v1. Chaque requête reçoit une
-échéance ; le superviseur peut l'annuler et retirer toutes les contributions du
-plugin. Un crash ou timeout devient un diagnostic de commande et ne ferme pas le
-shell.
+The command lookup order is:
 
-## Étapes restantes
+1. native command table;
+2. structured user commands;
+3. authorized declarative plugin commands;
+4. typed `unknown command` failure.
 
-T104 fixe le contrat et prépare le registre natif, mais n'exécute pas encore de
-code tiers. L'enregistrement dynamique attend le runtime isolé et ses tests de
-cycle de vie. Cette séparation évite d'exposer une fausse commande dans l'aide
-ou la complétion avant qu'elle puisse réellement répondre.
+Completion reads the same active command names from `ShellEngine`. A plugin
+entry that is disabled, incompatible, invalid, ungranted, duplicated, or in
+conflict is never returned as executable. Invoking a uniquely named but
+ungranted declarative command returns the explicit permission denial; it is not
+misreported as an unknown command.
+
+## Future runtime commands
+
+The Rust SDK template still implements `Plugin::execute` for contract tests, but
+the host does not load its `.rlib`. A future isolated runtime will transport a
+serialized `CommandRequest` and `CommandResponse`, enforce a deadline, and use
+the same permission and compatibility gates. The declarative path remains a
+small useful runtime of its own; it must not grow into a script language.
+
+Arguments will arrive as an already parsed vector, never a raw shell string.
+Plugin output remains UTF-8 text plus bounded semantic styles, and ANSI supplied
+by a plugin is treated as text. Directory changes use host-issued resource
+tokens. A plugin failure never becomes a core panic.

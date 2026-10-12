@@ -39,6 +39,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   command surface, and security boundary for future discovery work.
 - Added an English beginner plugin tutorial covering the template, manifest,
   typed command, tests, local discovery, debugging, and responsible sharing.
+- Added the first official declarative plugin command runtime with explicit
+  grants, static bounded responses, command dispatch, and disable-safe tests.
 - Added a reusable `ShellEngine` library API with typed execution status,
   captured standard streams, errors, and directory-change metadata for CLI and
   future desktop consumers.

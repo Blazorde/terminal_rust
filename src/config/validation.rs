@@ -1,5 +1,5 @@
 use super::schema::AppConfig;
-use crate::plugin::is_valid_id;
+use crate::plugin::{Permission, is_valid_id};
 use std::collections::HashSet;
 
 pub fn validate(config: &AppConfig) -> Result<(), String> {
@@ -65,6 +65,22 @@ pub fn validate(config: &AppConfig) -> Result<(), String> {
     }
     for plugin_id in config.plugins.settings.keys() {
         validate_plugin_id(plugin_id, "plugins")?;
+    }
+    for (plugin_id, permissions) in &config.plugins.grants {
+        validate_plugin_id(plugin_id, "plugins.grants")?;
+        let mut granted = HashSet::new();
+        for permission in permissions {
+            if Permission::from_name(permission).is_none() {
+                return Err(format!(
+                    "plugins.grants.{plugin_id} contains unknown permission '{permission}'"
+                ));
+            }
+            if !granted.insert(permission) {
+                return Err(format!(
+                    "plugins.grants.{plugin_id} contains duplicate permission '{permission}'"
+                ));
+            }
+        }
     }
     for (name, command) in &config.commands {
         if !is_valid_user_command_name(name) {
@@ -171,6 +187,30 @@ mod tests {
 
         let error = validate(&config).expect_err("invalid plugin id should fail");
         assert!(error.contains("plugins.enabled contains invalid plugin id 'Git Plugin'"));
+    }
+
+    #[test]
+    fn rejects_unknown_and_duplicate_plugin_grants() {
+        let mut config = AppConfig::default();
+        config
+            .plugins
+            .grants
+            .insert("example.plugin".into(), vec!["unknown".into()]);
+        assert!(
+            validate(&config)
+                .unwrap_err()
+                .contains("unknown permission")
+        );
+
+        config.plugins.grants.insert(
+            "example.plugin".into(),
+            vec!["output.write".into(), "output.write".into()],
+        );
+        assert!(
+            validate(&config)
+                .unwrap_err()
+                .contains("duplicate permission")
+        );
     }
 
     #[test]

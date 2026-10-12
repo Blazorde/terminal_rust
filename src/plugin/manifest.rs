@@ -115,6 +115,23 @@ impl Permission {
             Self::NetworkConnect => "network.connect",
         }
     }
+
+    pub(crate) fn from_name(value: &str) -> Option<Self> {
+        Some(match value {
+            "context.cwd.read" => Self::ContextCwdRead,
+            "context.env.read" => Self::ContextEnvRead,
+            "config.read" => Self::ConfigRead,
+            "command.register" => Self::CommandRegister,
+            "completion.register" => Self::CompletionRegister,
+            "output.write" => Self::OutputWrite,
+            "prompt.segment.register" => Self::PromptSegmentRegister,
+            "filesystem.read" => Self::FilesystemRead,
+            "filesystem.write" => Self::FilesystemWrite,
+            "process.spawn" => Self::ProcessSpawn,
+            "network.connect" => Self::NetworkConnect,
+            _ => return None,
+        })
+    }
 }
 
 impl fmt::Display for Permission {
@@ -196,12 +213,9 @@ impl PluginManifest {
             }
         }
         for command in &self.commands {
-            if !command.is_valid() {
-                return Err(invalid(format!(
-                    "command '{}' must have a lowercase name and a non-empty summary",
-                    command.name
-                )));
-            }
+            command
+                .validate()
+                .map_err(|message| invalid(format!("command '{}': {message}", command.name)))?;
         }
         let declared_permissions = PermissionSet::for_manifest(self, &self.permissions);
         if !self.commands.is_empty()
@@ -211,6 +225,18 @@ impl PluginManifest {
         {
             return Err(invalid(
                 "commands require the 'command.register' permission".into(),
+            ));
+        }
+        if self
+            .commands
+            .iter()
+            .any(|command| command.response.is_some())
+            && declared_permissions
+                .authorize(Permission::OutputWrite)
+                .is_err()
+        {
+            return Err(invalid(
+                "declarative command responses require the 'output.write' permission".into(),
             ));
         }
         let mut segment_names = std::collections::HashSet::new();
@@ -391,6 +417,41 @@ summary = "Say hello"
         let error = PluginManifest::load(&path).unwrap_err().to_string();
 
         assert!(error.contains("commands require the 'command.register' permission"));
+    }
+
+    #[test]
+    fn declarative_response_requires_output_permission() {
+        let path = fixture(
+            r#"schema_version = 1
+id = "missing-output"
+name = "Missing output"
+version = "1.0.0"
+description = "Invalid declarative command"
+host_api = "^1.0"
+terminal_version = ">=0.3, <2.0"
+permissions = ["command.register"]
+
+[[commands]]
+name = "hello"
+summary = "Say hello"
+response = "hello"
+"#,
+        );
+
+        let error = PluginManifest::load(&path).unwrap_err().to_string();
+
+        assert!(error.contains("responses require the 'output.write' permission"));
+    }
+
+    #[test]
+    fn rejects_terminal_control_in_a_declarative_response() {
+        let path = fixture(
+            "schema_version = 1\nid = \"control\"\nname = \"Control\"\nversion = \"1.0.0\"\ndescription = \"Invalid response\"\nhost_api = \"^1.0\"\npermissions = [\"command.register\", \"output.write\"]\n[[commands]]\nname = \"hello\"\nsummary = \"Say hello\"\nresponse = \"\\u001b[31munsafe\"\n",
+        );
+
+        let error = PluginManifest::load(&path).unwrap_err().to_string();
+
+        assert!(error.contains("without NUL or escape characters"));
     }
 
     #[test]

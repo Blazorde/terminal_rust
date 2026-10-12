@@ -22,6 +22,11 @@ value = ">"
 # Plugins are disabled by default. Add installed plugin identifiers here.
 enabled = []
 
+# Grants are explicit and persist independently from activation. A permission
+# must also be requested by the installed manifest.
+# [plugins.grants]
+# "example.hello" = ["command.register", "output.write"]
+
 # Plugin-specific options are preserved for the future plugin runtime:
 # [plugins.git]
 # show_branch = true

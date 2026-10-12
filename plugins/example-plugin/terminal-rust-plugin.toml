@@ -10,4 +10,5 @@ permissions = ["command.register", "output.write"]
 
 [[commands]]
 name = "hello"
-summary = "Greet a name from a plugin"
+summary = "Print the official plugin greeting"
+response = "Hello from the official Terminal Rust plugin!\n"
