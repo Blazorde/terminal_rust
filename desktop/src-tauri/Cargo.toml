@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Desktop interface for Terminal Rust"
 edition = "2024"
 license = "MIT"
+repository = "https://github.com/Blazorde/terminal_rust"
 
 [lib]
 name = "terminal_rust_desktop_lib"

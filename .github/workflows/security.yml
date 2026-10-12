@@ -1,0 +1,60 @@
+name: Security and licenses
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-dependencies:
+    name: Rust advisories, sources and licenses
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check Rust dependency policy
+        uses: EmbarkStudios/cargo-deny-action@v2.1.1
+        with:
+          command: check
+
+  npm-dependencies:
+    name: npm audit and notice inventory
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install locked npm dependencies
+        run: npm ci --prefix desktop
+
+      - name: Audit npm dependencies
+        run: npm audit --prefix desktop --audit-level=high
+
+      - name: Verify third-party notice inventory
+        run: npm run notices:check --prefix desktop

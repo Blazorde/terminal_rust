@@ -29,6 +29,7 @@ product-oriented; design and contribution details live here.
 | Install Terminal Rust | [Installation](install.md) |
 | Troubleshoot | [Troubleshooting](troubleshooting.md) |
 | Build a release | [Release builds](release.md) |
+| Review security and dependency policy | [Security](security.md) |
 | Process a ticket | [Ticket workflow](agents/ticket-workflow.md) |
 | Configure GitHub | [Workflows and protections](workflows/README.md) |
 
