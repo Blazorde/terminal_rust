@@ -49,6 +49,11 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
 
+Le SDK de plugins, le template copiable et l'application desktop sont des
+membres séparés du workspace. La matrice exécute aussi `check`, Clippy strict et
+les tests sur ces paquets explicitement afin qu'aucun exemple distribué ne soit
+validé uniquement sur le poste d'un contributeur.
+
 The CI runs on Ubuntu, Windows, and macOS. The test command includes the
 integration suite in `tests/cli_tests.rs`, which launches the compiled binary
 and verifies stdout, stderr, and exit codes.

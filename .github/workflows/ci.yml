@@ -67,17 +67,26 @@ jobs:
       - name: Check desktop compilation
         run: cargo check -p terminal-rust-desktop --all-targets --all-features
 
+      - name: Check plugin SDK and template compilation
+        run: cargo check -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features
+
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Run desktop clippy
         run: cargo clippy -p terminal-rust-desktop --all-targets --all-features -- -D warnings
 
+      - name: Run plugin SDK and template clippy
+        run: cargo clippy -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features -- -D warnings
+
       - name: Run unit and integration tests
         run: cargo test --all-targets --all-features
 
       - name: Run desktop tests
         run: cargo test -p terminal-rust-desktop --all-targets --all-features
+
+      - name: Run plugin SDK and template tests
+        run: cargo test -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features
 
       - name: Validate Unix installer syntax
         if: runner.os != 'Windows'

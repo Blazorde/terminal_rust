@@ -1,0 +1,10 @@
+[package]
+name = "terminal-rust-example-plugin"
+version = "0.1.0"
+edition = "2024"
+description = "Copyable hello-world template for Terminal Rust plugins"
+license = "MIT"
+publish = false
+
+[dependencies]
+terminal-rust-plugin-sdk = { path = "../../crates/terminal-rust-plugin-sdk" }

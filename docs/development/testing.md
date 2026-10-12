@@ -24,6 +24,14 @@ personnel de l'utilisateur.
 
 ## Cas à couvrir
 
+Les membres additionnels du workspace se valident ensemble avec :
+
+```bash
+cargo check --workspace --all-targets --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-targets --all-features
+```
+
 ### Commandes de fichiers
 
 - chemin valide ;

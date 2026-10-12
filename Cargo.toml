@@ -11,7 +11,11 @@ keywords = ["shell", "terminal", "rust", "multiplatform", "git"]
 categories = ["command-line-utilities"]
 
 [workspace]
-members = ["desktop/src-tauri"]
+members = [
+    "crates/terminal-rust-plugin-sdk",
+    "desktop/src-tauri",
+    "plugins/example-plugin",
+]
 resolver = "2"
 
 [dependencies]
