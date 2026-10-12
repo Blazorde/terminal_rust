@@ -1,48 +1,40 @@
-# Configuration utilisateur
+# User configuration
 
-Terminal Rust charge un fichier TOML optionnel au démarrage interactif. Son
-absence n'est pas une erreur : les valeurs intégrées de `config/default.toml`
-sont utilisées.
+Terminal Rust loads an optional TOML file when an interactive session starts.
+Missing configuration is valid and uses the defaults in `config/default.toml`.
 
-## Emplacements
+## Locations
 
-- Windows : `%APPDATA%\terminal-rust\config.toml`
-- macOS : `$HOME/Library/Application Support/terminal-rust/config.toml`
-- Linux : `$XDG_CONFIG_HOME/terminal-rust/config.toml`, ou
+- Windows: `%APPDATA%\terminal-rust\config.toml`
+- macOS: `$HOME/Library/Application Support/terminal-rust/config.toml`
+- Linux: `$XDG_CONFIG_HOME/terminal-rust/config.toml`, falling back to
   `$HOME/.config/terminal-rust/config.toml`
 
-`TERMINAL_RUST_CONFIG` peut désigner explicitement un autre fichier avec un
-chemin natif absolu ou relatif. Contrairement à la recherche automatique, un
-chemin explicite absent produit un diagnostic.
+`TERMINAL_RUST_CONFIG` can select another absolute or relative native path. A
+missing explicit path reports a diagnostic, unlike automatic discovery.
 
-## Format v1
+## Version 1 format
 
-Le fichier [d'exemple](../config/default.toml) documente toutes les options. Les
-sections ou clés inconnues, un TOML invalide, une version différente de `1`, un
-segment inconnu ou des caractères de contrôle produisent une erreur indiquant
-le fichier concerné. Le shell affiche le diagnostic puis démarre avec ses
-valeurs par défaut.
+The [example configuration](../config/default.toml) documents every option.
+Unknown sections or keys, invalid TOML, unsupported versions, unknown segments
+and control characters produce a file-specific diagnostic. The shell then
+starts with safe defaults.
 
-Les champs absents reçoivent leur valeur par défaut. La politique
-`prompt.icons`, le choix des segments, leur ordre, le séparateur, le mode nouvelle
-ligne, le style du chemin, l'affichage de l'état Git et le symbole final sont
-appliqués au prompt.
+Missing fields use defaults. Prompt icon policy, segment order and position,
+separator, newline mode, path style, Git status and final symbol are applied to
+the prompt.
 
-`theme` accepte les presets intégrés `default`, `minimal`, `git-focus` et
-`powerline`. Le
-guide [des thèmes](themes.md) décrit leur rendu et la priorité des options
-d'icônes.
+`theme` accepts `default`, `minimal`, `git-focus` and `powerline`. See the
+[theme guide](themes.md) for rendering and icon-option precedence.
 
-La section `[plugins]` réserve la configuration des extensions. Les plugins
-restent inactifs tant que leur identifiant n'apparaît pas dans `enabled`. Le
-guide [de configuration des plugins](plugins/configuration.md) définit le format
-et les comportements d'erreur avant l'arrivée du runtime d'extensions.
+`[plugins]` controls extension activation and permission grants. A plugin is
+inactive unless its identifier appears in `enabled`. See
+[plugin configuration](plugins/configuration.md).
 
-La table `[commands]` contient des raccourcis structurés vers une commande
-interne ou un processus externe. Le guide [des commandes
-utilisateur](custom-commands.md) détaille la syntaxe et les limites de sécurité.
+`[commands]` defines structured aliases for built-ins or external processes.
+See [custom commands](custom-commands.md) for syntax and security boundaries.
 
-## Exemple minimal
+## Minimal example
 
 ```toml
 version = 1

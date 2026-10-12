@@ -1,57 +1,38 @@
-# Documentation de Terminal Rust
+# Terminal Rust documentation
 
-Ce dossier est la porte d'entrée de la documentation technique. Le README à la
-racine reste orienté utilisateur ; les détails de conception et de contribution
-vivent ici.
+This directory is the technical documentation entry point. The root README is
+product-oriented; design and contribution details live here.
 
-## Parcours conseillé
+## Documentation map
 
-| Besoin | Document |
+| Goal | Document |
 | --- | --- |
-| Comprendre le système | [Vue d'ensemble](architecture/overview.md) |
-| Utiliser le moteur partagé | [API du moteur de shell](architecture/shell-engine.md) |
-| Préparer l'interface desktop | [Architecture GUI](architecture/desktop-gui.md) |
-| Comprendre la vision des plugins | [Vision d'un Terminal Rust extensible](vision-plugins.md) |
-| Préparer l'architecture des plugins | [Architecture cible des plugins](plugins/architecture.md) |
-| Examiner le futur contrat public des plugins | [API de plugins proposée](plugins/api.md) |
-| Configurer les plugins | [Configuration des plugins](plugins/configuration.md) |
-| Écrire un manifeste de plugin | [Format du manifeste](plugins/manifest.md) |
-| Comprendre la découverte locale | [Registre local des plugins](plugins/registry.md) |
-| Concevoir une commande plugin | [Commandes de plugins](plugins/commands.md) |
-| Review plugin permissions | [Plugin permissions and security](plugins/security.md) |
-| Check plugin compatibility | [Plugin compatibility policy](plugins/compatibility.md) |
-| Design plugin discovery | [Local plugin catalog](plugins/catalog.md) |
-| Concevoir un segment plugin | [Segments de prompt des plugins](plugins/prompt-segments.md) |
-| Démarrer un plugin | [SDK minimal et template](plugins/sdk.md) |
+| Understand the system | [Architecture overview](architecture/overview.md) |
+| Use the shared engine | [Shell engine API](architecture/shell-engine.md) |
+| Understand the desktop boundary | [Desktop GUI architecture](architecture/desktop-gui.md) |
+| Configure the shell | [User configuration](configuration.md) |
+| Customize the prompt | [Prompt customization](customization.md) |
+| Create user commands | [Custom commands](custom-commands.md) |
+| Create a theme | [Theme format](themes.md) |
+| Understand plugin direction | [Extensibility vision](vision-plugins.md) |
 | Build a first plugin | [Beginner plugin tutorial](plugins/getting-started.md) |
-| Étudier le scripting | [Comparatif Lua, Rhai et WebAssembly](research/scripting-runtime.md) |
-| Planifier les outils développeur | [Developer tools roadmap](research/developer-tools-roadmap.md) |
-| Développer et valider l'interface desktop | [Guide desktop](development/desktop.md) |
-| Consulter l'audit qualité GUI | [Audit accessibilité, responsive et performance](development/gui-quality-audit.md) |
-| Explorer une interface TUI à panneaux | [Prototype de layout TUI](architecture/tui-layout-prototype.md) |
-| Concevoir le futur prompt | [Moteur de prompt](architecture/prompt-engine.md) |
-| Vérifier la portabilité | [Compatibilité multiplateforme](architecture/cross-platform.md) |
-| Comprendre une décision | [Registre des ADR](decisions/README.md) |
-| Personnaliser le prompt | [Personnalisation](customization.md) |
-| Configurer le shell | [Configuration utilisateur](configuration.md) |
-| Déclarer des commandes personnelles | [Commandes utilisateur](custom-commands.md) |
-| Créer un thème | [Format des thèmes](themes.md) |
-| Contribuer | [Guide de contribution](development/contributing.md) |
-| Tester une évolution | [Stratégie de tests](development/testing.md) |
-| Valider le MVP | [Checklist qualité MVP](development/mvp-quality-checklist.md) |
-| Installer Terminal Rust | [Installation](install.md) |
-| Résoudre un problème | [Dépannage](troubleshooting.md) |
-| Produire un binaire | [Builds de distribution](release.md) |
-| Traiter un ticket | [Workflow des agents](agents/ticket-workflow.md) |
-| Configurer GitHub | [Workflows et protections](workflows/README.md) |
+| Review plugin security | [Permissions and security](plugins/security.md) |
+| Develop the desktop app | [Desktop guide](development/desktop.md) |
+| Review GUI evidence | [GUI quality audit](development/gui-quality-audit.md) |
+| Check portability | [Cross-platform guide](architecture/cross-platform.md) |
+| Review decisions | [ADR register](decisions/README.md) |
+| Contribute | [Contribution guide](development/contributing.md) |
+| Test a change | [Testing strategy](development/testing.md) |
+| Validate the MVP | [MVP quality checklist](development/mvp-quality-checklist.md) |
+| Install Terminal Rust | [Installation](install.md) |
+| Troubleshoot | [Troubleshooting](troubleshooting.md) |
+| Build a release | [Release builds](release.md) |
+| Process a ticket | [Ticket workflow](agents/ticket-workflow.md) |
+| Configure GitHub | [Workflows and protections](workflows/README.md) |
 
-## Principes
+## Principles
 
-- La documentation décrit l'état réel ou indique clairement qu'une proposition
-  est future.
-- Une décision structurante reçoit un ADR plutôt qu'une note isolée dans une
-  PR.
-- Les exemples restent exécutables sur Windows, macOS et Linux, ou signalent
-  explicitement leur plateforme.
-- Les chemins internes sont relatifs à la racine du dépôt afin que les liens
-  fonctionnent sur GitHub et dans les éditeurs.
+- Documentation describes the current state or clearly labels future work.
+- Structural decisions receive an ADR instead of an isolated pull-request note.
+- Examples run on Windows, macOS and Linux or state their platform explicitly.
+- Internal links remain relative to the repository root for GitHub and editors.

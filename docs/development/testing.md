@@ -1,14 +1,13 @@
-# Stratégie de tests
+# Testing strategy
 
-## Pyramide actuelle
+## Current pyramid
 
-Le projet privilégie des tests unitaires rapides au plus près des modules. Les
-tests d'intégration dans `tests/cli_tests.rs` lancent aussi le binaire comme un
-utilisateur pour vérifier ses sorties et ses codes de retour.
+Fast unit tests live beside modules. Integration tests in `tests/cli_tests.rs`
+also launch the real binary and verify output and exit codes as a user would.
 
-## Suite locale
+## Local suite
 
-Exécuter avant chaque PR :
+Run before every pull request:
 
 ```bash
 cargo fmt --all -- --check
@@ -17,14 +16,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
 
-`cargo test` compile le binaire puis exécute les tests unitaires et les tests
-d'intégration CLI. Ces derniers utilisent des dossiers temporaires uniques,
-notamment avec des espaces dans leur nom, et ne dépendent pas du dossier
-personnel de l'utilisateur.
-
-## Cas à couvrir
-
-Les membres additionnels du workspace se valident ensemble avec :
+Validate all workspace members together with:
 
 ```bash
 cargo check --workspace --all-targets --all-features
@@ -32,59 +24,23 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
 ```
 
-### Commandes de fichiers
+CLI tests use unique temporary directories, including paths with spaces, and do
+not depend on the user's home directory.
 
-- chemin valide ;
-- argument manquant ;
-- fichier contre dossier ;
-- chemin contenant des espaces ;
-- opération refusée ou impossible.
+## Cases to cover
 
-### Parser et dispatcher
+File commands cover valid paths, missing arguments, file/directory mismatches,
+spaces and refused operations. Parser and dispatcher tests cover whitespace,
+quotes, unknown commands, argument counts, help and completion. External-tool
+tests cover valid output, missing executables, failing exit codes, empty or
+invalid output and direct execution without a shell.
 
-- espaces multiples et guillemets ;
-- guillemet non fermé ;
-- commande inconnue ;
-- nombre d'arguments invalide ;
-- commande visible dans la complétion et l'aide.
-
-### Intégrations externes
-
-- outil disponible et réponse valide ;
-- outil absent ;
-- code de sortie en erreur ;
-- sortie vide, inattendue ou non UTF-8 ;
-- exécution sans passer par un shell.
-
-## Tests dépendants de l'environnement
-
-Un test peut ignorer une vérification complémentaire si Git n'est pas installé,
-mais les branches « outil absent » et « parsing de sortie » doivent rester
-testables sans Git. Les dossiers temporaires doivent être uniques et supprimés à
-la fin du test.
-
-## Tests CLI
-
-La suite d'intégration vérifie actuellement :
-
-- `terminal_rust help` et la présence de toutes les commandes publiques ;
-- `terminal_rust pwd` et son dossier de travail ;
-- `terminal_rust ls` avec un fichier et un dossier de test ;
-- le cycle `mkdir`, `touch`, `cat`, `rm` sur un chemin contenant des espaces ;
-- `terminal_rust dashboard`, ses sections principales et son rendu sans ANSI
-  lorsque la sortie n'est pas un terminal ;
-- une commande inconnue, sa sortie d'erreur et son code de retour ;
-- une commande sans argument obligatoire, sa sortie d'erreur et son code de
-  retour.
-
-Les assertions tolèrent les différences de fins de ligne entre plateformes et
-comparent les chemins après résolution par la bibliothèque standard Rust.
+Environment-dependent tests may skip an extra Git-backed assertion, but missing
+tool and output-parser branches must remain testable without Git. Normalize paths
+with the Rust standard library and tolerate platform line endings.
 
 ## CI
 
-La CI couvre Ubuntu, Windows et macOS. Chaque système exécute le formatage, la
-compilation, Clippy, les tests unitaires et les tests d'intégration CLI. Un
-échec sur une plateforme bloque la fusion.
-
-La [checklist qualité MVP](mvp-quality-checklist.md) complète la suite automatisée
-avec une vérification manuelle courte des comportements interactifs.
+CI targets Ubuntu, Windows and macOS with formatting, compilation, Clippy, unit
+tests and CLI integration tests. A platform result counts only when its steps
+actually execute. Complete automation with the [MVP checklist](mvp-quality-checklist.md).

@@ -1,219 +1,52 @@
-# Workflow and Branch Protection
-
-This project uses GitHub Actions plus GitHub branch protection rules.
+# Workflow and branch protection
 
 ## Branch flow
 
-- `main` only accepts pull requests from `develop`.
-- `develop` only accepts pull requests from:
-  - `feat/name`
-  - `fix/name`
-  - `chore/name`
-  - `refractor/name`
-  - `hotfix/name`
-
-Examples:
-
-```text
-feat/autocomplete
-fix/cd-home
-chore/update-ci
-refractor/ls-modules
-hotfix/windows-path
-```
-
-Invalid examples:
-
-```text
-feature/autocomplete
-bugfix/cd
-test
-feat/
-Feat/autocomplete
-```
+- `main` accepts pull requests only from `develop`.
+- `develop` accepts `feat/*`, `fix/*`, `chore/*`, `refractor/*` and `hotfix/*`.
 
 ## Workflows
 
-### CI
+`.github/workflows/ci.yml` runs formatting, all-target/all-feature checks,
+Clippy with warnings denied, workspace tests and platform installer parsing on
+Ubuntu, Windows and macOS. Plugin SDK, plugin template and desktop are workspace
+members and are validated explicitly. `CI / Required CI gate` succeeds only
+after the matrix passes.
 
-File: `.github/workflows/ci.yml`
+`.github/workflows/release.yml` builds, smoke-tests and packages optimized
+binaries. Manual runs retain artifacts for 14 days. Version tags create a
+GitHub Release with changelog notes, all archives and `SHA256SUMS.txt`.
 
-Runs on pull requests targeting `main` or `develop`, and on direct updates to
-those two protected branches. Work branches are validated through their pull
-request so the same commit does not consume a duplicate CI matrix. It checks:
+`.github/workflows/pr-policy.yml` enforces PR routes, while
+`.github/workflows/branch-policy.yml` reports invalid branch names. Workflows
+cannot prevent branch creation before they run; use GitHub Rulesets for that.
+
+## Required GitHub settings
+
+Create rulesets for `main` and `develop` that require pull requests, block force
+pushes and deletions, and require:
+
+```text
+PR policy / Required PR policy gate
+CI / Required CI gate
+```
+
+Allow bypass only for maintainers listed in `.github/bypass-owners.txt`, and
+configure the same actors manually in Rulesets. A branch-name ruleset should
+allow only `main`, `develop` and the documented prefixes.
+
+## Contribution path
 
 ```bash
+git switch develop
+git pull --ff-only origin develop
+git switch -c feat/my-change
 cargo fmt --all -- --check
 cargo check --all-targets --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
 
-Le SDK de plugins, le template copiable et l'application desktop sont des
-membres séparés du workspace. La matrice exécute aussi `check`, Clippy strict et
-les tests sur ces paquets explicitement afin qu'aucun exemple distribué ne soit
-validé uniquement sur le poste d'un contributeur.
-
-The CI runs on Ubuntu, Windows, and macOS. The test command includes the
-integration suite in `tests/cli_tests.rs`, which launches the compiled binary
-and verifies stdout, stderr, and exit codes.
-
-The matrix also parses the platform installer that can run on each host:
-
-```text
-Linux/macOS: sh -n scripts/install.sh
-Windows:     PowerShell parser for scripts/install.ps1
-```
-
-`CI / Required CI gate` succeeds only after every matrix job has passed.
-
-### Release builds
-
-File: `.github/workflows/release.yml`
-
-The workflow builds and smoke-tests an optimized binary on Ubuntu, Windows,
-and macOS. It packages each binary into a system- and architecture-specific
-archive, then uploads that archive as a GitHub Actions artifact for 14 days.
-
-It runs manually through `workflow_dispatch` and automatically for version tags
-matching `v*.*.*`. A tag run waits for every build, extracts the matching notes
-from `CHANGELOG.md`, generates `SHA256SUMS.txt`, and publishes a GitHub Release
-with all three archives. Manual runs never publish a release.
-
-### PR policy
-
-File: `.github/workflows/pr-policy.yml`
-
-This blocks invalid pull request routes:
-
-- PR to `main` must come from `develop`.
-- PR to `develop` must come from `feat/*`, `fix/*`, `chore/*`, `refractor/*`, or `hotfix/*`.
-
-### Branch policy
-
-File: `.github/workflows/branch-policy.yml`
-
-This fails if a pushed or created branch does not match the naming rules.
-
-Important: GitHub Actions cannot prevent the branch from being created before the workflow starts. To block creation completely, configure a GitHub Ruleset as described below.
-
-## Required GitHub settings
-
-Configure these in GitHub:
-
-```text
-Repository -> Settings -> Rules -> Rulesets
-```
-
-The workflow files can fail invalid changes, but they cannot mark themselves as required and they cannot decide who is allowed to bypass. Required checks and bypass permissions must be configured in GitHub Rulesets.
-
-Repository owner allowed to bypass:
-
-```text
-Blazorde
-```
-
-Bypass owners are listed in:
-
-```text
-.github/bypass-owners.txt
-```
-
-Put one GitHub username per line. Example:
-
-```text
-Blazorde
-AnotherMaintainer
-```
-
-The policy workflows read this file for policy-gate bypasses. GitHub Rulesets do not automatically read repository files, so you must also add the same users manually as bypass actors in GitHub Rulesets.
-
-### Ruleset for `main`
-
-Recommended settings:
-
-- Target branch: `main`
-- Require pull request before merging
-- Require status checks to pass
-- Required checks:
-  - `PR policy / Required PR policy gate`
-  - `CI / Required CI gate`
-- Block force pushes
-- Block deletions
-- Require linear history if desired
-- Restrict bypass permissions to the users listed in `.github/bypass-owners.txt`
-- Do not allow direct pushes
-
-### Ruleset for `develop`
-
-Recommended settings:
-
-- Target branch: `develop`
-- Require pull request before merging
-- Require status checks to pass
-- Required checks:
-  - `PR policy / Required PR policy gate`
-  - `CI / Required CI gate`
-- Block force pushes
-- Block deletions
-- Restrict bypass permissions to the users listed in `.github/bypass-owners.txt`
-- Do not allow direct pushes
-
-### Ruleset for branch names
-
-Create a ruleset for branch creation and updates.
-
-Allow only:
-
-```text
-main
-develop
-feat/*
-fix/*
-chore/*
-refractor/*
-hotfix/*
-```
-
-Block or reject every other branch name.
-
-## How to update the project
-
-1. Create a branch from `develop`:
-
-```bash
-git checkout develop
-git pull
-git checkout -b feat/my-change
-```
-
-2. Make changes and run checks locally:
-
-```bash
-cargo fmt
-cargo check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
-```
-
-3. Open a pull request into `develop`.
-
-4. After review and CI success, merge into `develop`.
-
-5. To release or promote stable work, open a pull request from `develop` into `main`.
-
-## Bypass policy
-
-Only users listed in `.github/bypass-owners.txt` should be allowed to bypass required checks.
-
-This cannot be safely enforced by a workflow file alone. Configure it in GitHub Rulesets by limiting bypass actors to the same users listed in `.github/bypass-owners.txt`.
-
-If GitHub asks for required status check names, use:
-
-```text
-CI / Required CI gate
-PR policy / Required PR policy gate
-```
-
-The CI gate depends on every Rust matrix job. If Ubuntu, Windows, or macOS
-fails, the gate fails too.
+Open the PR into `develop`. Stable promotion uses a `develop` to `main` PR.
+Required checks should be bypassed only under the documented maintainer policy,
+with local evidence recorded when hosted jobs cannot execute.

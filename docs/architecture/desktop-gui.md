@@ -1,81 +1,44 @@
-# Architecture cible de l'interface desktop
+# Desktop GUI architecture
 
-Ce document décrit les frontières introduites par T118. Tauri 2 est retenu par
-l'[ADR-0005](../decisions/0005-desktop-gui-stack.md). Le prototype T121
-implémente cette frontière avec `portable-pty` côté Rust et xterm.js côté
-présentation. T122 ajoute une persistance versionnée dont la validation et les
-accès disque restent dans l'adaptateur Rust.
-
-## Frontières
+T118 introduced this boundary. [ADR-0005](../decisions/0005-desktop-gui-stack.md)
+selects Tauri 2; T121 connects `portable-pty` on the Rust side to xterm.js in
+the presentation layer. T122 adds versioned settings whose validation and disk
+access remain in Rust.
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│ Interface desktop                                            │
-│ rendu terminal · réglages · focus · raccourcis · responsive │
-└───────────────────────┬──────────────────────────────────────┘
-                        │ messages typés / événements
-┌───────────────────────▼──────────────────────────────────────┐
-│ Adaptateur desktop Rust                                      │
-│ sessions PTY · cycle de vie · persistance · capacités OS    │
-└───────────────────────┬──────────────────────────────────────┘
-                        │ API Rust sans dépendance GUI
-┌───────────────────────▼──────────────────────────────────────┐
-│ ShellEngine / bibliothèque Rust                              │
-│ résultats · commandes · parser · prompt · Git · configuration│
-└───────────────┬───────────────────────────────┬──────────────┘
-                │                               │
-       ┌────────▼────────┐             ┌────────▼────────┐
-       │ Binaire CLI     │             │ Adaptateurs OS  │
-       │ rustyline       │             │ chemins · PTY   │
-       └─────────────────┘             └─────────────────┘
+desktop UI (terminal rendering, settings, focus, shortcuts, responsive layout)
+                              │ typed messages and events
+Rust desktop adapter (PTY sessions, lifecycle, persistence, OS capabilities)
+                              │ GUI-independent Rust API
+ShellEngine (results, commands, parser, prompt, Git, configuration)
+                     ┌────────┴────────┐
+                 CLI runner       OS adapters
 ```
 
-## Règles d'architecture
+## Rules
 
-- La bibliothèque Rust ne dépend ni de Tauri, ni de React, ni d'un toolkit GUI.
-- Le CLI utilise déjà `ShellEngine`; le desktop consommera le même contrat
-  `ExecutionResult` pour les sorties, les erreurs et les changements de dossier.
-- La couche desktop ne construit pas des commandes shell par concaténation de
-  chaînes. Les entrées utilisateur voyagent comme données vers une API bornée.
-- Le processus Rust possède les PTY, les handles de processus, le dossier
-  courant et les accès au disque.
-- La WebView ne reçoit aucun secret et n'obtient pas d'accès générique au shell
-  ou au système de fichiers.
-- Les segments de prompt proviennent d'un `PromptLayout` Rust transmis par une
-  séquence OSC privée consommée par xterm ; la GUI ne sonde pas Git ni le disque.
-- Un onglet possède une seule session PTY et une session PTY n'appartient qu'à
-  un onglet. L'identifiant natif est vérifié sur chaque événement pour empêcher
-  tout mélange d'entrée, de sortie ou de contexte entre onglets.
-- Les préférences partagées utilisent le schéma versionné existant ou une
-  extension rétrocompatible ; une donnée invalide garde un fallback sûr.
-- Les polices et assets livrés sont locaux. Une police système monospace reste
-  toujours disponible en dernier recours.
+- The Rust library depends on neither Tauri, React nor a GUI toolkit.
+- CLI and desktop consume the same engine behavior.
+- User input travels as data through bounded APIs, never concatenated shell text.
+- Rust owns PTYs, process handles, current directories and disk access.
+- The WebView receives no secrets or generic shell/filesystem capability.
+- Rust sends typed prompt layouts over private OSC `777`; the GUI does not probe Git or disk.
+- Each tab owns exactly one PTY and every event is checked against its native session ID.
+- Invalid settings use safe defaults; shipped assets are local with system-font fallbacks.
 
-## Séquence de livraison
+## Delivery sequence
 
-1. **T119** — valider l'ADR et la technologie.
-2. **T120** — extraire `terminal-core` sans modifier le comportement CLI.
-3. **T121** — ouvrir une fenêtre et connecter une session PTY réelle (prototype
-   implémenté ; validation finale dans la matrice des trois OS).
-4. **T122** — ajouter réglages, thèmes et persistance (implémenté localement ;
-   validation multiplateforme portée par la matrice et T124).
-5. **T123** — enrichir les segments de prompt partagés (implémenté : layout
-   gauche/droite typé et transport OSC local).
-6. **T125** — ajouter de vrais onglets de sessions terminal isolées (implémenté
-   localement ; validation multiplateforme portée par la matrice et T124).
-7. **T124** — vérifier accessibilité, responsive, performance et trois OS.
+T119 selected the stack; T120 exposed the shared engine; T121 connected a real
+PTY; T122 added settings, themes and persistence; T123 shared typed prompt
+segments; T125 added isolated tabs. T124 retains final accessibility,
+performance and three-platform validation.
 
-Chaque étape possède sa propre branche et sa propre PR. Une fonctionnalité GUI
-ne peut pas être déclarée multiplateforme sur la seule preuve d'un poste local ;
-la matrice et les captures des trois systèmes sont nécessaires.
+A GUI cannot be called cross-platform from one machine's evidence. Windows,
+macOS and Linux each require build, PTY and manual evidence.
 
-## Référence Atelier
+## Atelier reference
 
-L'archive `Terminal de ligne de commande.zip` fournie par le propriétaire est
-une référence de composition : fenêtre translucide, barre de titre, zone
-terminal, pied de contexte et tiroir de réglages. Le fond quadrillé extérieur a
-été retiré pour que la surface terminal remplisse exactement la fenêtre native,
-conformément au retour produit du 11 octobre 2026. Son code React,
-ses commandes simulées et ses données fictives ne sont pas importés. Les écarts
-nécessaires seront consignés au fil des tickets GUI.
-
+The owner-provided `Terminal de ligne de commande.zip` is a composition
+reference only. Its simulated commands, fake data and remote fonts are not
+imported. The outer decorative grid was removed so the terminal fills the native
+window, following product feedback from 2026-10-11.

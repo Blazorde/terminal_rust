@@ -1,61 +1,38 @@
-# Prototype TUI à panneaux
+# Pane-based TUI prototype
 
-Ce document fixe la direction technique du ticket T111. Le prototype reste une
-expérience séparée : il ne remplace ni le shell CLI, ni l'interface desktop
-Tauri, et ne lance aucune commande.
+This T111 experiment does not replace the CLI or Tauri desktop interface and
+does not execute commands.
 
-## Choix technique
+## Technical choice
 
-Le prototype utilise **Ratatui 0.30** avec le backend **Crossterm 0.29**. Ce
-couple fournit les primitives de layout, le rendu différentiel, les événements
-clavier et le redimensionnement sur Windows, macOS et Linux. Les dépendances
-sont optionnelles derrière la feature `tui-prototype` afin que le binaire CLI
-normal ne les compile pas.
-
-La solution est volontairement un exemple Cargo plutôt qu'un nouveau mode du
-shell :
+The optional `tui-prototype` feature uses Ratatui 0.30 with Crossterm 0.29 for
+cross-platform layout, differential rendering, keyboard input and resize events.
+It remains a Cargo example so the normal CLI does not compile these dependencies:
 
 ```console
 cargo run --example tui-layout --features tui-prototype
 ```
 
-Ratatui initialise le mode brut et l'écran alternatif, puis restaure le terminal
-à la sortie et lors d'un panic. Crossterm ne livre que les événements ; le
-prototype ignore les événements non clavier et laisse le prochain rendu
-recalculer les rectangles après un événement de redimensionnement.
+Ratatui restores raw mode and the alternate screen on normal exit and panic.
+Only key-press events are handled, avoiding duplicate Windows release events.
 
-## Composition
+## Composition and shortcuts
 
-Le prototype affiche deux zones avec une barre d'aide :
+The prototype renders a mock `Terminal` pane, a mock `Project & logs` pane and
+a help bar with a 65/35 horizontal or vertical split. It adds no filesystem,
+Git, network or shell-engine access.
 
-- `Terminal`, zone de sortie factice qui représente le futur terminal actif ;
-- `Project & logs`, zone factice pour fichiers, Git et journaux ;
-- un split à 65/35, horizontal ou vertical.
-
-Les deux zones sont rendues depuis un état minimal et testable. Aucun accès au
-système de fichiers, à Git, au réseau ou au moteur du shell n'est ajouté.
-
-## Raccourcis
-
-| Entrée | Action |
+| Input | Action |
 | --- | --- |
-| `Tab`, `Shift+Tab` | déplacer le focus vers l'autre panneau |
-| flèches | déplacer le focus vers l'autre panneau |
-| `s` | basculer le split horizontal/vertical |
-| `q`, `Esc`, `Ctrl+C` | quitter et restaurer le terminal |
+| `Tab`, `Shift+Tab`, arrows | Move focus between panes |
+| `s` | Toggle horizontal/vertical split |
+| `q`, `Esc`, `Ctrl+C` | Exit and restore the terminal |
 
-La bordure cyan constitue l'indicateur de focus. Crossterm émet aussi des
-événements de relâchement sous Windows ; seuls les événements `Press` sont
-traités pour éviter les doubles actions.
+A future integration must replace mock data with typed views while keeping
+command execution in `ShellEngine` and isolated PTY ownership in the desktop
+adapter. Promotion requires rendering, shortcut and terminal-restoration proof
+on Windows, macOS and Linux.
 
-## Frontière avec le produit
-
-Une intégration future devra remplacer les données factices par des vues
-typées, sans déplacer l'exécution de commandes hors de `ShellEngine`. Le
-terminal desktop continuera d'utiliser ses sessions PTY isolées. Avant toute
-promotion de ce prototype, il faudra prouver le rendu, les raccourcis et la
-restauration du terminal sur les trois systèmes ciblés.
-
-Sources : [installation Ratatui](https://ratatui.rs/installation/),
-[backends Ratatui](https://ratatui.rs/concepts/backends/) et
+Sources: [Ratatui installation](https://ratatui.rs/installation/),
+[Ratatui backends](https://ratatui.rs/concepts/backends/) and
 [Crossterm](https://docs.rs/crate/crossterm/latest).

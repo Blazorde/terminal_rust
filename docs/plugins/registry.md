@@ -1,29 +1,26 @@
-# Registre local des plugins
+# Local plugin registry
 
-Le registre local inventorie des manifestes, sans charger de bibliothèque ni
-lancer de processus. L'organisation canonique est :
+The local registry inventories manifests without loading libraries or starting
+processes. The canonical layout is:
 
 ```text
 <data-dir>/terminal-rust/plugins/<plugin-id>/<version>/terminal-rust-plugin.toml
 ```
 
-| Système | `<data-dir>` |
+| System | `<data-dir>` |
 | --- | --- |
 | Windows | `%LOCALAPPDATA%` |
 | macOS | `$HOME/Library/Application Support` |
-| Linux | `$XDG_DATA_HOME`, sinon `$HOME/.local/share` |
+| Linux | `$XDG_DATA_HOME`, falling back to `$HOME/.local/share` |
 
-`plugins list` affiche chaque version dans un ordre déterministe avec son état :
-`enabled`, `disabled`, `incompatible` ou `error`. L'activation vient de
-`plugins.enabled` dans la configuration utilisateur. Un dossier absent signifie
-simplement qu'aucun plugin n'est installé. Une erreur de lecture, en revanche,
-nomme le dossier concerné.
+`plugins list` shows every version deterministically as `enabled`, `disabled`,
+`incompatible` or `error`. Activation comes from `plugins.enabled`. A missing
+directory means no plugin is installed; read failures name the affected path.
 
-La découverte est limitée à l'arborescence attendue, ignore les liens
-symboliques et ne suit jamais un chemin fourni par un manifeste. Ces contraintes
-réduisent les traversées imprévues et gardent le comportement identique sur les
-trois plateformes.
+Discovery stays inside the expected tree, ignores symbolic links and never
+follows a path supplied by a manifest. This limits traversal and keeps behavior
+consistent across platforms.
 
-Le registre ne résout pas encore les doublons, n'active aucune contribution et
-n'exécute aucun plugin. Les tickets de commandes et de segments consommeront
-uniquement les entrées compatibles et activées lors des étapes suivantes.
+Compatible, enabled entries may contribute safe declarative commands when their
+permissions are granted. The registry does not load arbitrary native libraries
+or start plugin processes.

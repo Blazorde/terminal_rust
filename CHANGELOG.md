@@ -61,6 +61,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Changed
 
+- Standardized contributor, architecture, configuration, desktop, plugin,
+  installation, release and troubleshooting documentation in concise English.
 - The CLI now executes built-in commands through the same public Rust engine
   intended for the desktop adapter.
 - The desktop terminal surface now fills the native window without an outer

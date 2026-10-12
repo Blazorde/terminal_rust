@@ -1,125 +1,54 @@
-# Audit qualité de l'interface desktop
+# Desktop GUI quality audit
 
-Statut : audit T124 réalisé sous Windows le 11 octobre 2026 ; preuves macOS et
-Linux en attente d'un runner disponible.
+Status: Windows audit completed on 2026-10-11; macOS and Linux evidence is still
+missing because no runner has executed the required steps.
 
-## Résultat
+## Result
 
-| Dimension | Score | Preuve principale |
+| Dimension | Score | Main evidence |
 | --- | ---: | --- |
-| Accessibilité | 4/4 | Navigation clavier, dialogue modal borné, retour de focus et contrastes AA |
-| Performance | 3/4 | Mesures reproductibles et découpage du bundle ; mémoire WebView encore élevée |
-| Responsive | 4/4 | Aucun débordement à 1280×720, 560×400 et 320×240 |
-| Thèmes | 4/4 | Les trois palettes dépassent 4,5:1 pour tous les textes |
-| Intégrité | 4/4 | Détecteur Impeccable sans résultat et aucune donnée simulée |
-| **Total** | **19/20** | **Excellent, validation des deux autres OS encore requise** |
+| Accessibility | 4/4 | Keyboard navigation, bounded modal focus and AA contrast |
+| Performance | 3/4 | Reproducible measurements and split bundle; WebView memory remains high |
+| Responsive | 4/4 | No overflow at 1280×720, 560×400 or 320×240 |
+| Themes | 4/4 | All three palettes exceed 4.5:1 for text |
+| Integrity | 4/4 | No detector findings and no simulated data |
+| **Total** | **19/20** | **Excellent locally; two OS validations remain** |
 
-L'audit initial a trouvé trois problèmes, tous corrigés dans la même passe :
+The audit fixed low-contrast faint text, focus escaping the settings drawer and
+an overbroad reduced-motion rule. The drawer now traps focus while open, returns
+it to Settings on close and makes the background inert. Reduced motion disables
+only the activity rail, connection pulse, drawer transition and cursor blink.
 
-- `--faint` descendait jusqu'à 2,98:1, sous WCAG AA ;
-- le focus pouvait quitter le tiroir de réglages et n'était pas rendu au bouton
-  d'ouverture ;
-- la réduction de mouvement reposait sur une règle globale à `0,01 ms` au lieu
-  de replis explicites.
+`npm run audit:ui --prefix desktop` checks actual CSS tokens and fails below
+4.5:1 for text or 3:1 for focus. The minimum native window is 560×400; the
+drawer remains scrollable and the tab strip scrolls independently.
 
-Le tiroir est désormais un dialogue modal : le contenu arrière devient
-`inert`, `Tab` et `Maj+Tab` restent dans le panneau, `Échap` le ferme et rend le
-focus au bouton **Réglages**. La préférence de mouvement désactive uniquement
-le rail d'activité, la respiration de connexion, la transition du tiroir et le
-clignotement du curseur xterm. Les changements de statut restent visibles.
+## Windows reference measurements
 
-## Contrastes
+Reference machine: Windows 11 Pro `10.0.26200`, Intel Core Ultra 9 185H, 31.5
+GiB, Rust 1.95.0 and Node 24.11.1. Release-build results:
 
-`npm run audit:ui --prefix desktop` lit les vrais tokens CSS et échoue sous
-4,5:1 pour le texte, ou sous 3:1 pour l'indicateur de focus.
-
-| Thème | Texte | Secondaire | Faible | Accent | Erreur | Focus |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Graphite | 13,94 | 6,49 | 5,07 | 6,36 | 7,42 | 10,28 |
-| Minuit | 14,85 | 6,99 | 5,22 | 10,69 | 7,82 | 14,08 |
-| Papier | 13,55 | 5,13 | 4,61 | 4,54 | 5,01 | 7,92 |
-
-Le contrôle vérifie aussi le repli de mouvement ciblé et le contrat plein
-écran. Le détecteur mécanique Impeccable a retourné `[]` après les corrections.
-
-## Responsive
-
-La WebView a été observée avec les dimensions suivantes :
-
-| Vue | Contenu rendu | Débordement | Résultat |
-| --- | --- | --- | --- |
-| 1280×720 | terminal 1280×720 à l'origine 0,0 | aucun | conforme |
-| 560×400 | taille native minimale déclarée par Tauri | aucun | conforme |
-| 320×240 | stress inférieur au minimum natif | aucun | conforme |
-
-À 560×400, le tiroir reste défilable et conserve 100 % de ses commandes. La
-barre d'onglets défile horizontalement de façon indépendante lorsque le nombre
-de sessions dépasse l'espace disponible.
-
-## Mesures Windows
-
-Machine de référence : Windows 11 Professionnel `10.0.26200`, Intel Core Ultra
-9 185H (22 processeurs logiques), 31,5 Gio, Rust 1.95.0 et Node 24.11.1. Les
-mesures utilisent une build `--release` et trois essais consécutifs.
-
-### Processus GUI
-
-Le démarrage va de `Start-Process` jusqu'à la présence d'une fenêtre répondante.
-La mémoire est la somme des working sets du processus Tauri, du shell enfant et
-des processus WebView2, une seconde après l'ouverture.
-
-| Essai | Démarrage | Processus | Mémoire |
+| Trial | Startup | Processes | Memory |
 | ---: | ---: | ---: | ---: |
-| 1, froid | 541,1 ms | 10 | 409,5 Mio |
-| 2, chaud | 174,4 ms | 10 | 406,7 Mio |
-| 3, chaud | 184,8 ms | 10 | 406,6 Mio |
+| Cold | 541.1 ms | 10 | 409.5 MiB |
+| Warm 1 | 174.4 ms | 10 | 406.7 MiB |
+| Warm 2 | 184.8 ms | 10 | 406.6 MiB |
 
-Le premier démarrage reste sous 600 ms sur cette machine. La mémoire reflète
-principalement l'isolation de WebView2 ; elle constitue la référence à suivre,
-pas une preuve transférable à WebKitGTK ou WKWebView.
+The ignored PTY probe measured first prompt at 70.360–86.049 ms and `pwd`
+round trips at 0.566–0.850 ms. These figures are a Windows baseline, not proof
+for WebKitGTK or WKWebView.
 
-### PTY et commande
+Frontend bundle: application 236.38 kB (74.07 kB gzip), xterm 332.16 kB (83.42
+kB gzip), Tauri API 1.14 kB (0.55 kB gzip), CSS 14.59 kB (3.99 kB gzip).
 
-Le probe ignoré par défaut ouvre un vrai PTY, attend le premier frame OSC 777,
-exécute `pwd`, attend le frame suivant et ferme la session :
+## Platform matrix
 
-```bash
-cargo test -p terminal-rust-desktop --test pty_shell \
-  desktop_performance_probe_reports_three_trials -- --ignored --nocapture
-```
-
-| Essai | Premier prompt | Aller-retour `pwd` |
-| ---: | ---: | ---: |
-| 1 | 70,360 ms | 0,566 ms |
-| 2 | 71,799 ms | 0,850 ms |
-| 3 | 86,049 ms | 0,660 ms |
-
-Le probe est Rust et `portable-pty` uniquement ; la même commande doit être
-rejouée sans modification sur macOS et Linux.
-
-### Bundle frontend
-
-Le build sépare xterm et l'API Tauri du code d'application. Tailles minifiées :
-
-- application : 236,38 kB, 74,07 kB gzip ;
-- xterm : 332,16 kB, 83,42 kB gzip ;
-- API Tauri : 1,14 kB, 0,55 kB gzip ;
-- CSS total : 14,59 kB, 3,99 kB gzip.
-
-Le build ne déclenche plus l'avertissement de chunk supérieur à 500 kB. Les
-mises à jour de trafic identiques ne provoquent plus de rendu React, et les
-panneaux terminal inactifs sont mémoïsés.
-
-## Matrice multiplateforme
-
-| Système | Build | Tests Rust | Probe PTY | Contrôle manuel | État |
+| System | Build | Rust tests | PTY probe | Manual check | State |
 | --- | --- | --- | --- | --- | --- |
-| Windows 11 | réussi | réussi | réussi | réussi | validé localement |
-| macOS | non exécuté | non exécuté | non exécuté | non exécuté | en attente |
-| Linux | non exécuté | non exécuté | non exécuté | non exécuté | en attente |
+| Windows 11 | passed | passed | passed | passed | locally validated |
+| macOS | not run | not run | not run | not run | pending |
+| Linux | not run | not run | not run | not run | pending |
 
-Pour chaque système restant, exécuter la validation de
-[desktop.md](desktop.md), le probe ci-dessus, puis relever version du système,
-matériel, trois démarrages, mémoire du processus complet et captures à
-1280×720 et 560×400. Une CI qui échoue avant sa première étape n'est pas une
-preuve : T124 reste donc ouvert jusqu'à obtention des deux lignes manquantes.
+For each missing system, run the [desktop guide](desktop.md), record hardware
+and OS, three startup/memory trials and captures at 1280×720 and 560×400. CI
+that fails before executing steps is not evidence; T124 remains open.

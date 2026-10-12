@@ -1,105 +1,41 @@
-# Moteur de prompt
+# Prompt engine
 
-Statut : modèle, collecte enrichie, renderer ANSI et partage desktop
-implémentés.
+Status: typed model, enriched context collection, ANSI renderer and desktop
+transport are implemented.
 
-## Objectif
+## Goal
 
-Construire un prompt inspiré d'Oh My Posh sans en reproduire toute la complexité
-dès la première version. Le système doit composer des segments indépendants et
-rester lisible sans couleur, icône ou Git.
-
-## Première version actuelle
-
-Le rendu actuel compose :
-
-- dossier courant ;
-- branche Git ;
-- état propre ou modifié du dépôt ;
-- symbole final statique.
-
-Exemple enrichi :
+Build an Oh My Posh-inspired prompt from independent segments while remaining
+readable without color, icons or Git.
 
 ```text
 ~/project  git:main* >
-```
-
-Exemple de repli :
-
-```text
 C:\project>
 ```
 
-## Modèle actuel
+`Prompt` lives for the interactive session. The Git provider collects branch
+and worktree state with one porcelain-v2 command; `GitPromptCache` retains both
+positive and unavailable results for 250 ms and invalidates on directory change.
 
-```rust
-struct Prompt {
-    git_cache: GitPromptCache,
-}
+`PromptSegment` is the collection-to-rendering contract. It carries a value and
+semantic style/icon references, never ANSI. Missing values hide the segment.
+Supported kinds cover path, Git, symbol, user, host, exit status, local runtime,
+duration and time. One typed `PromptLayout` feeds the CLI and desktop status bar.
 
-struct PromptGitInfo {
-    branch: String,
-    dirty: bool,
-}
+`render::palette` defines semantic roles and `render::ansi` maps them to portable
+terminal output with a reset after every styled segment. Redirected output,
+`NO_COLOR` and `TERM=dumb` use plain text. Windows enables color only for a known
+ANSI-capable terminal.
 
-struct PromptSegment {
-    kind: SegmentKind,
-    label: Option<String>,
-    value: Option<String>,
-    style_key: String,
-    icon: Option<SegmentIcon>,
-}
-```
+`render::icons` and `render::separators` select Nerd Font or Powerline glyphs
+only when policy and capability allow them; every glyph has an ASCII fallback.
+Color and icon policies remain independent.
 
-`Prompt` vit pendant toute la session interactive. Le module `git` collecte la
-branche et l'état avec une seule commande porcelain v2 ; le module `cache`
-conserve ce résultat pendant 250 ms, y compris l'absence de contexte Git. Le
-rendu n'affiche le segment que lorsque ces données sont disponibles.
+## Configuration contract
 
-`PromptSegment` est le contrat commun entre collecte et rendu. Il transporte une
-valeur et des références sémantiques de style ou d'icône, jamais un code ANSI.
-Une valeur absente ou vide rend le segment invisible. Le modèle couvre le
-chemin, Git, le symbole, l'utilisateur, l'hôte, le statut de sortie, le runtime
-local, la durée et l'heure. Un `PromptContext` collecte ces valeurs sans code de
-présentation ; le même `PromptLayout` typé alimente le renderer CLI et la barre
-d'état desktop.
-
-Le module `render::palette` centralise les rôles sémantiques `primary`,
-`secondary`, `success`, `warning`, `error` et `muted`. Les segments ne connaissent
-que ces noms : la palette injectée décide de leur couleur sans modifier la logique
-du chemin ou de Git. Le module `render::ansi` traduit ensuite la palette en
-séquences ANSI portables. Chaque segment stylé se termine par un reset, afin qu'une couleur ne
-déborde jamais sur la saisie ou la sortie suivante. Le renderer propose les huit
-couleurs ANSI de base, le foreground, le background, le gras et le mode atténué.
-Il produit automatiquement du texte brut lorsque la sortie standard n'est pas
-un terminal, lorsque `NO_COLOR` est défini ou lorsque `TERM=dumb`. Sous Windows,
-la couleur n'est activée que lorsqu'un terminal ANSI connu est détecté (Windows
-Terminal, VS Code, ConEmu, ANSICON ou un environnement qui expose `TERM`) ; la
-console historique conserve ainsi un prompt lisible.
-
-Le module `render::icons` contient tous les glyphes Nerd Font. Le renderer choisit
-entre le glyphe et le fallback ASCII porté par `SegmentIcon`. Les modes `always`,
-`never` et `auto` sont indépendants de la couleur ; le mode automatique reste
-prudent et exige une confirmation explicite de la police configurée.
-
-Le module `render::separators` applique la même détection aux séparateurs
-Powerline. Il colore le glyphe avec le rôle du segment précédent et retourne un
-fallback ASCII lorsque la capacité Nerd Font n'est pas confirmée. La collecte
-des données et les segments restent ainsi indépendants de la décoration.
-
-La commande mesurée sur le dépôt du projet sous Windows prend environ 50 ms à
-froid. Le cache évite de répéter ce coût lors de rendus rapprochés tout en
-bornant l'obsolescence à 250 ms. Les tests injectent le temps et le fournisseur
-de données afin de vérifier le TTL sans attente réelle.
-
-## Contrat de configuration
-
-La [spécification de personnalisation](../customization.md) sépare désormais la
-sélection des segments de leur apparence. Le fichier utilisateur choisira le
-thème, l'ordre et les options fonctionnelles ; le thème décrira uniquement le
-rendu. Aucun des deux formats ne permet l'exécution arbitraire de commandes.
-
-Exemple :
+The [customization specification](../customization.md) separates segment choice
+from appearance. User configuration selects theme, order and behavior; themes
+describe rendering. Neither format executes arbitrary commands.
 
 ```toml
 version = 1
@@ -111,20 +47,13 @@ segments = ["user", "host", "path", "git", "symbol"]
 right_segments = ["status", "runtime", "duration", "time"]
 ```
 
-Les exemples canoniques sont `config/default.toml` et
-`config/themes/default.toml`. Le chargeur valide l'ordre, l'unicité et la
-position de chaque segment.
+Canonical examples live in `config/default.toml` and
+`config/themes/default.toml`. The loader validates order, uniqueness and side.
 
-Dans la session desktop uniquement, le processus enfant sérialise le layout en
-JSON dans l'OSC privé `777`. xterm intercepte cette séquence avant affichage et
-met à jour la barre d'état ; la WebView ne recalcule donc ni Git, ni le runtime,
-ni la durée. Une session CLI ordinaire n'émet jamais cette métadonnée.
+For desktop sessions, the child process serializes the layout as JSON through
+private OSC `777`. xterm consumes it before display, so the WebView never probes
+Git, runtime or duration. Ordinary CLI sessions never emit this metadata.
 
-## Étapes recommandées
-
-1. Ajouter des fournisseurs de contexte uniquement lorsqu'ils restent bornés.
-2. Étendre les thèmes sans coupler les segments aux couleurs terminal.
-3. Garder le contrat OSC versionnable avant d'ajouter un second consommateur.
-
-Chaque étape doit rester fusionnable et testable seule. L'ADR-0003 fixe la
-direction par segments ; les interfaces pourront évoluer avec la configuration.
+Add context providers only when their cost is bounded, evolve themes without
+coupling segments to colors, and version the OSC contract before adding another
+consumer. ADR-0003 defines the segment-based direction.

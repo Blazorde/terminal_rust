@@ -1,33 +1,23 @@
-# ADR 0004 - Limiter les commandes Git intégrées à une liste blanche
+# ADR-0004 — Allowlist built-in Git operations
 
-- Statut : Acceptée
-- Date : 2026-10-09
+- Status: Accepted
+- Date: 2026-10-09
 
-## Contexte
+## Context
 
-Le mini-shell doit aider les développeurs à consulter rapidement l'état d'un
-dépôt, ses branches et son historique. Un passthrough Git complet exposerait
-aussi des opérations distantes ou destructrices sans ajouter de valeur
-pédagogique au shell.
+The shell should help developers inspect status, branches and history without
+exposing destructive or remote Git operations through an unrestricted passthrough.
 
-## Décision
+## Decision
 
-La commande interne `git` délègue uniquement `status`, `branch` et `log` à
-l'exécutable Git installé. Elle transmet leurs options de consultation,
-conserve stdout, stderr et le code de sortie, et force `--no-pager` pour éviter
-de bloquer le shell interactif. Les arguments mutateurs de `branch` et l'option
-`log --output` sont refusés avant le lancement.
+The built-in `git` command delegates only `status`, `branch` and `log` to the
+installed executable. It preserves stdout, stderr and exit status, forces
+`--no-pager`, and rejects mutating branch arguments and `log --output` before
+launch. It runs `git -C <current directory>` consistently on all platforms.
 
-Le processus est lancé avec `git -C <dossier courant>` afin de garder le même
-comportement sous Windows, macOS et Linux. Toute autre sous-commande est
-refusée avant le lancement du processus.
+## Consequences
 
-## Conséquences
-
-- Les consultations Git courantes sont disponibles sans réimplémenter Git.
-- `push`, `reset`, `clean` et les autres opérations non autorisées ne peuvent
-  pas être lancées par cette commande interne.
-- Git reste une dépendance optionnelle : son absence produit une erreur claire
-  sans fermer le shell.
-- Toute nouvelle sous-commande devra être ajoutée explicitement avec ses tests
-  et une justification de sécurité.
+Common inspection works without reimplementing Git, while `push`, `reset`,
+`clean` and other operations are unavailable through this command. Missing Git
+produces a clear recoverable error. Every new subcommand requires explicit
+allowlisting, tests and a security justification.
