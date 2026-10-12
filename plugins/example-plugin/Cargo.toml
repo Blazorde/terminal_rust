@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Copyable hello-world template for Terminal Rust plugins"
 license = "MIT"
+repository = "https://github.com/Blazorde/terminal_rust"
 publish = false
 
 [dependencies]

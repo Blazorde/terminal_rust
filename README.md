@@ -246,6 +246,10 @@ The [contribution guide](docs/development/contributing.md),
 [testing strategy](docs/development/testing.md) and
 [branch workflow](docs/workflows/README.md) describe the expected evidence.
 
+Security reports must use the private process in [SECURITY.md](SECURITY.md),
+not a public issue. Dependency and license checks are documented in the
+[security guide](docs/security.md).
+
 ## Platform support
 
 Windows, macOS and Linux are first-class targets. The Rust CLI is covered by
@@ -266,7 +270,8 @@ See [CHANGELOG.md](CHANGELOG.md) for delivered changes and documented limits.
 
 ## License
 
-Terminal Rust is available under the [MIT License](LICENSE).
+Terminal Rust is available under the [MIT License](LICENSE). Locked dependency
+license metadata is recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Support
 

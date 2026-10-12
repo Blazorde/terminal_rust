@@ -45,7 +45,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist/package
-          cp target/release/terminal_rust LICENSE README.md CHANGELOG.md dist/package/
+          cp target/release/terminal_rust LICENSE README.md CHANGELOG.md THIRD_PARTY_NOTICES.md dist/package/
           cp -R config dist/package/config
 
       - name: Stage release files on Windows
@@ -53,7 +53,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path dist\package -Force | Out-Null
-          Copy-Item target\release\terminal_rust.exe, LICENSE, README.md, CHANGELOG.md -Destination dist\package
+          Copy-Item target\release\terminal_rust.exe, LICENSE, README.md, CHANGELOG.md, THIRD_PARTY_NOTICES.md -Destination dist\package
           Copy-Item config -Destination dist\package\config -Recurse
 
       - name: Package Linux binary

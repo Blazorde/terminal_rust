@@ -12,7 +12,8 @@ cargo build --release --locked
 ```
 
 The binary is smoke-tested with `help`. Archives contain the binary at their
-root plus `LICENSE`, `README.md`, `CHANGELOG.md` and `config/`:
+root plus `LICENSE`, `THIRD_PARTY_NOTICES.md`, `README.md`, `CHANGELOG.md` and
+`config/`:
 
 ```text
 terminal_rust-linux-<architecture>.tar.gz
