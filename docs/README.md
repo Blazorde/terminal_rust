@@ -23,6 +23,7 @@ vivent ici.
 | Étudier le scripting | [Comparatif Lua, Rhai et WebAssembly](research/scripting-runtime.md) |
 | Développer et valider l'interface desktop | [Guide desktop](development/desktop.md) |
 | Consulter l'audit qualité GUI | [Audit accessibilité, responsive et performance](development/gui-quality-audit.md) |
+| Explorer une interface TUI à panneaux | [Prototype de layout TUI](architecture/tui-layout-prototype.md) |
 | Concevoir le futur prompt | [Moteur de prompt](architecture/prompt-engine.md) |
 | Vérifier la portabilité | [Compatibilité multiplateforme](architecture/cross-platform.md) |
 | Comprendre une décision | [Registre des ADR](decisions/README.md) |

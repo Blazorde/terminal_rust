@@ -27,6 +27,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   processes, including listing, completion, conflict checks, and safe arguments.
 - Compared Lua, Rhai, and WebAssembly for future scripting and proposed a
   bounded Rhai experiment after the plugin permission model is complete.
+- Added an optional Ratatui layout prototype with two focusable panes,
+  horizontal and vertical splits, keyboard shortcuts, and resize handling.
 - Added a reusable `ShellEngine` library API with typed execution status,
   captured standard streams, errors, and directory-change metadata for CLI and
   future desktop consumers.
