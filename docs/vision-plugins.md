@@ -142,6 +142,9 @@ silencieusement le même identifiant.
 - galerie locale vérifiée, sans installation silencieuse.
 
 Cette roadmap n'engage ni le langage du runtime ni une marketplace distante.
+Le [comparatif des runtimes de scripting](research/scripting-runtime.md) propose
+Rhai pour une expérimentation future de scripts locaux approuvés, sans modifier
+la préférence WebAssembly de l'ADR-0006 pour les plugins tiers non fiables.
 Chaque phase doit rester supprimable sans casser le shell natif.
 
 ## Critères de décision pour la suite
