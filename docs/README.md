@@ -18,6 +18,7 @@ vivent ici.
 | Écrire un manifeste de plugin | [Format du manifeste](plugins/manifest.md) |
 | Comprendre la découverte locale | [Registre local des plugins](plugins/registry.md) |
 | Concevoir une commande plugin | [Commandes de plugins](plugins/commands.md) |
+| Review plugin permissions | [Plugin permissions and security](plugins/security.md) |
 | Concevoir un segment plugin | [Segments de prompt des plugins](plugins/prompt-segments.md) |
 | Démarrer un plugin | [SDK minimal et template](plugins/sdk.md) |
 | Étudier le scripting | [Comparatif Lua, Rhai et WebAssembly](research/scripting-runtime.md) |
