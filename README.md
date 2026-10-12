@@ -12,7 +12,7 @@
 
 Real commands. Native PTY sessions. Git-aware prompts. No simulated terminal.
 
-[Quick start](#quick-start) · [Desktop app](#desktop-workspace) · [Commands](#command-deck) · [Documentation](docs/README.md)
+[Quick start](#quick-start) · [Desktop app](#desktop-workspace) · [Commands](#command-deck) · [Documentation](docs/README.md) · [Wiki](https://github.com/Blazorde/terminal_rust/wiki) · [Wiki source](wiki/Home.md)
 
 </div>
 
