@@ -238,11 +238,11 @@ kbd { border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color
 .terminal-stage { position: relative; min-height: 0; padding: 16px 18px 12px; overflow: hidden; }
 .terminal-pane { width: 100%; height: 100%; }
 .terminal-pane[hidden] { display: none; }
-.terminal-host { width: 100%; height: 100%; }
+.terminal-host { width: 100%; height: 100%; overflow: hidden; }
 .terminal-host,
 .terminal-host .xterm,
 .terminal-host .xterm-viewport { background-color: var(--surface); }
-.terminal-host .xterm { height: 100%; }
+.terminal-host .xterm { width: 100%; height: 100%; font-variant-ligatures: none; }
 .terminal-host .xterm-viewport { scrollbar-color: #4a5056 transparent; scrollbar-width: thin; }
 .terminal-host .xterm-viewport::-webkit-scrollbar { width: 8px; }
 .terminal-host .xterm-viewport::-webkit-scrollbar-thumb { border-radius: 8px; background: #4a5056; }
