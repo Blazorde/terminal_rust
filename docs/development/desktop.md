@@ -26,6 +26,10 @@ Open two tabs, change directory in one, and confirm the other keeps independent
 directory, history and prompt context. Keyboard tab-list navigation supports
 arrows, `Home`, `End` and `Delete`.
 
+The appearance selector exposes Graphite, Bone, Nord, Amber, Moss and Dusk.
+Older persisted `paper` and `midnight` values migrate to Bone and Nord when
+loaded, so existing users keep a close visual equivalent.
+
 ## Frontend-only preview
 
 ```bash

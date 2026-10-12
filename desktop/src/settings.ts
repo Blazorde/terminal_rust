@@ -1,6 +1,6 @@
 import type { ITheme, Terminal } from '@xterm/xterm'
 
-export type DesktopTheme = 'graphite' | 'midnight' | 'paper'
+export type DesktopTheme = 'graphite' | 'bone' | 'nord' | 'amber' | 'moss' | 'dusk'
 export type FontFamily = 'system' | 'cascadia' | 'jetbrains'
 export type CursorStyle = 'block' | 'bar' | 'underline'
 export type WindowDensity = 'compact' | 'comfortable'
@@ -57,7 +57,24 @@ const terminalThemes: Record<DesktopTheme, ITheme> = {
     brightBlack: '#626970',
     brightWhite: '#fffaf0',
   },
-  midnight: {
+  bone: {
+    background: '#f2eee5',
+    foreground: '#25231f',
+    cursor: '#b94725',
+    cursorAccent: '#f2eee5',
+    selectionBackground: '#b9472540',
+    black: '#25231f',
+    red: '#b13d45',
+    green: '#3d7650',
+    yellow: '#8b6918',
+    blue: '#365f91',
+    magenta: '#765087',
+    cyan: '#2e7370',
+    white: '#e6dfd2',
+    brightBlack: '#756f65',
+    brightWhite: '#fffdf8',
+  },
+  nord: {
     background: '#0d1320',
     foreground: '#dce7f5',
     cursor: '#67d7c4',
@@ -74,22 +91,35 @@ const terminalThemes: Record<DesktopTheme, ITheme> = {
     brightBlack: '#627089',
     brightWhite: '#f6fbff',
   },
-  paper: {
-    background: '#f2eee5',
-    foreground: '#25231f',
-    cursor: '#b94725',
-    cursorAccent: '#f2eee5',
-    selectionBackground: '#b9472540',
-    black: '#25231f',
-    red: '#b13d45',
-    green: '#3d7650',
-    yellow: '#8b6918',
-    blue: '#365f91',
-    magenta: '#765087',
-    cyan: '#2e7370',
-    white: '#e6dfd2',
-    brightBlack: '#756f65',
-    brightWhite: '#fffdf8',
+  amber: {
+    background: '#1b1510',
+    foreground: '#f2dfbd',
+    cursor: '#f0ad4e',
+    cursorAccent: '#1b1510',
+    selectionBackground: '#f0ad4e50',
+    black: '#1b1510', red: '#ed7b72', green: '#a9c47f', yellow: '#f0c36a',
+    blue: '#8eb3cf', magenta: '#c89ac7', cyan: '#7fc7b7', white: '#f2dfbd',
+    brightBlack: '#756553', brightWhite: '#fff4df',
+  },
+  moss: {
+    background: '#101713',
+    foreground: '#dce7d8',
+    cursor: '#a8cc75',
+    cursorAccent: '#101713',
+    selectionBackground: '#a8cc7550',
+    black: '#101713', red: '#e1857c', green: '#a8cc75', yellow: '#d8bd70',
+    blue: '#86b4b4', magenta: '#b59ac8', cyan: '#79c4aa', white: '#dce7d8',
+    brightBlack: '#627064', brightWhite: '#f2f8ef',
+  },
+  dusk: {
+    background: '#17131d',
+    foreground: '#e9e0ef',
+    cursor: '#d69adf',
+    cursorAccent: '#17131d',
+    selectionBackground: '#d69adf50',
+    black: '#17131d', red: '#ef8794', green: '#9bc58f', yellow: '#dfbd72',
+    blue: '#91acf0', magenta: '#d69adf', cyan: '#7bc5c2', white: '#e9e0ef',
+    brightBlack: '#71667a', brightWhite: '#fff7ff',
   },
 }
 
