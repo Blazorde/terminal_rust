@@ -33,6 +33,11 @@ appliqués au prompt.
 guide [des thèmes](themes.md) décrit leur rendu et la priorité des options
 d'icônes.
 
+La section `[plugins]` réserve la configuration des extensions. Les plugins
+restent inactifs tant que leur identifiant n'apparaît pas dans `enabled`. Le
+guide [de configuration des plugins](plugins/configuration.md) définit le format
+et les comportements d'erreur avant l'arrivée du runtime d'extensions.
+
 ## Exemple minimal
 
 ```toml

@@ -17,3 +17,12 @@ show_status = true
 
 [segments.symbol]
 value = ">"
+
+[plugins]
+# Plugins are disabled by default. Add installed plugin identifiers here.
+enabled = []
+
+# Plugin-specific options are preserved for the future plugin runtime:
+# [plugins.git]
+# show_branch = true
+# show_dirty = true
