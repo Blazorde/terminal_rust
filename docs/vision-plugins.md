@@ -2,6 +2,10 @@
 
 Statut : vision long terme, sans runtime de plugins dans le MVP actuel.
 
+La frontière technique retenue est détaillée dans
+[l'architecture des plugins](plugins/architecture.md) et
+[l'ADR-0006](decisions/0006-plugin-boundary.md).
+
 ## Intention
 
 Terminal Rust doit pouvoir évoluer d'un mini-shell pédagogique vers une
