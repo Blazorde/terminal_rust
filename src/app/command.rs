@@ -6,23 +6,33 @@ use crate::commands::{
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
+use crate::plugin::DeclarativeCommandRegistry;
 use crate::render;
 
 pub struct ShellState {
     previous_dir: Option<PathBuf>,
+    plugin_commands: DeclarativeCommandRegistry,
     user_commands: user::UserCommandRegistry,
 }
 
 impl ShellState {
-    pub(crate) fn new(user_commands: user::UserCommandRegistry) -> Self {
+    pub(crate) fn new(
+        user_commands: user::UserCommandRegistry,
+        plugin_commands: DeclarativeCommandRegistry,
+    ) -> Self {
         Self {
             previous_dir: None,
+            plugin_commands,
             user_commands,
         }
     }
 
     pub(crate) fn user_command_names(&self) -> impl Iterator<Item = &str> {
         self.user_commands.names()
+    }
+
+    pub(crate) fn plugin_command_names(&self) -> impl Iterator<Item = &str> {
+        self.plugin_commands.names()
     }
 }
 
@@ -174,7 +184,10 @@ pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
     };
 
     let Some(command) = find_command(command_name) else {
-        return execute_user_command(command_name, &args[1..], state);
+        if state.user_commands.get(command_name).is_some() {
+            return execute_user_command(command_name, &args[1..], state);
+        }
+        return execute_plugin_command(command_name, &args[1..], state);
     };
 
     let command_args = &args[1..];
@@ -211,6 +224,26 @@ fn execute_user_command(
             map_display_error(user::run_process(name, &command, invocation_args))
         }
     }
+}
+
+fn execute_plugin_command(
+    name: &str,
+    invocation_args: &[String],
+    state: &mut ShellState,
+) -> CommandResult {
+    let Some(command) = state.plugin_commands.get(name).cloned() else {
+        if let Some(reason) = state.plugin_commands.blocked_reason(name) {
+            return CommandResult::Error(reason.to_string());
+        }
+        return CommandResult::Error(CommandError::UnknownCommand(name.to_string()).to_string());
+    };
+    if !invocation_args.is_empty() {
+        return CommandResult::Error(format!(
+            "{name}: declarative command from plugin '{}' does not accept arguments",
+            command.plugin_id
+        ));
+    }
+    map_prefixed_error(name, render::stdout(command.response))
 }
 
 fn find_command(name: &str) -> Option<&'static CommandSpec> {

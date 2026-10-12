@@ -1,67 +1,70 @@
-# Configuration des plugins
+# Plugin configuration
 
-Terminal Rust réserve dans le format de configuration v1 un espace stable pour
-activer les futurs plugins et conserver leurs options. Ce contrat est pris en
-charge dès maintenant ; le chargement et l'exécution de plugins arriveront dans
-un ticket ultérieur.
+Terminal Rust reserves a stable v1 configuration area for activation, explicit
+permission grants, and plugin-owned settings.
 
-## Format TOML
+## TOML format
 
 ```toml
 [plugins]
-enabled = ["git", "docker", "node"]
+enabled = ["example.hello"]
 
-[plugins.git]
-show_branch = true
-show_dirty = true
+[plugins.grants]
+"example.hello" = ["command.register", "output.write"]
 
-[plugins.docker]
-context = "desktop-linux"
+[plugins."example.hello"]
+greeting = "Welcome"
 ```
 
-`plugins.enabled` est la liste ordonnée des plugins à charger. Une liste absente
-ou vide désactive tous les plugins. Retirer un identifiant de cette liste suffit
-à désactiver le plugin ; sa table reste dans le fichier et ses réglages sont
-conservés.
+`plugins.enabled` is the ordered list of plugin IDs considered for activation.
+An absent or empty list disables every plugin. Removing an ID is enough to
+disable it; settings and grants remain so a temporary disable does not destroy
+user choices.
 
-Chaque table `[plugins.<identifiant>]` appartient au plugin correspondant. Le
-cœur conserve ses valeurs TOML sans interpréter ni supprimer les clés inconnues.
-Une configuration n'est pas obligatoire pour activer un plugin.
+`plugins.grants` maps a plugin ID to permissions the user approved. A grant is
+effective only when the installed manifest also requests the same permission.
+Unknown and duplicate permission names reject the configuration. Activation is
+not consent, and a stale grant cannot authorize a permission omitted by the
+current manifest.
 
-## Identifiants
+Every other `[plugins.<id>]` table belongs to that plugin. The core preserves
+its TOML values without interpreting or deleting unknown keys. A settings table
+is optional.
 
-Un identifiant contient entre 1 et 64 caractères ASCII minuscules. Les lettres,
-chiffres, points, tirets et tirets bas sont autorisés ; le premier et le dernier
-caractère doivent être une lettre ou un chiffre. Les identifiants simples comme
-`git` et qualifiés comme `acme.git-tools` sont donc valides.
+## IDs
 
-La même règle s'applique aux valeurs de `plugins.enabled` et aux noms des tables.
-Un identifiant ne peut apparaître qu'une fois dans `enabled`. L'ordre est
-conservé afin que le futur registre charge les plugins de façon déterministe.
+An ID contains 1–64 lowercase ASCII characters. Letters, digits, dots, hyphens,
+and underscores are accepted; the first and last character must be a letter or
+digit. Both simple IDs such as `git` and qualified IDs such as
+`acme.git-tools` are valid.
 
-## Comportements d'erreur
+The same rule applies to activation, grants, and settings table keys. An ID may
+appear only once in `enabled`; order is preserved for deterministic discovery,
+but never resolves a command conflict.
 
-| Situation | Comportement |
+## Error behavior
+
+| Situation | Behavior |
 | --- | --- |
-| Section `[plugins]` absente | Configuration valide, aucun plugin activé |
-| Identifiant invalide ou dupliqué | Le fichier est rejeté avec le chemin et la propriété concernés |
-| Valeur `[plugins.<id>]` qui n'est pas une table | Le TOML est rejeté avec le chemin du fichier |
-| Table d'un plugin désactivé | Réglages conservés, plugin non chargé |
-| Plugin activé sans table | Chargement autorisé avec une configuration vide |
-| Plugin activé mais non installé | Le schéma accepte le fichier ; le futur registre signalera le plugin indisponible et continuera sans l'exécuter |
-| Clé inconnue dans une table de plugin | Conservée et transmise au plugin, qui en assure la validation |
+| Missing `[plugins]` | Valid configuration; no plugin is active |
+| Invalid or duplicate enabled ID | Configuration rejected with property and ID |
+| Invalid grants ID | Configuration rejected |
+| Unknown or duplicate grant | Configuration rejected with plugin and permission |
+| Settings value is not a table | TOML rejected with the file path |
+| Disabled plugin has settings or grants | Values preserved; no contribution exposed |
+| Enabled plugin is not installed | Shell continues; plugin remains unavailable |
+| Unknown key inside plugin settings | Preserved for the plugin to validate |
 
-Comme pour toute erreur de configuration globale, le shell affiche un diagnostic
-puis démarre avec ses valeurs sûres par défaut. L'absence d'un plugin ou d'un
-outil externe reste une capacité indisponible, pas une erreur fatale du shell.
+As with any global configuration error, the shell prints a diagnostic and uses
+safe defaults. Missing plugins and tools are unavailable capabilities, not fatal
+shell errors.
 
-## Compatibilité
+## Portability
 
-Le format n'encode aucun chemin de plateforme et fonctionne de façon identique
-sur Windows, macOS et Linux. Les chemins éventuellement utilisés dans les
-options d'un plugin restent des chaînes TOML ; le plugin doit les convertir avec
-les API natives de chemins et documenter leur portée.
+The format contains no OS-specific path separator and behaves the same on
+Windows, macOS, and Linux. Paths stored inside plugin settings remain TOML
+strings and must be converted with native path APIs by a scoped host service.
 
-Les anciens fichiers v1 sans section `[plugins]` restent valides. Le fichier
-canonique [`config/default.toml`](../../config/default.toml) conserve une liste
-vide afin qu'une installation neuve n'exécute jamais une extension implicitement.
+Older v1 files without plugins or grants remain valid. The canonical
+[`config/default.toml`](../../config/default.toml) keeps an empty activation
+list so a fresh installation never runs an extension implicitly.

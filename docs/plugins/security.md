@@ -51,6 +51,17 @@ and incompatible plugins. A future activation screen must show the same sorted
 list and distinguish previously granted, newly requested, and removed
 permissions. An update that adds a permission returns to a pending-consent state.
 
+Permission consent is stored explicitly in user configuration:
+
+```toml
+[plugins.grants]
+"example.hello" = ["command.register", "output.write"]
+```
+
+Disabling a plugin preserves this record, but no operation is authorized while
+the plugin is inactive. A manifest update that asks for a new permission does
+not add that permission to the grant list.
+
 Example manifest:
 
 ```toml

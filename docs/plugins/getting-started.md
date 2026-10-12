@@ -170,6 +170,9 @@ Enable the ID in the Terminal Rust user configuration:
 ```toml
 [plugins]
 enabled = ["learning.greeting"]
+
+[plugins.grants]
+"learning.greeting" = ["command.register", "output.write"]
 ```
 
 Then run:

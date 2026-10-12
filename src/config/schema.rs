@@ -60,6 +60,7 @@ pub enum UserCommandKind {
 #[serde(default)]
 pub struct PluginsConfig {
     pub enabled: Vec<String>,
+    pub grants: BTreeMap<String, Vec<String>>,
     #[serde(flatten)]
     pub settings: BTreeMap<String, toml::Table>,
 }

@@ -173,6 +173,9 @@ version = 1
 [plugins]
 enabled = ["git", "docker", "node"]
 
+[plugins.grants]
+git = ["command.register", "output.write"]
+
 [plugins.git]
 show_branch = true
 show_dirty = true
@@ -186,6 +189,10 @@ context = "desktop-linux"
         assert!(config.plugins.enabled.iter().any(|plugin| plugin == "git"));
         assert!(config.plugins.enabled.iter().any(|plugin| plugin == "node"));
         assert!(!config.plugins.settings.contains_key("node"));
+        assert_eq!(
+            config.plugins.grants["git"],
+            ["command.register", "output.write"]
+        );
         assert_eq!(
             config
                 .plugins

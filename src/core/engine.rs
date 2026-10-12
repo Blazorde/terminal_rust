@@ -5,6 +5,8 @@ use crate::app::command::{self, CommandResult, ShellState};
 use crate::app::parser::parse_input;
 use crate::commands::user::UserCommandRegistry;
 use crate::config::AppConfig;
+use crate::plugin::DeclarativeCommandRegistry;
+use crate::plugin::registry;
 use crate::render;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -43,14 +45,33 @@ pub struct ShellEngine {
 impl ShellEngine {
     pub fn new() -> Self {
         Self {
-            state: ShellState::new(UserCommandRegistry::default()),
+            state: ShellState::new(
+                UserCommandRegistry::default(),
+                DeclarativeCommandRegistry::default(),
+            ),
         }
     }
 
     pub(crate) fn from_config(config: &AppConfig) -> Result<Self, String> {
+        let entries = registry::discover_default(&config.plugins.enabled).unwrap_or_default();
+        Self::from_config_and_entries(config, &entries)
+    }
+
+    fn from_config_and_entries(
+        config: &AppConfig,
+        entries: &[registry::RegistryEntry],
+    ) -> Result<Self, String> {
         let user_commands = UserCommandRegistry::new(&config.commands, command::command_names())?;
+        let reserved_names = command::command_names()
+            .map(str::to_string)
+            .chain(user_commands.names().map(str::to_string));
+        let plugin_commands = DeclarativeCommandRegistry::from_entries(
+            entries,
+            &config.plugins.grants,
+            reserved_names,
+        );
         Ok(Self {
-            state: ShellState::new(user_commands),
+            state: ShellState::new(user_commands, plugin_commands),
         })
     }
 
@@ -58,6 +79,7 @@ impl ShellEngine {
         command::command_names()
             .map(str::to_string)
             .chain(self.state.user_command_names().map(str::to_string))
+            .chain(self.state.plugin_command_names().map(str::to_string))
             .collect()
     }
 
@@ -135,6 +157,29 @@ mod tests {
     use crate::test_support::cwd_lock;
     use crate::utils::path::temp_path;
 
+    fn plugin_fixture(root: &std::path::Path) {
+        let directory = root.join("example.hello").join("0.1.0");
+        fs::create_dir_all(&directory).expect("plugin fixture directory should be created");
+        fs::write(
+            directory.join("terminal-rust-plugin.toml"),
+            r#"schema_version = 1
+id = "example.hello"
+name = "Hello plugin"
+version = "0.1.0"
+description = "Official declarative fixture"
+host_api = "^1.0"
+terminal_version = ">=0.3, <2.0"
+permissions = ["command.register", "output.write"]
+
+[[commands]]
+name = "hello"
+summary = "Print a greeting"
+response = "Hello from the official Terminal Rust plugin!\n"
+"#,
+        )
+        .expect("plugin fixture manifest should be written");
+    }
+
     #[test]
     fn captures_command_output_without_writing_to_the_terminal() {
         let _guard = cwd_lock().lock().expect("cwd lock is poisoned");
@@ -205,5 +250,65 @@ mod tests {
         assert_eq!(result.status, ExecutionStatus::Continue);
         assert!(result.stdout.contains("Theme: minimal"));
         assert!(engine.command_names().contains(&"show-theme".into()));
+    }
+
+    #[test]
+    fn executes_and_disables_an_authorized_declarative_plugin_command() {
+        let root = temp_path("engine", "declarative-plugin");
+        fs::create_dir(&root).expect("plugin root should be created");
+        plugin_fixture(&root);
+
+        let mut config = AppConfig::default();
+        config.plugins.enabled.push("example.hello".into());
+        config.plugins.grants.insert(
+            "example.hello".into(),
+            vec!["command.register".into(), "output.write".into()],
+        );
+        let entries = registry::discover(&root, &config.plugins.enabled).unwrap();
+        let mut engine = ShellEngine::from_config_and_entries(&config, &entries).unwrap();
+
+        let result = engine.execute_line("hello");
+
+        assert_eq!(result.status, ExecutionStatus::Continue);
+        assert_eq!(
+            result.stdout,
+            "Hello from the official Terminal Rust plugin!\n"
+        );
+        assert!(engine.command_names().contains(&"hello".into()));
+
+        config.plugins.enabled.clear();
+        let entries = registry::discover(&root, &config.plugins.enabled).unwrap();
+        let mut disabled_engine = ShellEngine::from_config_and_entries(&config, &entries).unwrap();
+        let disabled = disabled_engine.execute_line("hello");
+        let native = disabled_engine.execute_line("pwd");
+
+        assert_eq!(disabled.status, ExecutionStatus::Failed);
+        assert_eq!(disabled.error.as_deref(), Some("unknown command: hello"));
+        assert_eq!(native.status, ExecutionStatus::Continue);
+
+        fs::remove_dir_all(root).expect("plugin fixture should be removed");
+    }
+
+    #[test]
+    fn keeps_a_plugin_command_hidden_without_permission_grants() {
+        let root = temp_path("engine", "ungranted-plugin");
+        fs::create_dir(&root).expect("plugin root should be created");
+        plugin_fixture(&root);
+
+        let mut config = AppConfig::default();
+        config.plugins.enabled.push("example.hello".into());
+        let entries = registry::discover(&root, &config.plugins.enabled).unwrap();
+        let mut engine = ShellEngine::from_config_and_entries(&config, &entries).unwrap();
+
+        let result = engine.execute_line("hello");
+
+        assert_eq!(result.status, ExecutionStatus::Failed);
+        assert_eq!(
+            result.error.as_deref(),
+            Some(
+                "plugin 'example.hello' cannot use permission 'command.register': has not been granted by the user"
+            )
+        );
+        fs::remove_dir_all(root).expect("plugin fixture should be removed");
     }
 }
