@@ -23,6 +23,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   budgets while keeping all rendering under host control.
 - Added a runtime-independent plugin SDK and a copyable, compiling `hello`
   plugin template with a validated manifest and tests.
+- Added structured custom commands for built-in aliases and directly spawned
+  processes, including listing, completion, conflict checks, and safe arguments.
 - Added a reusable `ShellEngine` library API with typed execution status,
   captured standard streams, errors, and directory-change metadata for CLI and
   future desktop consumers.

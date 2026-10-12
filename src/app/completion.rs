@@ -4,16 +4,16 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Context, Helper};
 
-use crate::app::command;
-
 pub struct ShellHelper {
     filename_completer: FilenameCompleter,
+    command_names: Vec<String>,
 }
 
 impl ShellHelper {
-    pub fn new() -> Self {
+    pub fn with_command_names(command_names: Vec<String>) -> Self {
         Self {
             filename_completer: FilenameCompleter::new(),
+            command_names,
         }
     }
 }
@@ -35,18 +35,19 @@ impl Completer for ShellHelper {
         let current_word = &before_cursor[command_start..];
 
         if command_start == 0 {
-            return Ok((0, command_completions(current_word)));
+            return Ok((0, command_completions(&self.command_names, current_word)));
         }
 
         self.filename_completer.complete(line, pos, context)
     }
 }
 
-fn command_completions(prefix: &str) -> Vec<Pair> {
-    command::command_names()
+fn command_completions(command_names: &[String], prefix: &str) -> Vec<Pair> {
+    command_names
+        .iter()
         .filter(|command| command.starts_with(prefix))
         .map(|command| Pair {
-            display: command.to_string(),
+            display: command.clone(),
             replacement: format!("{command} "),
         })
         .collect()
@@ -65,10 +66,16 @@ impl Helper for ShellHelper {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::command;
+
+    fn completions(prefix: &str) -> Vec<Pair> {
+        let names: Vec<_> = command::command_names().map(str::to_string).collect();
+        command_completions(&names, prefix)
+    }
 
     #[test]
     fn command_completion_matches_prefix() {
-        let completions = command_completions("pw");
+        let completions = completions("pw");
 
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].replacement, "pwd ");
@@ -76,7 +83,7 @@ mod tests {
 
     #[test]
     fn clear_is_available_in_completion() {
-        let completions = command_completions("cle");
+        let completions = completions("cle");
 
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].replacement, "clear ");
@@ -84,7 +91,7 @@ mod tests {
 
     #[test]
     fn dashboard_is_available_in_completion() {
-        let completions = command_completions("dash");
+        let completions = completions("dash");
 
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].replacement, "dashboard ");
@@ -92,7 +99,7 @@ mod tests {
 
     #[test]
     fn git_is_available_in_completion() {
-        let completions = command_completions("git");
+        let completions = completions("git");
 
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].replacement, "git ");
@@ -100,7 +107,7 @@ mod tests {
 
     #[test]
     fn theme_is_available_in_completion() {
-        let completions = command_completions("the");
+        let completions = completions("the");
 
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].replacement, "theme ");
@@ -108,9 +115,17 @@ mod tests {
 
     #[test]
     fn plugins_is_available_in_completion() {
-        let completions = command_completions("plug");
+        let completions = completions("plug");
 
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].replacement, "plugins ");
+    }
+
+    #[test]
+    fn custom_commands_are_available_in_completion() {
+        let names = vec!["pwd".into(), "serve".into()];
+        let completions = command_completions(&names, "ser");
+
+        assert_eq!(completions[0].replacement, "serve ");
     }
 }

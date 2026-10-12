@@ -2,14 +2,28 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    cat, cd, clear, dashboard, git_command, ls, mkdir, plugins, pwd, rm, theme, touch,
+    cat, cd, clear, dashboard, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
 };
+use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
 use crate::render;
 
-#[derive(Default)]
 pub struct ShellState {
     previous_dir: Option<PathBuf>,
+    user_commands: user::UserCommandRegistry,
+}
+
+impl ShellState {
+    pub(crate) fn new(user_commands: user::UserCommandRegistry) -> Self {
+        Self {
+            previous_dir: None,
+            user_commands,
+        }
+    }
+
+    pub(crate) fn user_command_names(&self) -> impl Iterator<Item = &str> {
+        self.user_commands.names()
+    }
 }
 
 #[derive(Eq, PartialEq)]
@@ -115,6 +129,13 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_plugins,
     },
     CommandSpec {
+        name: "commands",
+        usage: "commands list",
+        summary: "list configured custom commands",
+        max_args: None,
+        handler: run_commands,
+    },
+    CommandSpec {
         name: "help",
         usage: "help",
         summary: "show this help",
@@ -153,9 +174,7 @@ pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
     };
 
     let Some(command) = find_command(command_name) else {
-        return CommandResult::Error(
-            CommandError::UnknownCommand(command_name.to_string()).to_string(),
-        );
+        return execute_user_command(command_name, &args[1..], state);
     };
 
     let command_args = &args[1..];
@@ -164,6 +183,34 @@ pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
     }
 
     (command.handler)(command_args, state)
+}
+
+fn execute_user_command(
+    name: &str,
+    invocation_args: &[String],
+    state: &mut ShellState,
+) -> CommandResult {
+    let Some(command) = state.user_commands.get(name).cloned() else {
+        return CommandResult::Error(CommandError::UnknownCommand(name.to_string()).to_string());
+    };
+    let mut expanded_args = command.args.clone();
+    if command.append_args {
+        expanded_args.extend_from_slice(invocation_args);
+    } else if !invocation_args.is_empty() {
+        return CommandResult::Error(format!(
+            "{name}: this custom command does not accept arguments"
+        ));
+    }
+
+    match command.kind {
+        UserCommandKind::Builtin => {
+            expanded_args.insert(0, command.target);
+            execute(&expanded_args, state)
+        }
+        UserCommandKind::Process => {
+            map_display_error(user::run_process(name, &command, invocation_args))
+        }
+    }
 }
 
 fn find_command(name: &str) -> Option<&'static CommandSpec> {
@@ -242,6 +289,16 @@ fn run_theme(args: &[String], _state: &mut ShellState) -> CommandResult {
 
 fn run_plugins(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_display_error(plugins::plugins(args))
+}
+
+fn run_commands(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args != ["list"] {
+        return CommandResult::Error("commands: expected 'list'".into());
+    }
+    map_prefixed_error(
+        "commands",
+        render::stdout(state.user_commands.render_list()),
+    )
 }
 
 fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {

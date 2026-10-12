@@ -66,10 +66,46 @@ pub fn validate(config: &AppConfig) -> Result<(), String> {
     for plugin_id in config.plugins.settings.keys() {
         validate_plugin_id(plugin_id, "plugins")?;
     }
+    for (name, command) in &config.commands {
+        if !is_valid_user_command_name(name) {
+            return Err(format!("commands contains invalid command name '{name}'"));
+        }
+        if command.target.trim().is_empty()
+            || command.target.chars().any(|character| character == '\0')
+        {
+            return Err(format!(
+                "commands.{name}.target must not be empty or contain NUL"
+            ));
+        }
+        if command.args.iter().any(|argument| argument.contains('\0')) {
+            return Err(format!("commands.{name}.args must not contain NUL"));
+        }
+        if command.description.chars().any(char::is_control) {
+            return Err(format!(
+                "commands.{name}.description must not contain control characters"
+            ));
+        }
+    }
 
     let _ = config.segments.git.show_status;
     let _ = config.prompt.newline;
     Ok(())
+}
+
+fn is_valid_user_command_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name
+            .as_bytes()
+            .first()
+            .is_some_and(u8::is_ascii_alphanumeric)
+        && name
+            .as_bytes()
+            .last()
+            .is_some_and(u8::is_ascii_alphanumeric)
+        && name.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-' || byte == b'_'
+        })
 }
 
 fn validate_plugin_id(plugin_id: &str, property: &str) -> Result<(), String> {
@@ -135,5 +171,37 @@ mod tests {
 
         let error = validate(&config).expect_err("invalid plugin id should fail");
         assert!(error.contains("plugins.enabled contains invalid plugin id 'Git Plugin'"));
+    }
+
+    #[test]
+    fn rejects_invalid_user_command_names_and_nul_arguments() {
+        let mut config = AppConfig::default();
+        config.commands.insert(
+            "Bad Command".into(),
+            super::super::schema::UserCommandConfig {
+                target: "pwd".into(),
+                ..Default::default()
+            },
+        );
+        assert!(
+            validate(&config)
+                .unwrap_err()
+                .contains("invalid command name")
+        );
+
+        config.commands.clear();
+        config.commands.insert(
+            "bad-arg".into(),
+            super::super::schema::UserCommandConfig {
+                target: "pwd".into(),
+                args: vec!["bad\0argument".into()],
+                ..Default::default()
+            },
+        );
+        assert!(
+            validate(&config)
+                .unwrap_err()
+                .contains("must not contain NUL")
+        );
     }
 }

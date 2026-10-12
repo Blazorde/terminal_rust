@@ -27,6 +27,7 @@ vivent ici.
 | Comprendre une décision | [Registre des ADR](decisions/README.md) |
 | Personnaliser le prompt | [Personnalisation](customization.md) |
 | Configurer le shell | [Configuration utilisateur](configuration.md) |
+| Déclarer des commandes personnelles | [Commandes utilisateur](custom-commands.md) |
 | Créer un thème | [Format des thèmes](themes.md) |
 | Contribuer | [Guide de contribution](development/contributing.md) |
 | Tester une évolution | [Stratégie de tests](development/testing.md) |

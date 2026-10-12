@@ -38,6 +38,10 @@ restent inactifs tant que leur identifiant n'apparaît pas dans `enabled`. Le
 guide [de configuration des plugins](plugins/configuration.md) définit le format
 et les comportements d'erreur avant l'arrivée du runtime d'extensions.
 
+La table `[commands]` contient des raccourcis structurés vers une commande
+interne ou un processus externe. Le guide [des commandes
+utilisateur](custom-commands.md) détaille la syntaxe et les limites de sécurité.
+
 ## Exemple minimal
 
 ```toml
