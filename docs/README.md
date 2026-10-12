@@ -23,6 +23,7 @@ vivent ici.
 | Design plugin discovery | [Local plugin catalog](plugins/catalog.md) |
 | Concevoir un segment plugin | [Segments de prompt des plugins](plugins/prompt-segments.md) |
 | Démarrer un plugin | [SDK minimal et template](plugins/sdk.md) |
+| Build a first plugin | [Beginner plugin tutorial](plugins/getting-started.md) |
 | Étudier le scripting | [Comparatif Lua, Rhai et WebAssembly](research/scripting-runtime.md) |
 | Planifier les outils développeur | [Developer tools roadmap](research/developer-tools-roadmap.md) |
 | Développer et valider l'interface desktop | [Guide desktop](development/desktop.md) |

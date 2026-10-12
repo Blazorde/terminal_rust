@@ -1,24 +1,27 @@
-# Template de plugin Terminal Rust
+# Terminal Rust plugin template
 
-Ce dossier est un modèle minimal copiable. Il contient un manifeste reconnu par
-le registre, une commande `hello` et un test unitaire. Le code utilise seulement
-les DTO du SDK ; il ne choisit pas le futur transport entre l'hôte et le plugin.
+This directory is a minimal copyable template. It contains a registry-compatible
+manifest, one `hello` command, and a unit test. The code uses only SDK message
+types and does not choose the future transport between the host and plugin.
 
-## Copier le modèle
+For a guided explanation, start with the
+[beginner tutorial](../../docs/plugins/getting-started.md).
 
-1. Copier le dossier hors de `plugins/example-plugin` ou le renommer.
-2. Modifier `name` dans `Cargo.toml`.
-3. Remplacer `id`, `name`, `version`, `description` et `authors` dans
+## Copy the template
+
+1. Copy this directory outside `plugins/example-plugin`, or rename it.
+2. Change `name` in `Cargo.toml`.
+3. Replace `id`, `name`, `version`, `description`, and `authors` in
    `terminal-rust-plugin.toml`.
-4. Adapter l'identifiant `example.hello/hello` et la réponse dans `src/lib.rs`.
-5. Garder uniquement les permissions réellement nécessaires.
+4. Update `example.hello/hello` and the response in `src/lib.rs`.
+5. Keep only permissions the plugin actually needs.
 
-L'identifiant du plugin est stable ; ne le changez pas après publication. Le
-couple version du manifeste/version du crate doit rester identique.
+The plugin ID is stable and should not change after publishing. The manifest
+and crate versions must remain identical.
 
-## Compiler et tester
+## Build and test
 
-Depuis la racine du dépôt :
+From the repository root:
 
 ```bash
 cargo check -p terminal-rust-example-plugin --all-targets
@@ -26,34 +29,36 @@ cargo clippy -p terminal-rust-example-plugin --all-targets -- -D warnings
 cargo test -p terminal-rust-example-plugin --all-targets
 ```
 
-Le test appelle directement l'implémentation et vérifie la réponse typée. Le
-manifeste est aussi parsé par les tests du cœur. Le template n'est pas chargé
-dynamiquement : le choix du runtime isolé reste volontairement séparé.
+The test calls the implementation directly and checks its typed response. Core
+tests also parse the manifest. The template is not dynamically loaded: the
+isolated runtime remains a separate milestone.
 
-## Tester l'installation locale
+## Test local discovery
 
-Créer l'arborescence suivante dans le [répertoire local des
-plugins](../../docs/plugins/registry.md), puis y copier le manifeste :
+Create the following tree in the
+[local plugin directory](../../docs/plugins/registry.md), then copy the manifest:
 
 ```text
 terminal-rust/plugins/example.hello/0.1.0/terminal-rust-plugin.toml
 ```
 
-Ajouter `example.hello` à `plugins.enabled`, puis lancer :
+Add `example.hello` to `plugins.enabled`, then run:
 
 ```bash
 terminal_rust plugins list
 ```
 
-Le plugin doit apparaître `enabled`. Sa commande ne devient exécutable qu'après
-l'arrivée du runtime ; le registre n'exécute jamais une bibliothèque copiée.
+The plugin should appear as `enabled` with its requested permissions. Its
+command will become executable only after the runtime milestone; the registry
+never executes a copied Rust library.
 
-## Checklist avant partage
+## Sharing checklist
 
-- identifiant et SemVer valides ;
-- manifeste et crate à la même version ;
-- permissions minimales ;
-- aucune donnée sensible dans les exemples ou tests ;
-- formatage, Clippy strict et tests réussis ;
-- erreurs utilisateur courtes et actionnables ;
-- comportement documenté sur Windows, macOS et Linux.
+- valid, stable ID and SemVer;
+- matching manifest and crate versions;
+- tested API and Terminal Rust compatibility ranges;
+- minimum requested permissions;
+- no secret or personal path in examples and tests;
+- formatting, strict Clippy, and tests pass;
+- concise, actionable user errors;
+- behavior documented for Windows, macOS, and Linux.
