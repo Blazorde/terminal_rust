@@ -162,7 +162,7 @@ portable.
 
 1. T102 définit uniquement les DTO et règles de compatibilité.
 2. T103 ajoute la configuration sans découverte de code.
-3. T106 et T107 livrent registre local et manifeste validé.
+3. T106 et T107 livrent le registre local, `plugins list` et le manifeste validé.
 4. T104 et T105 branchent une commande et un segment déclaratifs.
 5. T108 puis T117 fournissent le SDK minimal et un plugin officiel.
 6. Un ADR ultérieur choisit WASM ou processus après un spike mesuré.

@@ -16,6 +16,7 @@ pub fn print_help() -> io::Result<()> {
         "  dashboard            show system performance and context",
         "  git <status|branch|log> [options]",
         "  theme <list|preview NAME>",
+        "  plugins list         list locally installed plugins",
         "  help                 show this help",
         "  exit                 close the terminal",
         "  quit                 close the terminal",
