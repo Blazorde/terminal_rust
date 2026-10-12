@@ -8,6 +8,7 @@ use semver::{Version, VersionReq};
 use serde::Deserialize;
 
 use super::command::CommandContribution;
+use super::prompt_segment::PromptSegmentContribution;
 
 pub(crate) const MANIFEST_FILE: &str = "terminal-rust-plugin.toml";
 
@@ -26,6 +27,8 @@ pub(crate) struct PluginManifest {
     pub permissions: Vec<Permission>,
     #[serde(default)]
     pub commands: Vec<CommandContribution>,
+    #[serde(default)]
+    pub prompt_segments: Vec<PromptSegmentContribution>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -101,6 +104,32 @@ impl PluginManifest {
                 )));
             }
         }
+        if !self.commands.is_empty() && !self.permissions.contains(&Permission::CommandRegister) {
+            return Err(invalid(
+                "commands require the 'command.register' permission".into(),
+            ));
+        }
+        let mut segment_names = std::collections::HashSet::new();
+        for segment in &self.prompt_segments {
+            segment.validate().map_err(|message| {
+                invalid(format!("prompt segment '{}': {message}", segment.name))
+            })?;
+            if !segment_names.insert(&segment.name) {
+                return Err(invalid(format!(
+                    "duplicate prompt segment '{}'",
+                    segment.name
+                )));
+            }
+        }
+        if !self.prompt_segments.is_empty()
+            && !self
+                .permissions
+                .contains(&Permission::PromptSegmentRegister)
+        {
+            return Err(invalid(
+                "prompt_segments require the 'prompt.segment.register' permission".into(),
+            ));
+        }
         Ok(())
     }
 }
@@ -163,10 +192,16 @@ name = "Git tools"
 version = "0.1.0"
 description = "Safe Git helpers"
 host_api = "^1.0"
-permissions = ["command.register", "output.write"]
+permissions = ["command.register", "output.write", "prompt.segment.register"]
 [[commands]]
 name = "git-clean-check"
 summary = "Check whether the repository is clean"
+
+[[prompt_segments]]
+name = "git-review"
+summary = "Pull request review state"
+timeout_ms = 20
+cache_ttl_ms = 5000
 "#,
         );
         let manifest = PluginManifest::load(&path).unwrap();
