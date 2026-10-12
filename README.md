@@ -42,8 +42,10 @@ cargo run
 ```
 
 At the prompt, run `help` to explore the command set, `dashboard` to inspect the
-machine, or `exit` to close the session. A single command can run without an
-interactive session:
+machine, or `exit` to close the session. `Tab` cycles command and path
+completions; a dim history suggestion can be accepted with `Right Arrow` or
+dismissed with `Left Arrow`. See the [completion guide](docs/completion.md).
+A single command can run without an interactive session:
 
 ```bash
 cargo run -- pwd

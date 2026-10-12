@@ -50,7 +50,7 @@ fn run_interactive_editor() -> ExitCode {
     let app_config = load_config();
     let mut engine = load_engine(&app_config);
     let config = Config::builder()
-        .completion_type(CompletionType::List)
+        .completion_type(CompletionType::Circular)
         .build();
     let mut editor = match Editor::<ShellHelper, DefaultHistory>::with_config(config) {
         Ok(editor) => editor,
