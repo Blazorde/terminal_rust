@@ -12,7 +12,8 @@ choix a été fait et quelles conséquences il faut accepter.
 | [0002](0002-non-blocking-git-detection.md) | Acceptée | Détection Git externe et non bloquante |
 | [0003](0003-segmented-prompt-engine.md) | Acceptée | Moteur de prompt composé de segments |
 | [0004](0004-allowlisted-git-commands.md) | Acceptée | Raccourcis Git limités à une liste blanche en lecture seule |
-| [0005](0005-desktop-gui-stack.md) | Proposée | Couche desktop Tauri autour du moteur Rust |
+| [0005](0005-desktop-gui-stack.md) | Acceptée | Couche desktop Tauri autour du moteur Rust |
+| [0006](0006-plugin-boundary.md) | Acceptée | Frontière de plugins déclarative et isolable |
 
 ## Cycle de vie
 

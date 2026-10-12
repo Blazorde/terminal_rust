@@ -9,6 +9,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 - Documented the post-MVP plugin vision, extension boundaries, permission model
   and staged roadmap inspired by Neovim without enabling third-party code.
+- Defined the target plugin architecture, declarative-first lifecycle, stable
+  message boundary, future source layout and cross-platform compatibility rules.
 - Added a reusable `ShellEngine` library API with typed execution status,
   captured standard streams, errors, and directory-change metadata for CLI and
   future desktop consumers.
