@@ -3,6 +3,7 @@ use std::fmt;
 use std::io;
 
 use crate::config;
+use crate::plugin::Permission;
 use crate::plugin::registry::{self, PluginStatus, RegistryEntry};
 use crate::render;
 
@@ -50,6 +51,10 @@ fn format_entries(entries: &[RegistryEntry]) -> String {
                     manifest.description,
                     path.display()
                 ));
+                output.push_str(&format!(
+                    "    requested permissions: {}\n",
+                    format_permissions(&manifest.permissions)
+                ));
             }
             RegistryEntry::Invalid { path, message } => {
                 output.push_str(&format!(
@@ -60,6 +65,18 @@ fn format_entries(entries: &[RegistryEntry]) -> String {
         }
     }
     output
+}
+
+fn format_permissions(permissions: &[Permission]) -> String {
+    if permissions.is_empty() {
+        return "none".into();
+    }
+    let mut names = permissions
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    names.sort();
+    names.join(", ")
 }
 
 impl fmt::Display for PluginsCommandError {
@@ -78,6 +95,8 @@ impl Error for PluginsCommandError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin::PluginManifest;
+    use semver::{Version, VersionReq};
 
     #[test]
     fn formats_an_empty_registry() {
@@ -90,5 +109,39 @@ mod tests {
             plugins(&[]).unwrap_err().to_string(),
             "plugins: expected 'list'"
         );
+    }
+
+    #[test]
+    fn formats_requested_permissions_for_review() {
+        assert_eq!(
+            format_permissions(&[Permission::ProcessSpawn, Permission::FilesystemRead]),
+            "filesystem.read, process.spawn"
+        );
+        assert_eq!(format_permissions(&[]), "none");
+    }
+
+    #[test]
+    fn plugin_list_exposes_permissions_before_activation() {
+        let entry = RegistryEntry::Installed {
+            manifest: Box::new(PluginManifest {
+                schema_version: 1,
+                id: "example.secure".into(),
+                name: "Secure example".into(),
+                version: Version::new(1, 0, 0),
+                description: "Permission review fixture".into(),
+                host_api: VersionReq::parse("^1").unwrap(),
+                authors: Vec::new(),
+                permissions: vec![Permission::NetworkConnect, Permission::ConfigRead],
+                commands: Vec::new(),
+                prompt_segments: Vec::new(),
+            }),
+            path: std::path::PathBuf::from("plugins/example"),
+            status: PluginStatus::Disabled,
+        };
+
+        let output = format_entries(&[entry]);
+
+        assert!(output.contains("example.secure 1.0.0 [disabled]"));
+        assert!(output.contains("requested permissions: config.read, network.connect"));
     }
 }

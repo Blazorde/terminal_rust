@@ -31,6 +31,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   horizontal and vertical splits, keyboard shortcuts, and resize handling.
 - Prioritized future project detection and task shortcuts while preserving
   native developer tools and the existing no-implicit-shell boundary.
+- Added a fail-closed plugin permission gate, sensitive capability requests,
+  visible permission review, and explicit denial diagnostics.
 - Added a reusable `ShellEngine` library API with typed execution status,
   captured standard streams, errors, and directory-change metadata for CLI and
   future desktop consumers.

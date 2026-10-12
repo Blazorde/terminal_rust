@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 
+use super::PermissionSet;
 use super::command::CommandContribution;
 use super::prompt_segment::PromptSegmentContribution;
 
@@ -31,7 +32,7 @@ pub(crate) struct PluginManifest {
     pub prompt_segments: Vec<PromptSegmentContribution>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub(crate) enum Permission {
     #[serde(rename = "context.cwd.read")]
     ContextCwdRead,
@@ -47,6 +48,38 @@ pub(crate) enum Permission {
     OutputWrite,
     #[serde(rename = "prompt.segment.register")]
     PromptSegmentRegister,
+    #[serde(rename = "filesystem.read")]
+    FilesystemRead,
+    #[serde(rename = "filesystem.write")]
+    FilesystemWrite,
+    #[serde(rename = "process.spawn")]
+    ProcessSpawn,
+    #[serde(rename = "network.connect")]
+    NetworkConnect,
+}
+
+impl Permission {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::ContextCwdRead => "context.cwd.read",
+            Self::ContextEnvRead => "context.env.read",
+            Self::ConfigRead => "config.read",
+            Self::CommandRegister => "command.register",
+            Self::CompletionRegister => "completion.register",
+            Self::OutputWrite => "output.write",
+            Self::PromptSegmentRegister => "prompt.segment.register",
+            Self::FilesystemRead => "filesystem.read",
+            Self::FilesystemWrite => "filesystem.write",
+            Self::ProcessSpawn => "process.spawn",
+            Self::NetworkConnect => "network.connect",
+        }
+    }
+}
+
+impl fmt::Display for Permission {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
 }
 
 #[derive(Debug)]
@@ -96,6 +129,12 @@ impl PluginManifest {
         if self.name.trim().is_empty() || self.description.trim().is_empty() {
             return Err(invalid("name and description must not be empty".into()));
         }
+        let mut permissions = std::collections::HashSet::new();
+        for permission in &self.permissions {
+            if !permissions.insert(permission) {
+                return Err(invalid(format!("duplicate permission '{permission}'")));
+            }
+        }
         for command in &self.commands {
             if !command.is_valid() {
                 return Err(invalid(format!(
@@ -104,7 +143,12 @@ impl PluginManifest {
                 )));
             }
         }
-        if !self.commands.is_empty() && !self.permissions.contains(&Permission::CommandRegister) {
+        let declared_permissions = PermissionSet::for_manifest(self, &self.permissions);
+        if !self.commands.is_empty()
+            && declared_permissions
+                .authorize(Permission::CommandRegister)
+                .is_err()
+        {
             return Err(invalid(
                 "commands require the 'command.register' permission".into(),
             ));
@@ -122,9 +166,9 @@ impl PluginManifest {
             }
         }
         if !self.prompt_segments.is_empty()
-            && !self
-                .permissions
-                .contains(&Permission::PromptSegmentRegister)
+            && declared_permissions
+                .authorize(Permission::PromptSegmentRegister)
+                .is_err()
         {
             return Err(invalid(
                 "prompt_segments require the 'prompt.segment.register' permission".into(),
@@ -218,12 +262,70 @@ name = "Unsafe"
 version = "1.0.0"
 description = "Invalid permission"
 host_api = "^1.0"
-permissions = ["process.spawn"]
+permissions = ["terminal.control"]
 "#,
         );
         let error = PluginManifest::load(&path).unwrap_err().to_string();
         assert!(error.contains(path.to_string_lossy().as_ref()));
         assert!(error.contains("unknown variant"));
+    }
+
+    #[test]
+    fn accepts_sensitive_permissions_as_requests_not_implicit_grants() {
+        let path = fixture(
+            r#"schema_version = 1
+id = "scoped-tools"
+name = "Scoped tools"
+version = "1.0.0"
+description = "Requests host services"
+host_api = "^1.0"
+permissions = ["filesystem.read", "filesystem.write", "process.spawn", "network.connect"]
+"#,
+        );
+
+        let manifest = PluginManifest::load(&path).unwrap();
+
+        assert!(manifest.permissions.contains(&Permission::FilesystemRead));
+        assert!(manifest.permissions.contains(&Permission::NetworkConnect));
+    }
+
+    #[test]
+    fn rejects_duplicate_permissions() {
+        let path = fixture(
+            r#"schema_version = 1
+id = "duplicate"
+name = "Duplicate"
+version = "1.0.0"
+description = "Duplicate permissions"
+host_api = "^1.0"
+permissions = ["config.read", "config.read"]
+"#,
+        );
+
+        let error = PluginManifest::load(&path).unwrap_err().to_string();
+
+        assert!(error.contains("duplicate permission 'config.read'"));
+    }
+
+    #[test]
+    fn blocks_a_contribution_without_its_declared_permission() {
+        let path = fixture(
+            r#"schema_version = 1
+id = "missing-permission"
+name = "Missing permission"
+version = "1.0.0"
+description = "Invalid command contribution"
+host_api = "^1.0"
+
+[[commands]]
+name = "hello"
+summary = "Say hello"
+"#,
+        );
+
+        let error = PluginManifest::load(&path).unwrap_err().to_string();
+
+        assert!(error.contains("commands require the 'command.register' permission"));
     }
 
     #[test]
