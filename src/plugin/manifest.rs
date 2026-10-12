@@ -22,6 +22,8 @@ pub(crate) struct PluginManifest {
     pub version: Version,
     pub description: String,
     pub host_api: VersionReq,
+    #[serde(default = "any_version")]
+    pub terminal_version: VersionReq,
     #[serde(default)]
     pub authors: Vec<String>,
     #[serde(default)]
@@ -30,6 +32,45 @@ pub(crate) struct PluginManifest {
     pub commands: Vec<CommandContribution>,
     #[serde(default)]
     pub prompt_segments: Vec<PromptSegmentContribution>,
+}
+
+fn any_version() -> VersionReq {
+    VersionReq::STAR
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Compatibility {
+    Compatible,
+    HostApiMismatch {
+        required: VersionReq,
+        current: Version,
+    },
+    TerminalMismatch {
+        required: VersionReq,
+        current: Version,
+    },
+}
+
+impl Compatibility {
+    pub(crate) fn is_compatible(&self) -> bool {
+        matches!(self, Self::Compatible)
+    }
+}
+
+impl fmt::Display for Compatibility {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Compatible => formatter.write_str("compatible"),
+            Self::HostApiMismatch { required, current } => write!(
+                formatter,
+                "requires plugin API {required}, but the host provides {current}; update the plugin or Terminal Rust"
+            ),
+            Self::TerminalMismatch { required, current } => write!(
+                formatter,
+                "requires Terminal Rust {required}, but {current} is installed; update the plugin or Terminal Rust"
+            ),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Hash, Ord, PartialOrd)]
@@ -110,6 +151,25 @@ impl PluginManifest {
         })?;
         manifest.validate(path)?;
         Ok(manifest)
+    }
+
+    pub(crate) fn compatibility(&self) -> Compatibility {
+        let host_api = Version::new(1, 0, 0);
+        if !self.host_api.matches(&host_api) {
+            return Compatibility::HostApiMismatch {
+                required: self.host_api.clone(),
+                current: host_api,
+            };
+        }
+        let terminal = Version::parse(env!("CARGO_PKG_VERSION"))
+            .expect("Cargo package versions are valid semantic versions");
+        if !self.terminal_version.matches(&terminal) {
+            return Compatibility::TerminalMismatch {
+                required: self.terminal_version.clone(),
+                current: terminal,
+            };
+        }
+        Compatibility::Compatible
     }
 
     fn validate(&self, path: &Path) -> Result<(), ManifestError> {
@@ -236,6 +296,7 @@ name = "Git tools"
 version = "0.1.0"
 description = "Safe Git helpers"
 host_api = "^1.0"
+terminal_version = ">=0.3, <2.0"
 permissions = ["command.register", "output.write", "prompt.segment.register"]
 [[commands]]
 name = "git-clean-check"
@@ -262,6 +323,7 @@ name = "Unsafe"
 version = "1.0.0"
 description = "Invalid permission"
 host_api = "^1.0"
+terminal_version = ">=0.3, <2.0"
 permissions = ["terminal.control"]
 "#,
         );
@@ -279,6 +341,7 @@ name = "Scoped tools"
 version = "1.0.0"
 description = "Requests host services"
 host_api = "^1.0"
+terminal_version = ">=0.3, <2.0"
 permissions = ["filesystem.read", "filesystem.write", "process.spawn", "network.connect"]
 "#,
         );
@@ -298,6 +361,7 @@ name = "Duplicate"
 version = "1.0.0"
 description = "Duplicate permissions"
 host_api = "^1.0"
+terminal_version = ">=0.3, <2.0"
 permissions = ["config.read", "config.read"]
 "#,
         );
@@ -316,6 +380,7 @@ name = "Missing permission"
 version = "1.0.0"
 description = "Invalid command contribution"
 host_api = "^1.0"
+terminal_version = ">=0.3, <2.0"
 
 [[commands]]
 name = "hello"
@@ -326,6 +391,51 @@ summary = "Say hello"
         let error = PluginManifest::load(&path).unwrap_err().to_string();
 
         assert!(error.contains("commands require the 'command.register' permission"));
+    }
+
+    #[test]
+    fn reports_host_api_and_terminal_version_mismatches() {
+        let mut manifest = PluginManifest {
+            schema_version: 1,
+            id: "compatibility".into(),
+            name: "Compatibility".into(),
+            version: Version::new(1, 0, 0),
+            description: "Compatibility fixture".into(),
+            host_api: VersionReq::parse("^2").unwrap(),
+            terminal_version: VersionReq::STAR,
+            authors: Vec::new(),
+            permissions: Vec::new(),
+            commands: Vec::new(),
+            prompt_segments: Vec::new(),
+        };
+
+        let api_error = manifest.compatibility().to_string();
+        assert!(api_error.contains("requires plugin API ^2"));
+        assert!(api_error.contains("host provides 1.0.0"));
+
+        manifest.host_api = VersionReq::parse("^1").unwrap();
+        manifest.terminal_version = VersionReq::parse(">=9").unwrap();
+        let terminal_error = manifest.compatibility().to_string();
+        assert!(terminal_error.contains("requires Terminal Rust >=9"));
+        assert!(terminal_error.contains(env!("CARGO_PKG_VERSION")));
+    }
+
+    #[test]
+    fn legacy_schema_one_manifest_defaults_to_any_terminal_version() {
+        let path = fixture(
+            r#"schema_version = 1
+id = "legacy"
+name = "Legacy"
+version = "1.0.0"
+description = "Legacy schema one manifest"
+host_api = "^1.0"
+"#,
+        );
+
+        let manifest = PluginManifest::load(&path).unwrap();
+
+        assert_eq!(manifest.terminal_version, VersionReq::STAR);
+        assert_eq!(manifest.compatibility(), Compatibility::Compatible);
     }
 
     #[test]

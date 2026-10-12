@@ -34,6 +34,7 @@ fn format_entries(entries: &[RegistryEntry]) -> String {
     for entry in entries {
         match entry {
             RegistryEntry::Installed {
+                compatibility,
                 manifest,
                 path,
                 status,
@@ -55,6 +56,9 @@ fn format_entries(entries: &[RegistryEntry]) -> String {
                     "    requested permissions: {}\n",
                     format_permissions(&manifest.permissions)
                 ));
+                if !compatibility.is_compatible() {
+                    output.push_str(&format!("    compatibility: {compatibility}\n"));
+                }
             }
             RegistryEntry::Invalid { path, message } => {
                 output.push_str(&format!(
@@ -123,6 +127,7 @@ mod tests {
     #[test]
     fn plugin_list_exposes_permissions_before_activation() {
         let entry = RegistryEntry::Installed {
+            compatibility: crate::plugin::Compatibility::Compatible,
             manifest: Box::new(PluginManifest {
                 schema_version: 1,
                 id: "example.secure".into(),
@@ -130,6 +135,7 @@ mod tests {
                 version: Version::new(1, 0, 0),
                 description: "Permission review fixture".into(),
                 host_api: VersionReq::parse("^1").unwrap(),
+                terminal_version: VersionReq::STAR,
                 authors: Vec::new(),
                 permissions: vec![Permission::NetworkConnect, Permission::ConfigRead],
                 commands: Vec::new(),
@@ -143,5 +149,37 @@ mod tests {
 
         assert!(output.contains("example.secure 1.0.0 [disabled]"));
         assert!(output.contains("requested permissions: config.read, network.connect"));
+    }
+
+    #[test]
+    fn plugin_list_explains_compatibility_failures() {
+        let entry = RegistryEntry::Installed {
+            compatibility: crate::plugin::Compatibility::TerminalMismatch {
+                required: VersionReq::parse(">=9").unwrap(),
+                current: Version::new(0, 3, 0),
+            },
+            manifest: Box::new(PluginManifest {
+                schema_version: 1,
+                id: "example.future".into(),
+                name: "Future example".into(),
+                version: Version::new(1, 0, 0),
+                description: "Compatibility fixture".into(),
+                host_api: VersionReq::parse("^1").unwrap(),
+                terminal_version: VersionReq::parse(">=9").unwrap(),
+                authors: Vec::new(),
+                permissions: Vec::new(),
+                commands: Vec::new(),
+                prompt_segments: Vec::new(),
+            }),
+            path: std::path::PathBuf::from("plugins/future"),
+            status: PluginStatus::Incompatible,
+        };
+
+        let output = format_entries(&[entry]);
+
+        assert!(output.contains("example.future 1.0.0 [incompatible]"));
+        assert!(output.contains("requires Terminal Rust >=9"));
+        assert!(output.contains("0.3.0 is installed"));
+        assert!(output.contains("update the plugin or Terminal Rust"));
     }
 }
