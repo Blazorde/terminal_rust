@@ -53,9 +53,45 @@ pub fn validate(config: &AppConfig) -> Result<(), String> {
         return Err("segments.symbol.value must be visible text".to_string());
     }
 
+    let mut enabled_plugins = HashSet::new();
+    for plugin_id in &config.plugins.enabled {
+        validate_plugin_id(plugin_id, "plugins.enabled")?;
+        if !enabled_plugins.insert(plugin_id) {
+            return Err(format!(
+                "plugins.enabled contains duplicate plugin '{plugin_id}'"
+            ));
+        }
+    }
+    for plugin_id in config.plugins.settings.keys() {
+        validate_plugin_id(plugin_id, "plugins")?;
+    }
+
     let _ = config.segments.git.show_status;
     let _ = config.prompt.newline;
     Ok(())
+}
+
+fn validate_plugin_id(plugin_id: &str, property: &str) -> Result<(), String> {
+    let valid_length = !plugin_id.is_empty() && plugin_id.len() <= 64;
+    let valid_edges = plugin_id
+        .as_bytes()
+        .first()
+        .is_some_and(u8::is_ascii_alphanumeric)
+        && plugin_id
+            .as_bytes()
+            .last()
+            .is_some_and(u8::is_ascii_alphanumeric);
+    let valid_characters = plugin_id
+        .bytes()
+        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte));
+
+    if valid_length && valid_edges && valid_characters {
+        Ok(())
+    } else {
+        Err(format!(
+            "{property} contains invalid plugin id '{plugin_id}' (expected 1-64 lowercase ASCII letters, digits, '.', '_' or '-', starting and ending with a letter or digit)"
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -91,5 +127,25 @@ mod tests {
             validate(&config),
             Err("prompt layout contains duplicate segment 'path'".into())
         );
+    }
+
+    #[test]
+    fn rejects_duplicate_enabled_plugins() {
+        let mut config = AppConfig::default();
+        config.plugins.enabled = vec!["git".into(), "git".into()];
+
+        assert_eq!(
+            validate(&config),
+            Err("plugins.enabled contains duplicate plugin 'git'".into())
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_plugin_identifiers() {
+        let mut config = AppConfig::default();
+        config.plugins.enabled = vec!["Git Plugin".into()];
+
+        let error = validate(&config).expect_err("invalid plugin id should fail");
+        assert!(error.contains("plugins.enabled contains invalid plugin id 'Git Plugin'"));
     }
 }

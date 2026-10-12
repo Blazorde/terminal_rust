@@ -13,6 +13,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   message boundary, future source layout and cross-platform compatibility rules.
 - Specified the proposed plugin API DTOs, host capabilities, error model,
   version negotiation and runtime-independent validation rules.
+- Added a validated, backward-compatible plugin configuration schema with
+  explicit activation and preserved plugin-owned settings.
 - Added a reusable `ShellEngine` library API with typed execution status,
   captured standard streams, errors, and directory-change metadata for CLI and
   future desktop consumers.

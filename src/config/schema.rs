@@ -1,12 +1,15 @@
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct AppConfig {
     pub version: u32,
     pub theme: String,
     pub prompt: PromptConfig,
     pub segments: SegmentsConfig,
+    pub plugins: PluginsConfig,
 }
 
 impl Default for AppConfig {
@@ -16,8 +19,17 @@ impl Default for AppConfig {
             theme: "default".to_string(),
             prompt: PromptConfig::default(),
             segments: SegmentsConfig::default(),
+            plugins: PluginsConfig::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct PluginsConfig {
+    pub enabled: Vec<String>,
+    #[serde(flatten)]
+    pub settings: BTreeMap<String, toml::Table>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]

@@ -162,4 +162,71 @@ mod tests {
 
         assert!(error.to_string().contains("expected 1"));
     }
+
+    #[test]
+    fn loads_enabled_plugins_and_preserves_their_settings() {
+        let path = fixture(
+            "plugins.toml",
+            r#"
+version = 1
+
+[plugins]
+enabled = ["git", "docker", "node"]
+
+[plugins.git]
+show_branch = true
+show_dirty = true
+
+[plugins.docker]
+context = "desktop-linux"
+"#,
+        );
+        let config = load_from_path(&path).expect("plugin configuration should load");
+
+        assert!(config.plugins.enabled.iter().any(|plugin| plugin == "git"));
+        assert!(config.plugins.enabled.iter().any(|plugin| plugin == "node"));
+        assert!(!config.plugins.settings.contains_key("node"));
+        assert_eq!(
+            config
+                .plugins
+                .settings
+                .get("git")
+                .and_then(|settings| settings.get("show_dirty"))
+                .and_then(toml::Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            config
+                .plugins
+                .settings
+                .get("docker")
+                .and_then(|settings| settings.get("context"))
+                .and_then(toml::Value::as_str),
+            Some("desktop-linux")
+        );
+    }
+
+    #[test]
+    fn retains_settings_for_a_disabled_plugin() {
+        let path = fixture(
+            "disabled-plugin.toml",
+            "version = 1\n[plugins.git]\nshow_branch = false\n",
+        );
+        let config = load_from_path(&path).expect("disabled plugin settings should load");
+
+        assert!(!config.plugins.enabled.iter().any(|plugin| plugin == "git"));
+        assert!(config.plugins.settings.contains_key("git"));
+    }
+
+    #[test]
+    fn rejects_non_table_plugin_settings() {
+        let path = fixture(
+            "invalid-plugin-settings.toml",
+            "version = 1\n[plugins]\nenabled = []\ngit = true\n",
+        );
+        let error = load_from_path(&path).expect_err("plugin settings must be a table");
+
+        assert!(error.to_string().contains("invalid TOML"));
+        assert!(error.to_string().contains("invalid-plugin-settings.toml"));
+    }
 }

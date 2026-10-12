@@ -14,6 +14,7 @@ vivent ici.
 | Comprendre la vision des plugins | [Vision d'un Terminal Rust extensible](vision-plugins.md) |
 | Préparer l'architecture des plugins | [Architecture cible des plugins](plugins/architecture.md) |
 | Examiner le futur contrat public des plugins | [API de plugins proposée](plugins/api.md) |
+| Configurer les plugins | [Configuration des plugins](plugins/configuration.md) |
 | Développer et valider l'interface desktop | [Guide desktop](development/desktop.md) |
 | Consulter l'audit qualité GUI | [Audit accessibilité, responsive et performance](development/gui-quality-audit.md) |
 | Concevoir le futur prompt | [Moteur de prompt](architecture/prompt-engine.md) |
