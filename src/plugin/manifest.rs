@@ -225,4 +225,16 @@ permissions = ["process.spawn"]
         assert!(error.contains(path.to_string_lossy().as_ref()));
         assert!(error.contains("unknown variant"));
     }
+
+    #[test]
+    fn repository_example_manifest_stays_valid() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("plugins")
+            .join("example-plugin")
+            .join(MANIFEST_FILE);
+
+        let manifest = PluginManifest::load(&path).unwrap();
+        assert_eq!(manifest.id, "example.hello");
+        assert_eq!(manifest.commands[0].name, "hello");
+    }
 }

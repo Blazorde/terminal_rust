@@ -1,0 +1,12 @@
+schema_version = 1
+id = "example.hello"
+name = "Hello plugin"
+version = "0.1.0"
+description = "Minimal copyable Terminal Rust plugin"
+host_api = "^1.0"
+authors = ["Your name"]
+permissions = ["command.register", "output.write"]
+
+[[commands]]
+name = "hello"
+summary = "Greet a name from a plugin"

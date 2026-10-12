@@ -21,6 +21,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   and completion can share the same future plugin-aware registry boundary.
 - Added validated prompt-segment declarations with bounded execution and cache
   budgets while keeping all rendering under host control.
+- Added a runtime-independent plugin SDK and a copyable, compiling `hello`
+  plugin template with a validated manifest and tests.
 - Added a reusable `ShellEngine` library API with typed execution status,
   captured standard streams, errors, and directory-change metadata for CLI and
   future desktop consumers.

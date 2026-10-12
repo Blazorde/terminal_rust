@@ -19,6 +19,7 @@ vivent ici.
 | Comprendre la découverte locale | [Registre local des plugins](plugins/registry.md) |
 | Concevoir une commande plugin | [Commandes de plugins](plugins/commands.md) |
 | Concevoir un segment plugin | [Segments de prompt des plugins](plugins/prompt-segments.md) |
+| Démarrer un plugin | [SDK minimal et template](plugins/sdk.md) |
 | Développer et valider l'interface desktop | [Guide desktop](development/desktop.md) |
 | Consulter l'audit qualité GUI | [Audit accessibilité, responsive et performance](development/gui-quality-audit.md) |
 | Concevoir le futur prompt | [Moteur de prompt](architecture/prompt-engine.md) |
