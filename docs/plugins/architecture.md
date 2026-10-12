@@ -1,8 +1,9 @@
 # Architecture cible des plugins
 
-Cette architecture concrétise la [vision long terme](../vision-plugins.md) et
-l'[ADR-0006](../decisions/0006-plugin-boundary.md). Elle décrit les frontières
-à construire ; aucun runtime de code tiers n'est présent dans le MVP actuel.
+Cette architecture concrétise la [vision long terme](../vision-plugins.md), le
+[contrat public proposé](api.md) et
+l'[ADR-0006](../decisions/0006-plugin-boundary.md). Elle décrit les frontières à
+construire ; aucun runtime de code tiers n'est présent dans le MVP actuel.
 
 ## Définition
 
