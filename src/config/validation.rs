@@ -1,4 +1,5 @@
 use super::schema::AppConfig;
+use crate::plugin::is_valid_id;
 use std::collections::HashSet;
 
 pub fn validate(config: &AppConfig) -> Result<(), String> {
@@ -72,20 +73,7 @@ pub fn validate(config: &AppConfig) -> Result<(), String> {
 }
 
 fn validate_plugin_id(plugin_id: &str, property: &str) -> Result<(), String> {
-    let valid_length = !plugin_id.is_empty() && plugin_id.len() <= 64;
-    let valid_edges = plugin_id
-        .as_bytes()
-        .first()
-        .is_some_and(u8::is_ascii_alphanumeric)
-        && plugin_id
-            .as_bytes()
-            .last()
-            .is_some_and(u8::is_ascii_alphanumeric);
-    let valid_characters = plugin_id
-        .bytes()
-        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte));
-
-    if valid_length && valid_edges && valid_characters {
+    if is_valid_id(plugin_id) {
         Ok(())
     } else {
         Err(format!(

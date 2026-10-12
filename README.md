@@ -24,6 +24,7 @@ cargo run -- ls -la
 cargo run -- dashboard
 cargo run -- theme list
 cargo run -- theme preview minimal
+cargo run -- plugins list
 ```
 
 | Plateforme | Archive publiée | Installateur | CI |
@@ -211,6 +212,7 @@ permettent aussi de la piloter sans souris.
 | `git <status\|branch\|log> [options]` | Lance un raccourci Git autorisé dans le dossier courant |
 | `theme list` | Liste les thèmes intégrés |
 | `theme preview <name>` | Prévisualise un thème avec des données de démonstration |
+| `plugins list` | Liste les manifestes de plugins installés et leur état |
 | `help` | Affiche l'aide |
 | `exit` | Ferme le shell |
 | `quit` | Ferme le shell |

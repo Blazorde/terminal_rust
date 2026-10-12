@@ -5,6 +5,7 @@ mod config;
 pub mod core;
 mod errors;
 pub mod git;
+mod plugin;
 mod prompt;
 mod render;
 mod theme;

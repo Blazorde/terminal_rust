@@ -3477,6 +3477,7 @@ version = "0.3.0"
 dependencies = [
  "jiff",
  "rustyline",
+ "semver",
  "serde",
  "serde_json",
  "sysinfo",

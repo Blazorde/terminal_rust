@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn command_completion_matches_prefix() {
-        let completions = command_completions("p");
+        let completions = command_completions("pw");
 
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].replacement, "pwd ");
@@ -104,5 +104,13 @@ mod tests {
 
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].replacement, "theme ");
+    }
+
+    #[test]
+    fn plugins_is_available_in_completion() {
+        let completions = command_completions("plug");
+
+        assert_eq!(completions.len(), 1);
+        assert_eq!(completions[0].replacement, "plugins ");
     }
 }
