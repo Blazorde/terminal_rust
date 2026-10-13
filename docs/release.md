@@ -48,5 +48,10 @@ must agree.
 5. After approval and merge, create lowercase tag `vx.y.z` on the `main` commit.
 6. Verify all build and publish jobs, archives, checksums and release notes.
 
+For v1.0.0, follow the explicit
+[stable snapshot inventory](development/v1-release-snapshot.md). It separates
+public product files from development-only material and defines the temporary
+cleanup/restore sequence required by the `develop` to `main` branch policy.
+
 The publication job rejects a tag without a matching changelog section. An
 Actions job that fails before executing steps is not release evidence.
