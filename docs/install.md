@@ -11,7 +11,7 @@ Windows:
 
 ```powershell
 .\scripts\install.ps1
-.\scripts\install.ps1 -NoPathUpdate -Version v0.3.0
+.\scripts\install.ps1 -NoPathUpdate -Version v1.0.0-alpha.1
 ```
 
 The default directory is `%LOCALAPPDATA%\Programs\TerminalRust`; PATH changes
@@ -22,11 +22,16 @@ Linux x86_64 or macOS Apple Silicon:
 ```bash
 chmod +x scripts/install.sh
 ./scripts/install.sh
+TERMINAL_RUST_VERSION=v1.0.0-alpha.1 ./scripts/install.sh
 ```
 
 The default is `~/.local/bin`; the script prints the required PATH line instead
 of editing shell files. Override version and directory with
 `TERMINAL_RUST_VERSION` and `TERMINAL_RUST_INSTALL_DIR`.
+
+GitHub does not treat prereleases as the latest stable release. Select
+`v1.0.0-alpha.1` explicitly when installing the alpha; omit the version only
+when you want the current stable release.
 
 For a private repository, set `GITHUB_TOKEN` temporarily to a read-only token.
 Never store it in a script or commit. Unix installation additionally uses `gh`.

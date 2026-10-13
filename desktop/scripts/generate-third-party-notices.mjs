@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,35 +33,35 @@ function rustPackages() {
     }));
 }
 
-function npmPackageDirectories(nodeModules) {
-  const result = [];
-  for (const entry of readdirSync(nodeModules)) {
-    if (entry.startsWith(".")) continue;
-    const path = join(nodeModules, entry);
-    if (!statSync(path).isDirectory()) continue;
-    if (entry.startsWith("@")) {
-      for (const scoped of readdirSync(path)) result.push(join(path, scoped));
-    } else {
-      result.push(path);
-    }
-  }
-  return result;
+function packageName(lockPath) {
+  const marker = "node_modules/";
+  const index = lockPath.lastIndexOf(marker);
+  return index === -1 ? "" : lockPath.slice(index + marker.length);
 }
 
 function npmPackages() {
-  return npmPackageDirectories(join(desktopRoot, "node_modules"))
-    .map((directory) => {
-      const manifest = JSON.parse(readFileSync(join(directory, "package.json"), "utf8"));
-      return {
-        ecosystem: "npm",
-        name: manifest.name,
-        version: manifest.version,
-        license: manifest.license ?? "UNKNOWN",
-        source:
-          normalizeRepository(manifest.repository) || manifest.homepage || "npmjs.com",
-      };
-    })
-    .filter((entry) => entry.name && entry.version);
+  const lockfile = JSON.parse(
+    readFileSync(join(desktopRoot, "package-lock.json"), "utf8"),
+  );
+  const packages = new Map();
+
+  for (const [path, manifest] of Object.entries(lockfile.packages ?? {})) {
+    const name = packageName(path);
+    if (!name || !manifest.version) continue;
+    const item = {
+      ecosystem: "npm",
+      name,
+      version: manifest.version,
+      license: manifest.license ?? "UNKNOWN",
+      source:
+        normalizeRepository(manifest.repository) ||
+        manifest.homepage ||
+        `https://www.npmjs.com/package/${name}`,
+    };
+    packages.set(`${item.name}@${item.version}`, item);
+  }
+
+  return [...packages.values()];
 }
 
 function render(packages) {
@@ -70,7 +70,7 @@ function render(packages) {
     "",
     "Terminal Rust is licensed under MIT. The following locked dependencies retain",
     "their own copyright and license terms. This inventory is generated from Cargo",
-    "metadata and installed npm package metadata; it is not legal advice and does not",
+    "metadata and the npm lockfile; it is not legal advice and does not",
     "replace the license files distributed by upstream projects.",
     "",
     "Regenerate with `npm run notices --prefix desktop` after `npm ci --prefix desktop`.",

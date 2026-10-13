@@ -5,6 +5,10 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+No changes yet.
+
+## [1.0.0-alpha.1] - 2026-10-13
+
 ### Added
 
 - Documented the post-MVP plugin vision, extension boundaries, permission model

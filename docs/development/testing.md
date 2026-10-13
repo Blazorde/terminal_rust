@@ -43,7 +43,8 @@ with the Rust standard library and tolerate platform line endings.
 
 CI targets Ubuntu, Windows and macOS with formatting, compilation, Clippy, unit
 tests and CLI integration tests. A platform result counts only when its steps
-actually execute. Complete automation with the [MVP checklist](mvp-quality-checklist.md).
+actually execute. Record native desktop evidence for every supported platform
+before publishing a release.
 
 ## Reproduce the Linux gate locally
 

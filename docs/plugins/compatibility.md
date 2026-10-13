@@ -65,3 +65,7 @@ Every contract change must cover:
 
 Before a runtime is described as portable, the same fixtures must pass on
 Windows, macOS, and Linux.
+
+Terminal Rust prereleases use the compatibility rules of their corresponding
+base release. For example, `1.0.0-alpha.1` satisfies a plugin requirement that
+accepts `1.0.0`, while diagnostics still report the complete prerelease version.

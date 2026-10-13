@@ -14,7 +14,7 @@
 
 Real commands. Native PTY sessions. Git-aware prompts. No simulated terminal.
 
-[Quick start](#quick-start) · [Desktop app](#desktop-workspace) · [Commands](#command-deck) · [Documentation](docs/README.md) · [Wiki](https://github.com/Blazorde/terminal_rust/wiki) · [Wiki source](wiki/Home.md)
+[Quick start](#quick-start) · [Desktop app](#desktop-workspace) · [Commands](#command-deck) · [Documentation](docs/README.md) · [Wiki](https://github.com/Blazorde/terminal_rust/wiki)
 
 </div>
 
@@ -192,6 +192,10 @@ Download the archive for your platform from the
 extract it and run `terminal_rust help` (`terminal_rust.exe help` on Windows).
 Use `SHA256SUMS.txt` to verify the download.
 
+The `v1.0.0-alpha.1` preview is a prerelease and therefore is not selected by
+GitHub's `latest` link. Choose that tag explicitly from the Releases page when
+testing the alpha.
+
 | Platform | Archive | CLI installer | Desktop bundle |
 | --- | --- | --- | --- |
 | Windows x86_64 | `.zip` | `scripts/install.ps1` | NSIS `.exe` |
@@ -262,17 +266,17 @@ not a public issue. Dependency and license checks are documented in the
 
 Windows, macOS and Linux are first-class targets. The Rust CLI is covered by
 portable unit and integration tests. Desktop work additionally requires native
-Tauri prerequisites and platform-specific PTY validation. The current evidence
-matrix is maintained in the [GUI quality audit](docs/development/gui-quality-audit.md);
-an unexecuted CI job is never reported as platform proof.
+Tauri prerequisites and platform-specific PTY validation. The
+[desktop development guide](docs/development/desktop.md) documents the native
+checks; an unexecuted CI job is never reported as platform proof.
 
 ## Project status
 
-The latest stable release is `v0.3.0`; newer work lives on `develop` until its
-release criteria are met. Plugin loading remains deliberately limited: the
-current foundation validates manifests, compatibility and permission grants,
-and can execute safe declarative commands, but it does not load arbitrary
-third-party native libraries.
+This product snapshot identifies as `v1.0.0-alpha.1`; the latest stable release
+remains `v0.3.0`. Plugin loading remains deliberately limited: the current
+foundation validates manifests, compatibility and permission grants, and can
+execute safe declarative commands, but it does not load arbitrary third-party
+native libraries.
 
 See [CHANGELOG.md](CHANGELOG.md) for delivered changes and documented limits.
 
