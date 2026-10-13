@@ -33,6 +33,7 @@ published mirror.
 | Install Terminal Rust | [Installation](install.md) |
 | Troubleshoot | [Troubleshooting](troubleshooting.md) |
 | Build a release | [Release builds](release.md) |
+| Prepare the v1 stable snapshot | [v1.0.0 release snapshot](development/v1-release-snapshot.md) |
 | Review security and dependency policy | [Security](security.md) |
 | Process a ticket | [Ticket workflow](agents/ticket-workflow.md) |
 | Configure GitHub | [Workflows and protections](workflows/README.md) |
