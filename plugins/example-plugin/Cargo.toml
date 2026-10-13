@@ -1,6 +1,6 @@
 [package]
 name = "terminal-rust-example-plugin"
-version = "0.1.0"
+version = "1.0.0-alpha.1"
 edition = "2024"
 description = "Copyable hello-world template for Terminal Rust plugins"
 license = "MIT"

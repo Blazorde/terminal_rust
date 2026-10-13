@@ -61,10 +61,10 @@ GitHub prereleases and do not replace the latest stable release. Tag creation is
 the publication trigger and requires a separate explicit owner approval after
 the final `main` commit has been presented.
 
-For the first v1 alpha, follow the explicit
-[release snapshot inventory](development/v1-release-snapshot.md). It separates
-public product files from development-only material and defines the temporary
-cleanup/restore sequence required by the `develop` to `main` branch policy.
+For the first v1 alpha, keep the release snapshot limited to product source,
+public documentation, legal notices, installer scripts and validation workflows.
+Internal planning notes, evidence logs and repository-automation instructions
+remain on `develop` and are not part of the `main` product snapshot.
 
 The publication job rejects a tag without a matching changelog section. An
 Actions job that fails before executing steps is not release evidence.

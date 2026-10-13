@@ -2,7 +2,7 @@
 
 Terminal Rust is licensed under MIT. The following locked dependencies retain
 their own copyright and license terms. This inventory is generated from Cargo
-metadata and installed npm package metadata; it is not legal advice and does not
+metadata and the npm lockfile; it is not legal advice and does not
 replace the license files distributed by upstream projects.
 
 Regenerate with `npm run notices --prefix desktop` after `npm ci --prefix desktop`.
@@ -10,35 +10,89 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 
 | Ecosystem | Package | Version | Declared license | Source |
 | --- | --- | --- | --- | --- |
-| npm | @oxc-project/types | 0.153.0 | MIT | git+https://github.com/oxc-project/oxc.git |
-| npm | @rolldown/binding-win32-x64-msvc | 1.2.13 | MIT | git+https://github.com/rolldown/rolldown.git |
-| npm | @rolldown/pluginutils | 1.0.1 | MIT | git+https://github.com/rolldown/plugins.git |
-| npm | @tauri-apps/api | 2.12.2 | Apache-2.0 OR MIT | git+https://github.com/tauri-apps/tauri.git |
-| npm | @tauri-apps/cli-win32-x64-msvc | 2.12.1 | Apache-2.0 OR MIT | git+https://github.com/tauri-apps/tauri.git |
-| npm | @tauri-apps/cli | 2.12.1 | Apache-2.0 OR MIT | git+https://github.com/tauri-apps/tauri.git |
-| npm | @types/react-dom | 19.2.3 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| npm | @types/react | 19.2.14 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| npm | @typescript/typescript-win32-x64 | 7.0.2 | Apache-2.0 | https://github.com/microsoft/TypeScript.git |
-| npm | @vitejs/plugin-react | 6.1.2 | MIT | git+https://github.com/vitejs/vite-plugin-react.git |
-| npm | @xterm/addon-fit | 0.11.0 | MIT | https://github.com/xtermjs/xterm.js/tree/master/addons/addon-fit |
-| npm | @xterm/xterm | 6.0.0 | MIT | https://github.com/xtermjs/xterm.js |
-| npm | csstype | 3.2.3 | MIT | https://github.com/frenic/csstype |
-| npm | detect-libc | 2.1.2 | Apache-2.0 | git://github.com/lovell/detect-libc.git |
-| npm | fdir | 6.5.0 | MIT | git+https://github.com/thecodrr/fdir.git |
-| npm | lightningcss-win32-x64-msvc | 1.33.0 | MPL-2.0 | https://github.com/parcel-bundler/lightningcss.git |
-| npm | lightningcss | 1.33.0 | MPL-2.0 | https://github.com/parcel-bundler/lightningcss.git |
-| npm | nanoid | 3.3.20 | MIT | ai/nanoid |
-| npm | picocolors | 1.1.1 | ISC | alexeyraspopov/picocolors |
-| npm | picomatch | 4.0.7 | MIT | micromatch/picomatch |
-| npm | postcss | 8.5.29 | MIT | postcss/postcss |
-| npm | react-dom | 19.3.0 | MIT | https://github.com/react/react.git |
-| npm | react | 19.3.0 | MIT | https://github.com/react/react.git |
-| npm | rolldown | 1.2.13 | MIT | git+https://github.com/rolldown/rolldown.git |
-| npm | scheduler | 0.28.0 | MIT | https://github.com/react/react.git |
-| npm | source-map-js | 1.2.2 | BSD-3-Clause | 7rulnik/source-map-js |
-| npm | tinyglobby | 0.2.17 | MIT | git+https://github.com/SuperchupuDev/tinyglobby.git |
-| npm | typescript | 7.0.2 | Apache-2.0 | https://github.com/microsoft/TypeScript.git |
-| npm | vite | 8.3.4 | MIT | git+https://github.com/vitejs/vite.git |
+| npm | @oxc-project/types | 0.153.0 | MIT | https://www.npmjs.com/package/@oxc-project/types |
+| npm | @rolldown/binding-android-arm-eabi | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-android-arm-eabi |
+| npm | @rolldown/binding-android-arm64 | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-android-arm64 |
+| npm | @rolldown/binding-darwin-arm64 | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-darwin-arm64 |
+| npm | @rolldown/binding-darwin-x64 | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-darwin-x64 |
+| npm | @rolldown/binding-freebsd-x64 | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-freebsd-x64 |
+| npm | @rolldown/binding-linux-arm-gnueabihf | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm-gnueabihf |
+| npm | @rolldown/binding-linux-arm64-gnu | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm64-gnu |
+| npm | @rolldown/binding-linux-arm64-musl | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm64-musl |
+| npm | @rolldown/binding-linux-ppc64-gnu | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-ppc64-gnu |
+| npm | @rolldown/binding-linux-s390x-gnu | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-s390x-gnu |
+| npm | @rolldown/binding-linux-x64-gnu | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-x64-gnu |
+| npm | @rolldown/binding-linux-x64-musl | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-x64-musl |
+| npm | @rolldown/binding-openharmony-arm64 | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-openharmony-arm64 |
+| npm | @rolldown/binding-win32-arm64-msvc | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-win32-arm64-msvc |
+| npm | @rolldown/binding-win32-x64-msvc | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-win32-x64-msvc |
+| npm | @rolldown/pluginutils | 1.0.1 | MIT | https://www.npmjs.com/package/@rolldown/pluginutils |
+| npm | @tauri-apps/api | 2.12.2 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/api |
+| npm | @tauri-apps/cli-darwin-arm64 | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-darwin-arm64 |
+| npm | @tauri-apps/cli-darwin-x64 | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-darwin-x64 |
+| npm | @tauri-apps/cli-linux-arm-gnueabihf | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm-gnueabihf |
+| npm | @tauri-apps/cli-linux-arm64-gnu | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm64-gnu |
+| npm | @tauri-apps/cli-linux-arm64-musl | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm64-musl |
+| npm | @tauri-apps/cli-linux-riscv64-gnu | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-riscv64-gnu |
+| npm | @tauri-apps/cli-linux-x64-gnu | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-x64-gnu |
+| npm | @tauri-apps/cli-linux-x64-musl | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-x64-musl |
+| npm | @tauri-apps/cli-win32-arm64-msvc | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-arm64-msvc |
+| npm | @tauri-apps/cli-win32-ia32-msvc | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-ia32-msvc |
+| npm | @tauri-apps/cli-win32-x64-msvc | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-x64-msvc |
+| npm | @tauri-apps/cli | 2.12.1 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli |
+| npm | @types/react-dom | 19.2.3 | MIT | https://www.npmjs.com/package/@types/react-dom |
+| npm | @types/react | 19.2.14 | MIT | https://www.npmjs.com/package/@types/react |
+| npm | @typescript/typescript-aix-ppc64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-aix-ppc64 |
+| npm | @typescript/typescript-darwin-arm64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-darwin-arm64 |
+| npm | @typescript/typescript-darwin-x64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-darwin-x64 |
+| npm | @typescript/typescript-freebsd-arm64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-freebsd-arm64 |
+| npm | @typescript/typescript-freebsd-x64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-freebsd-x64 |
+| npm | @typescript/typescript-linux-arm | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-linux-arm |
+| npm | @typescript/typescript-linux-arm64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-linux-arm64 |
+| npm | @typescript/typescript-linux-loong64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-linux-loong64 |
+| npm | @typescript/typescript-linux-mips64el | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-linux-mips64el |
+| npm | @typescript/typescript-linux-ppc64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-linux-ppc64 |
+| npm | @typescript/typescript-linux-riscv64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-linux-riscv64 |
+| npm | @typescript/typescript-linux-s390x | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-linux-s390x |
+| npm | @typescript/typescript-linux-x64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-linux-x64 |
+| npm | @typescript/typescript-netbsd-arm64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-netbsd-arm64 |
+| npm | @typescript/typescript-netbsd-x64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-netbsd-x64 |
+| npm | @typescript/typescript-openbsd-arm64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-openbsd-arm64 |
+| npm | @typescript/typescript-openbsd-x64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-openbsd-x64 |
+| npm | @typescript/typescript-sunos-x64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-sunos-x64 |
+| npm | @typescript/typescript-win32-arm64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-win32-arm64 |
+| npm | @typescript/typescript-win32-x64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-win32-x64 |
+| npm | @vitejs/plugin-react | 6.1.2 | MIT | https://www.npmjs.com/package/@vitejs/plugin-react |
+| npm | @xterm/addon-fit | 0.11.0 | MIT | https://www.npmjs.com/package/@xterm/addon-fit |
+| npm | @xterm/xterm | 6.0.0 | MIT | https://www.npmjs.com/package/@xterm/xterm |
+| npm | csstype | 3.2.3 | MIT | https://www.npmjs.com/package/csstype |
+| npm | detect-libc | 2.1.2 | Apache-2.0 | https://www.npmjs.com/package/detect-libc |
+| npm | fdir | 6.5.0 | MIT | https://www.npmjs.com/package/fdir |
+| npm | fsevents | 2.3.3 | MIT | https://www.npmjs.com/package/fsevents |
+| npm | lightningcss-android-arm64 | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss-android-arm64 |
+| npm | lightningcss-darwin-arm64 | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss-darwin-arm64 |
+| npm | lightningcss-darwin-x64 | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss-darwin-x64 |
+| npm | lightningcss-freebsd-x64 | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss-freebsd-x64 |
+| npm | lightningcss-linux-arm-gnueabihf | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss-linux-arm-gnueabihf |
+| npm | lightningcss-linux-arm64-gnu | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss-linux-arm64-gnu |
+| npm | lightningcss-linux-arm64-musl | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss-linux-arm64-musl |
+| npm | lightningcss-linux-x64-gnu | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss-linux-x64-gnu |
+| npm | lightningcss-linux-x64-musl | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss-linux-x64-musl |
+| npm | lightningcss-win32-arm64-msvc | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss-win32-arm64-msvc |
+| npm | lightningcss-win32-x64-msvc | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss-win32-x64-msvc |
+| npm | lightningcss | 1.33.0 | MPL-2.0 | https://www.npmjs.com/package/lightningcss |
+| npm | nanoid | 3.3.20 | MIT | https://www.npmjs.com/package/nanoid |
+| npm | picocolors | 1.1.1 | ISC | https://www.npmjs.com/package/picocolors |
+| npm | picomatch | 4.0.7 | MIT | https://www.npmjs.com/package/picomatch |
+| npm | postcss | 8.5.29 | MIT | https://www.npmjs.com/package/postcss |
+| npm | react-dom | 19.3.0 | MIT | https://www.npmjs.com/package/react-dom |
+| npm | react | 19.3.0 | MIT | https://www.npmjs.com/package/react |
+| npm | rolldown | 1.2.13 | MIT | https://www.npmjs.com/package/rolldown |
+| npm | scheduler | 0.28.0 | MIT | https://www.npmjs.com/package/scheduler |
+| npm | source-map-js | 1.2.2 | BSD-3-Clause | https://www.npmjs.com/package/source-map-js |
+| npm | tinyglobby | 0.2.17 | MIT | https://www.npmjs.com/package/tinyglobby |
+| npm | typescript | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/typescript |
+| npm | vite | 8.3.4 | MIT | https://www.npmjs.com/package/vite |
 | Rust | adler2 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | https://github.com/oyvindln/adler2 |
 | Rust | aho-corasick | 1.1.5 | Unlicense OR MIT | https://github.com/BurntSushi/aho-corasick |
 | Rust | alloc-no-stdlib | 3.0.0 | BSD-3-Clause | https://github.com/dropbox/rust-alloc-no-stdlib |

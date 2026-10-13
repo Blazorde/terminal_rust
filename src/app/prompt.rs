@@ -244,14 +244,15 @@ mod tests {
 
     #[test]
     fn gui_editor_prompt_compacts_the_path_and_keeps_git_context() {
+        let workspace = std::path::PathBuf::from("deep").join("workspace");
         let segments = vec![
-            PromptSegment::new(SegmentKind::User, "blaz", "muted"),
-            PromptSegment::new(SegmentKind::Path, "C:\\deep\\workspace", "primary"),
+            PromptSegment::new(SegmentKind::User, "user", "muted"),
+            PromptSegment::new(SegmentKind::Path, workspace.to_string_lossy(), "primary"),
             PromptSegment::new(SegmentKind::Git, "develop", "secondary"),
             PromptSegment::new(SegmentKind::Symbol, ">", "secondary"),
         ];
 
-        let compact = compact_gui_segments(&segments, Path::new("C:\\deep\\workspace"));
+        let compact = compact_gui_segments(&segments, &workspace);
 
         assert_eq!(compact.len(), 3);
         assert_eq!(compact[0].value.as_deref(), Some("workspace"));

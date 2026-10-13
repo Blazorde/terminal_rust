@@ -38,6 +38,19 @@ fn any_version() -> VersionReq {
     VersionReq::STAR
 }
 
+fn matches_terminal_version(requirement: &VersionReq, current: &Version) -> bool {
+    if requirement.matches(current) {
+        return true;
+    }
+
+    if current.pre.is_empty() {
+        return false;
+    }
+
+    let release = Version::new(current.major, current.minor, current.patch);
+    requirement.matches(&release)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Compatibility {
     Compatible,
@@ -180,7 +193,7 @@ impl PluginManifest {
         }
         let terminal = Version::parse(env!("CARGO_PKG_VERSION"))
             .expect("Cargo package versions are valid semantic versions");
-        if !self.terminal_version.matches(&terminal) {
+        if !matches_terminal_version(&self.terminal_version, &terminal) {
             return Compatibility::TerminalMismatch {
                 required: self.terminal_version.clone(),
                 current: terminal,
@@ -497,6 +510,14 @@ host_api = "^1.0"
 
         assert_eq!(manifest.terminal_version, VersionReq::STAR);
         assert_eq!(manifest.compatibility(), Compatibility::Compatible);
+    }
+
+    #[test]
+    fn stable_terminal_ranges_accept_a_prerelease_of_the_same_version() {
+        let requirement = VersionReq::parse(">=0.3, <2.0").unwrap();
+        let alpha = Version::parse("1.0.0-alpha.1").unwrap();
+
+        assert!(matches_terminal_version(&requirement, &alpha));
     }
 
     #[test]
