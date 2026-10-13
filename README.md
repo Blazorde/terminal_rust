@@ -97,11 +97,6 @@ The desktop app opens real native PTY sessions managed by Rust. The WebView
 renders terminal output and settings but cannot spawn arbitrary processes or
 access the filesystem directly.
 
-![Terminal Rust desktop running a real Git-aware PTY with adaptive colored ls output](docs/assets/terminal-rust-desktop.png)
-
-*Real Windows desktop session; the same Rust shell and native PTY contract are
-used by the Linux and macOS bundles.*
-
 ### Launch the native window from source
 
 Install the [Tauri prerequisites for your platform](docs/development/desktop.md#prerequisites),
