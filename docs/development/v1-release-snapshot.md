@@ -1,17 +1,17 @@
-# v1.0.0 release snapshot
+# v1.0.0-alpha.1 release snapshot
 
 Status: preparation only. Do not open the final `develop` to `main` pull
 request without the owner's explicit approval.
 
-The stable branch is a product snapshot, while `develop` also carries working
-notes and contribution automation. The v1.0.0 promotion therefore needs one
+The `main` branch is a product snapshot, while `develop` also carries working
+notes and contribution automation. The v1.0.0-alpha.1 promotion therefore needs one
 temporary cleanup commit on `develop`. After the stable squash merge, restore
 the development-only files on `develop` in a separate pull request. Do not
 rewrite either branch.
 
 ## Stable snapshot inventory
 
-Keep these groups in the v1.0.0 snapshot:
+Keep these groups in the v1.0.0-alpha.1 snapshot:
 
 - Rust CLI, shared engine, desktop application, plugin SDK and example plugin;
 - `Cargo.toml`, `Cargo.lock`, desktop npm/Tauri manifests and lockfile;
@@ -55,9 +55,9 @@ the shipped product.
 The release candidate is not ready while any item below is unchecked:
 
 - [ ] Set the root crate, plugin SDK, example plugin, desktop Rust crate,
-  desktop npm package and Tauri bundle to `1.0.0`.
+  desktop npm package and Tauri bundle to `1.0.0-alpha.1`.
 - [ ] Regenerate both lockfiles without unrelated dependency upgrades.
-- [ ] Move the complete Unreleased changelog into a dated `1.0.0` section and
+- [ ] Move the complete Unreleased changelog into a dated `1.0.0-alpha.1` section and
   create a new empty Unreleased section.
 - [ ] Run the required Rust format, check, Clippy and test commands.
 - [ ] Run the frontend UI audit, production build and notice inventory check.
@@ -81,13 +81,16 @@ The release candidate is not ready while any item below is unchecked:
 4. Present the final diff and evidence to the owner. Stop until approval is
    explicit.
 5. Open exactly one `develop` to `main` pull request and squash-merge it so the
-   first-parent history of `main` receives one v1.0.0 release commit.
-6. Tag that exact `main` commit as `v1.0.0`; verify archives, checksums and
-   release notes before announcing availability.
-7. Restore the development-only paths on a new branch from `develop`, merge
+   first-parent history of `main` receives one v1.0.0-alpha.1 release commit.
+6. Present the merged commit and final package plan to the owner. Stop again;
+   do not create a tag or GitHub Release without explicit publication approval.
+7. After that approval, tag the exact `main` commit as `v1.0.0-alpha.1`. The
+   GitHub Release must be marked as a prerelease, never as the latest stable
+   release. Verify archives, checksums and release notes before announcing it.
+8. Restore the development-only paths on a new branch from `develop`, merge
    that branch only into `develop`, and republish the wiki if required.
 
 The existing `main` ancestry is preserved. Rewriting published history merely
 to flatten older releases would invalidate existing clones, tags and release
 references; the one-release-commit policy applies to the first-parent history
-from v1.0.0 onward.
+from v1.0.0-alpha.1 onward.

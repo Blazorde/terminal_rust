@@ -34,6 +34,22 @@ Open two tabs, change directory in one, and confirm the other keeps independent
 directory, history and prompt context. Keyboard tab-list navigation supports
 arrows, `Home`, `End` and `Delete`.
 
+The native window uses a cross-platform custom title bar so the logo, PTY state,
+session controls and window controls remain visually consistent. Verify drag,
+minimize, maximize/restore and close on every target OS. The Rust adapter emits
+structured prompt metadata through the PTY; the frontend removes its OSC frame
+before rendering output and uses it only for tab labels and the status bar.
+Rustyline receives separate plain and styled prompt forms, and the desktop
+editable prompt is reduced to folder, Git and prompt symbol. This prevents long
+project paths or hidden metadata from shifting the cursor. Frontend PTY writes
+are serialized so fast typing and paste preserve byte order.
+
+Interactive `ls` uses the detected terminal width to wrap entries across a
+small number of readable rows. Directories and important project folders,
+manifests, source files, scripts and archives receive portable ANSI colors.
+`ls -1` remains one item per line, `ls -l` remains detailed, and redirected
+output remains stable plain text.
+
 The appearance selector exposes Graphite, Bone, Nord, Amber, Moss and Dusk.
 Older persisted `paper` and `midnight` values migrate to Bone and Nord when
 loaded, so existing users keep a close visual equivalent.

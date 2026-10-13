@@ -6,10 +6,10 @@ use std::time::Instant;
 
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
-use rustyline::{CompletionType, Config, Editor};
+use rustyline::{ColorMode, CompletionType, Config, Editor};
 
 use crate::app::completion::ShellHelper;
-use crate::app::prompt::Prompt;
+use crate::app::prompt::{GUI_PROMPT_ENV, Prompt};
 use crate::config::{self, AppConfig};
 use crate::core::{ExecutionResult, ExecutionStatus, ShellEngine};
 use crate::render;
@@ -49,9 +49,16 @@ pub fn run_interactive() -> ExitCode {
 fn run_interactive_editor() -> ExitCode {
     let app_config = load_config();
     let mut engine = load_engine(&app_config);
-    let config = Config::builder()
-        .completion_type(CompletionType::Circular)
-        .build();
+    let config = if env::var_os(GUI_PROMPT_ENV).is_some() {
+        Config::builder()
+            .completion_type(CompletionType::Circular)
+            .color_mode(ColorMode::Forced)
+            .build()
+    } else {
+        Config::builder()
+            .completion_type(CompletionType::Circular)
+            .build()
+    };
     let mut editor = match Editor::<ShellHelper, DefaultHistory>::with_config(config) {
         Ok(editor) => editor,
         Err(error) => {
@@ -80,7 +87,7 @@ fn run_interactive_editor() -> ExitCode {
     let mut shell_prompt = load_prompt(&app_config);
 
     let exit_code = loop {
-        let prompt = match shell_prompt.render() {
+        let prompt = match shell_prompt.render_for_editor() {
             Ok(prompt) => prompt,
             Err(error) => {
                 let _ = render::stderr_line(format_args!("prompt: {error}"));

@@ -1,8 +1,9 @@
 # Desktop GUI quality audit
 
-Status: Windows audit completed on 2026-10-11. A pinned Debian Bookworm
-container completed the Linux Rust, native dependency and headless PTY gate on
-2026-10-13. macOS and a visible Linux WebKitGTK audit are still missing.
+Status: Windows audit completed on 2026-10-11 and repeated after the native
+window redesign on 2026-10-13. Linux passed both the pinned Debian packaging
+gate and a visible Ubuntu 24.04 WebKitGTK audit through WSLg on 2026-10-13.
+The native macOS audit is still missing.
 
 ## Result
 
@@ -13,12 +14,29 @@ container completed the Linux Rust, native dependency and headless PTY gate on
 | Responsive | 4/4 | No overflow at 1280×720, 560×400 or 320×240 |
 | Themes | 4/4 | All six palettes exceed 4.5:1 for text |
 | Integrity | 4/4 | No detector findings and no simulated data |
-| **Total** | **19/20** | **Excellent locally; two visual OS audits remain** |
+| **Total** | **19/20** | **Excellent locally; the native macOS audit remains** |
 
 The audit fixed low-contrast faint text, focus escaping the settings drawer and
 an overbroad reduced-motion rule. The drawer now traps focus while open, returns
 it to Settings on close and makes the background inert. Reduced motion disables
 only the activity rail, connection pulse, drawer transition and cursor blink.
+
+The repeated Windows audit covered the frameless native window at 1280×800 and
+560×400, two independent PTY tabs, the settings drawer, terminal text/cursor
+alignment and maximize/restore controls. The logo, connection state, window
+controls and session tabs now have separate visual levels. Prompt metadata is
+removed from the PTY stream before xterm renders it, including the Windows
+ConPTY representation of the OSC escape byte; only the human-readable prompt is
+shown while the status bar receives the structured context. Rustyline uses a
+separate metadata-free width model, the editable prompt keeps only folder, Git
+and symbol segments, and PTY input is serialized to preserve rapid keystrokes.
+Native drag, maximize/restore and edge/corner resize were exercised on Windows.
+
+The visible Linux audit used Ubuntu 24.04, WebKitGTK 4.1 and WSLg. It covered the
+same 1280×720 and 560×400 layouts, settings, tabs, compact project prompt,
+ordered input and adaptive colored `ls` output. The custom frame rendered
+without overflow; WSLg synthetic pointer drags are not treated as native Linux
+window-manager evidence.
 
 `npm run audit:ui --prefix desktop` checks actual CSS tokens and fails below
 4.5:1 for text or 3:1 for focus. The minimum native window is 560×400; the
@@ -39,8 +57,9 @@ The ignored PTY probe measured first prompt at 70.360–86.049 ms and `pwd`
 round trips at 0.566–0.850 ms. These figures are a Windows baseline, not proof
 for WebKitGTK or WKWebView.
 
-Frontend bundle: application 236.38 kB (74.07 kB gzip), xterm 332.16 kB (83.42
-kB gzip), Tauri API 1.14 kB (0.55 kB gzip), CSS 14.59 kB (3.99 kB gzip).
+Current frontend bundle: application 241.53 kB (75.82 kB gzip), xterm 332.16 kB
+(83.42 kB gzip), Tauri API 15.36 kB (3.86 kB gzip), and CSS 18.14 kB (4.89 kB
+gzip). The larger Tauri chunk includes native window controls.
 
 ## Platform matrix
 
@@ -48,7 +67,7 @@ kB gzip), Tauri API 1.14 kB (0.55 kB gzip), CSS 14.59 kB (3.99 kB gzip).
 | --- | --- | --- | --- | --- | --- |
 | Windows 11 | passed | passed | passed | passed | locally validated |
 | macOS | not run | not run | not run | not run | pending |
-| Linux (Debian Bookworm) | DEB and AppImage passed | passed | packaged AppImage passed | not run | headless validated; visible GUI pending |
+| Linux (Debian/Ubuntu) | DEB and AppImage passed | passed | passed | passed under WSLg | locally validated |
 
 The Linux gate used Rust 1.95.0 and the native Tauri dependencies declared in
 the pinned validation image. Formatting, all-target/all-feature compilation,
@@ -65,9 +84,9 @@ the AppImage was 99,920,376 bytes with SHA-256
 Both packages contain the executable, MIT license, third-party notices and
 configuration. The AppImage stayed alive under Xvfb, spawned its packaged
 `--pty-shell` child and executed `pwd` successfully through a pseudo-terminal.
-This is reproducible headless launch evidence, not a visible WebKitGTK audit.
+The later WSLg run supplied the separate visible WebKitGTK evidence.
 
-For each missing visual audit, run the [desktop guide](desktop.md), record
+For the missing macOS visual audit, run the [desktop guide](desktop.md), record
 hardware and OS, three startup/memory trials and captures at 1280×720 and
 560×400. CI that fails before executing steps is not evidence; T124 remains
-open until macOS and the visible Linux window are checked.
+open until macOS is checked on native hardware.

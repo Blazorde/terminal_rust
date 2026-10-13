@@ -23,6 +23,10 @@ terminal_rust-macos-<architecture>.tar.gz
 terminal_rust-windows-<architecture>.zip
 ```
 
+Users download the archive and desktop installer built for their own operating
+system: Windows receives NSIS, Linux receives DEB/AppImage, and macOS receives a
+DMG. A package from one platform is never presented as compatible with another.
+
 The native desktop bundle also embeds `LICENSE`, `THIRD_PARTY_NOTICES.md` and
 the default configuration so installed copies retain their legal notices and
 offline defaults.
@@ -52,8 +56,13 @@ must agree.
 5. After approval and merge, create lowercase tag `vx.y.z` on the `main` commit.
 6. Verify all build and publish jobs, archives, checksums and release notes.
 
-For v1.0.0, follow the explicit
-[stable snapshot inventory](development/v1-release-snapshot.md). It separates
+Tags with a SemVer prerelease suffix, such as `v1.0.0-alpha.1`, are published as
+GitHub prereleases and do not replace the latest stable release. Tag creation is
+the publication trigger and requires a separate explicit owner approval after
+the final `main` commit has been presented.
+
+For the first v1 alpha, follow the explicit
+[release snapshot inventory](development/v1-release-snapshot.md). It separates
 public product files from development-only material and defines the temporary
 cleanup/restore sequence required by the `develop` to `main` branch policy.
 
