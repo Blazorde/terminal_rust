@@ -1,5 +1,12 @@
 # Contribution guide
 
+Terminal Rust is an open-source project under the MIT License. Contributions
+are welcome through GitHub issues and pull requests when they follow this guide
+and the repository documentation. Please keep changes focused, preserve
+Windows, macOS and Linux compatibility, include appropriate tests and document
+user-visible behavior. Report security vulnerabilities privately through
+[`SECURITY.md`](../../SECURITY.md), not in a public issue.
+
 ## Prepare the environment
 
 Install Rust with `rustup`, then verify:
