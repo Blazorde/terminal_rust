@@ -94,6 +94,8 @@ fn run_interactive(current_dir: &Path, input: &str) -> Output {
 fn run_interactive_with_env(current_dir: &Path, input: &str, config_path: Option<&Path>) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
         .current_dir(current_dir)
+        .env("USER", "terminal-rust-test")
+        .env("USERNAME", "terminal-rust-test")
         .envs(config_path.map(|path| ("TERMINAL_RUST_CONFIG", path)))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -44,3 +44,36 @@ with the Rust standard library and tolerate platform line endings.
 CI targets Ubuntu, Windows and macOS with formatting, compilation, Clippy, unit
 tests and CLI integration tests. A platform result counts only when its steps
 actually execute. Complete automation with the [MVP checklist](mvp-quality-checklist.md).
+
+## Reproduce the Linux gate locally
+
+When hosted runners are unavailable, Docker can execute the complete Rust gate
+against WebKitGTK and the other native Tauri dependencies used by Linux. Build
+the pinned validation image from the repository root:
+
+```bash
+docker build --file .github/docker/linux-validation.Dockerfile \
+  --tag terminal-rust-linux-validation .
+```
+
+Then mount the checkout read-only, copy it into the ephemeral container and
+keep Cargo output inside the container. The copy is required because Tauri's
+build script generates permission manifests beside its source configuration:
+
+```bash
+docker run --rm --volume "$PWD:/source:ro" \
+  terminal-rust-linux-validation bash -c '
+    tar --exclude=.git --exclude=target --exclude=node_modules \
+      --exclude=desktop/node_modules --exclude=desktop/dist \
+      -C /source -cf - . | tar -C /workspace -xf - &&
+    cd /workspace &&
+    cargo fmt --all -- --check &&
+    cargo check --workspace --all-targets --all-features --locked &&
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings &&
+    cargo test --workspace --all-targets --all-features --locked
+  '
+```
+
+This proves Linux compilation and headless Rust/PTY behavior. It does not prove
+that a visible WebKitGTK window renders correctly; the manual GUI evidence in
+the desktop audit is still required for that claim.

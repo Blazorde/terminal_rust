@@ -85,34 +85,57 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
         .master
         .take_writer()
         .expect("PTY input should be writable");
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut buffer = [0; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(length) => {
+                    if sender.send(buffer[..length].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
 
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
     command.arg("--pty-shell");
+    command.cwd(env!("CARGO_MANIFEST_DIR"));
     command.env("TERMINAL_RUST_GUI", "1");
     command.env("TERM", "xterm-256color");
+    command.env("USER", "terminal-rust-test");
     let mut child = pair
         .slave
         .spawn_command(command)
         .expect("desktop shell mode should start");
     drop(pair.slave);
 
-    // Let rustyline switch the PTY into raw mode before reproducing xterm's
-    // keyboard stream. Sending bytes during process bootstrap is racy on
-    // Windows ConPTY and does not model an interactive user.
-    std::thread::sleep(Duration::from_millis(300));
-    // On Windows, rustyline asks an ANSI terminal for its cursor position
-    // during startup. xterm answers this query; the headless test PTY must do
-    // the same before sending key presses. Unix obtains the position from its
-    // terminal interface and must not receive this synthetic response.
-    let input: &[u8] = if cfg!(windows) {
-        b"\x1b[1;1Rhelp\rexit\r"
-    } else {
-        b"help\rexit\r"
-    };
+    let mut output = Vec::new();
+    let mut cursor_answered = false;
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        1,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
     writer
-        .write_all(input)
+        .write_all(b"help\r")
         .and_then(|()| writer.flush())
-        .expect("commands should reach the PTY");
+        .expect("help command should reach the PTY");
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        2,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+    writer
+        .write_all(b"exit\r")
+        .and_then(|()| writer.flush())
+        .expect("exit command should reach the PTY");
 
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut timed_out = false;
@@ -132,10 +155,9 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
 
     drop(writer);
     drop(pair.master);
-    let mut output = Vec::new();
-    reader
-        .read_to_end(&mut output)
-        .expect("PTY output should remain readable until exit");
+    while let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
+        output.extend(chunk);
+    }
     let output = String::from_utf8_lossy(&output);
 
     assert!(
