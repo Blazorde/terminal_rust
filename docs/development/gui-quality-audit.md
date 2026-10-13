@@ -1,7 +1,8 @@
 # Desktop GUI quality audit
 
-Status: Windows audit completed on 2026-10-11; macOS and Linux evidence is still
-missing because no runner has executed the required steps.
+Status: Windows audit completed on 2026-10-11. A pinned Debian Bookworm
+container completed the Linux Rust, native dependency and headless PTY gate on
+2026-10-13. macOS and a visible Linux WebKitGTK audit are still missing.
 
 ## Result
 
@@ -12,7 +13,7 @@ missing because no runner has executed the required steps.
 | Responsive | 4/4 | No overflow at 1280×720, 560×400 or 320×240 |
 | Themes | 4/4 | All six palettes exceed 4.5:1 for text |
 | Integrity | 4/4 | No detector findings and no simulated data |
-| **Total** | **19/20** | **Excellent locally; two OS validations remain** |
+| **Total** | **19/20** | **Excellent locally; two visual OS audits remain** |
 
 The audit fixed low-contrast faint text, focus escaping the settings drawer and
 an overbroad reduced-motion rule. The drawer now traps focus while open, returns
@@ -47,8 +48,16 @@ kB gzip), Tauri API 1.14 kB (0.55 kB gzip), CSS 14.59 kB (3.99 kB gzip).
 | --- | --- | --- | --- | --- | --- |
 | Windows 11 | passed | passed | passed | passed | locally validated |
 | macOS | not run | not run | not run | not run | pending |
-| Linux | not run | not run | not run | not run | pending |
+| Linux (Debian Bookworm) | passed | passed | passed | not run | headless validated; visible GUI pending |
 
-For each missing system, run the [desktop guide](desktop.md), record hardware
-and OS, three startup/memory trials and captures at 1280×720 and 560×400. CI
-that fails before executing steps is not evidence; T124 remains open.
+The Linux gate used Rust 1.95.0 and the native Tauri dependencies declared in
+the pinned validation image. Formatting, all-target/all-feature compilation,
+Clippy with warnings denied and 182 automated tests passed; one manual
+performance probe remained intentionally ignored. During validation, the PTY
+test was made prompt-synchronous and environment-dependent tests were made
+hermetic so that clean Linux installations behave like Windows checkouts.
+
+For each missing visual audit, run the [desktop guide](desktop.md), record
+hardware and OS, three startup/memory trials and captures at 1280×720 and
+560×400. CI that fails before executing steps is not evidence; T124 remains
+open until macOS and the visible Linux window are checked.
