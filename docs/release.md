@@ -23,6 +23,10 @@ terminal_rust-macos-<architecture>.tar.gz
 terminal_rust-windows-<architecture>.zip
 ```
 
+The native desktop bundle also embeds `LICENSE`, `THIRD_PARTY_NOTICES.md` and
+the default configuration so installed copies retain their legal notices and
+offline defaults.
+
 Use [GitHub Releases](https://github.com/Blazorde/terminal_rust/releases/latest)
 for stable downloads and verify `SHA256SUMS.txt`. A local build validates only
 its own host; cross-platform proof requires executed jobs and manual desktop

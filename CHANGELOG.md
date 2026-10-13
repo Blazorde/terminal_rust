@@ -66,6 +66,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Changed
 
+- Linux desktop packaging now declares the complete native icon set and embeds
+  the MIT license alongside third-party notices and bundled configuration.
 - Expanded the desktop palette to Graphite, Bone, Nord, Amber, Moss and Dusk,
   while migrating the previous Paper and Midnight settings automatically.
 - The desktop terminal now refreshes xterm font metrics and dimensions after

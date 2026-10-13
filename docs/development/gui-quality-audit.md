@@ -48,7 +48,7 @@ kB gzip), Tauri API 1.14 kB (0.55 kB gzip), CSS 14.59 kB (3.99 kB gzip).
 | --- | --- | --- | --- | --- | --- |
 | Windows 11 | passed | passed | passed | passed | locally validated |
 | macOS | not run | not run | not run | not run | pending |
-| Linux (Debian Bookworm) | passed | passed | passed | not run | headless validated; visible GUI pending |
+| Linux (Debian Bookworm) | DEB and AppImage passed | passed | packaged AppImage passed | not run | headless validated; visible GUI pending |
 
 The Linux gate used Rust 1.95.0 and the native Tauri dependencies declared in
 the pinned validation image. Formatting, all-target/all-feature compilation,
@@ -56,6 +56,16 @@ Clippy with warnings denied and 182 automated tests passed; one manual
 performance probe remained intentionally ignored. During validation, the PTY
 test was made prompt-synchronous and environment-dependent tests were made
 hermetic so that clean Linux installations behave like Windows checkouts.
+
+The pinned image also built the native Tauri packages after adding Node.js 24,
+`patchelf` and an explicit square icon set. The DEB was 4,197,358 bytes with
+SHA-256 `6426b8cb9091554f5c3e900e69f120a91b3103219ea2edde94b3604def32a708`;
+the AppImage was 99,920,376 bytes with SHA-256
+`5c30bfd914469e7d0ab2aeb6582f40f6806c3802ca403c5be2a1b7d0d9f36cea`.
+Both packages contain the executable, MIT license, third-party notices and
+configuration. The AppImage stayed alive under Xvfb, spawned its packaged
+`--pty-shell` child and executed `pwd` successfully through a pseudo-terminal.
+This is reproducible headless launch evidence, not a visible WebKitGTK audit.
 
 For each missing visual audit, run the [desktop guide](desktop.md), record
 hardware and OS, three startup/memory trials and captures at 1280×720 and
