@@ -26,6 +26,18 @@
     }
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "targets": "all",
+    "publisher": "Blazorde",
+    "homepage": "https://github.com/Blazorde/terminal_rust",
+    "license": "MIT",
+    "licenseFile": "../../LICENSE",
+    "category": "DeveloperTool",
+    "shortDescription": "A cross-platform terminal powered by a Rust shell engine.",
+    "longDescription": "Terminal Rust combines a native Rust shell engine with a configurable desktop terminal for Windows, macOS and Linux.",
+    "resources": {
+      "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../../config/": "config/"
+    }
   }
 }

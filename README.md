@@ -185,14 +185,15 @@ Download the archive for your platform from the
 extract it and run `terminal_rust help` (`terminal_rust.exe help` on Windows).
 Use `SHA256SUMS.txt` to verify the download.
 
-| Platform | Archive | Installer |
-| --- | --- | --- |
-| Windows x86_64 | `.zip` | `scripts/install.ps1` |
-| Linux x86_64 | `.tar.gz` | `scripts/install.sh` |
-| macOS Apple Silicon | `.tar.gz` | `scripts/install.sh` |
+| Platform | Archive | CLI installer | Desktop bundle |
+| --- | --- | --- | --- |
+| Windows x86_64 | `.zip` | `scripts/install.ps1` | NSIS `.exe` |
+| Linux x86_64 | `.tar.gz` | `scripts/install.sh` | `.deb` + `.AppImage` |
+| macOS Apple Silicon | `.tar.gz` | `scripts/install.sh` | `.dmg` |
 
 There is no prebuilt macOS Intel archive yet; building from source remains
-supported with a compatible Rust toolchain. Read the full
+supported with a compatible Rust toolchain. Desktop bundles are stored in the
+archive's `desktop/` directory and are currently unsigned. Read the full
 [installation guide](docs/install.md) and [troubleshooting guide](docs/troubleshooting.md)
 before using an installer in a restricted environment.
 
