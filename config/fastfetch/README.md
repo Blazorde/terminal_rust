@@ -1,34 +1,32 @@
-# Preset Fastfetch Terminal Rust
+# Terminal Rust Fastfetch preset
 
-Ce preset offre une vue compacte et colorée du système sur Windows, macOS et
-Linux. Il utilise uniquement des modules Fastfetch standards et ne dépend pas
-d'une Nerd Font.
+This preset provides a compact, colorful system overview on Windows, macOS and
+Linux. It uses standard Fastfetch modules and does not require a Nerd Font.
 
-## Utilisation depuis le dépôt
+## Run from the repository
 
 ```bash
 fastfetch --config config/fastfetch/config.jsonc
 ```
 
-Fastfetch doit être installé séparément. Le projet ne l'installe pas et la
-commande interne `dashboard` fonctionne sans lui.
+Fastfetch must be installed separately. Terminal Rust does not install it, and
+the built-in `dashboard` command works without it.
 
-## Installation comme configuration par défaut
+## Use as the default configuration
 
-Créer le dossier de configuration Fastfetch, sauvegarder une éventuelle
-configuration existante, puis copier `config.jsonc` vers :
+Create the Fastfetch configuration directory, back up any existing file and
+copy `config.jsonc` to:
 
 ```text
 ~/.config/fastfetch/config.jsonc
 ```
 
-Ce chemin est reconnu par Fastfetch sur Windows, macOS et Linux. La
-configuration suit le [schéma officiel Fastfetch](https://github.com/fastfetch-cli/fastfetch/blob/dev/doc/json_schema.json).
+Fastfetch recognizes this path on Windows, macOS and Linux. The file follows
+the [official Fastfetch schema](https://github.com/fastfetch-cli/fastfetch/blob/dev/doc/json_schema.json).
 
-## Personnalisation
+## Customize
 
-- Modifier `keyColor` pour changer une catégorie.
-- Retirer `gpu` ou `battery` si la machine n'expose pas ces informations.
-- Remplacer `logo.type` par `auto` pour utiliser le logo complet du système.
-- Conserver le champ `$schema` pour la validation et l'autocomplétion dans
-  l'éditeur.
+- Change `keyColor` to recolor a category.
+- Remove `gpu` or `battery` when the machine does not expose that information.
+- Set `logo.type` to `auto` to use the full system logo.
+- Keep `$schema` for validation and editor completion.

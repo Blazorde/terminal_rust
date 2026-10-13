@@ -43,6 +43,50 @@ fn run_cli(current_dir: &Path, args: &[&str]) -> Output {
         .expect("the terminal_rust binary should start")
 }
 
+fn run_cli_with_config(current_dir: &Path, args: &[&str], config_path: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+        .args(args)
+        .current_dir(current_dir)
+        .env("TERMINAL_RUST_CONFIG", config_path)
+        .output()
+        .expect("the terminal_rust binary should start")
+}
+
+fn run_cli_with_plugin_data(
+    current_dir: &Path,
+    args: &[&str],
+    config_path: &Path,
+    data_root: &Path,
+) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_terminal_rust"));
+    command
+        .args(args)
+        .current_dir(current_dir)
+        .env("TERMINAL_RUST_CONFIG", config_path);
+    #[cfg(target_os = "windows")]
+    command.env("LOCALAPPDATA", data_root);
+    #[cfg(target_os = "macos")]
+    command.env("HOME", data_root);
+    #[cfg(all(unix, not(target_os = "macos")))]
+    command.env("XDG_DATA_HOME", data_root);
+    command
+        .output()
+        .expect("the terminal_rust binary should start")
+}
+
+fn plugin_root(data_root: &Path) -> PathBuf {
+    #[cfg(target_os = "windows")]
+    return data_root.join("terminal-rust").join("plugins");
+    #[cfg(target_os = "macos")]
+    return data_root
+        .join("Library")
+        .join("Application Support")
+        .join("terminal-rust")
+        .join("plugins");
+    #[cfg(all(unix, not(target_os = "macos")))]
+    return data_root.join("terminal-rust").join("plugins");
+}
+
 fn run_interactive(current_dir: &Path, input: &str) -> Output {
     run_interactive_with_env(current_dir, input, None)
 }
@@ -50,6 +94,8 @@ fn run_interactive(current_dir: &Path, input: &str) -> Output {
 fn run_interactive_with_env(current_dir: &Path, input: &str, config_path: Option<&Path>) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
         .current_dir(current_dir)
+        .env("USER", "terminal-rust-test")
+        .env("USERNAME", "terminal-rust-test")
         .envs(config_path.map(|path| ("TERMINAL_RUST_CONFIG", path)))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -79,7 +125,15 @@ fn interactive_shell_loads_icon_mode_from_toml() {
     let output = run_interactive_with_env(directory.path(), "exit\n", Some(&config));
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert!(stdout(&output).starts_with('\u{f07b}'));
+    let rendered = stdout(&output);
+    assert!(
+        rendered.contains('\u{f007}'),
+        "user icon missing: {rendered}"
+    );
+    assert!(
+        rendered.contains('\u{f07b}'),
+        "path icon missing: {rendered}"
+    );
 }
 
 #[test]
@@ -115,14 +169,14 @@ fn powerline_theme_uses_ascii_separator_without_terminal_font_capability() {
 
     let output = run_interactive_with_env(directory.path(), "exit\n", Some(&config));
     let rendered = stdout(&output);
-    let rendered_path = rendered
-        .strip_suffix(" | > ")
-        .expect("powerline should use its ASCII fallback when output is piped");
-
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert_eq!(
-        fs::canonicalize(rendered_path).expect("rendered path should exist"),
-        fs::canonicalize(directory.path()).expect("fixture path should exist")
+    assert!(
+        rendered.ends_with(" | > "),
+        "powerline should use its ASCII fallback: {rendered}"
+    );
+    assert!(
+        rendered.contains(&directory.path().display().to_string()),
+        "prompt should contain the current path: {rendered}"
     );
 }
 
@@ -222,6 +276,8 @@ fn help_lists_every_public_command() {
         "dashboard",
         "git",
         "theme",
+        "plugins",
+        "commands",
         "help",
         "exit",
         "quit",
@@ -233,6 +289,113 @@ fn help_lists_every_public_command() {
             "help should list {command}:\n{rendered}"
         );
     }
+}
+
+#[test]
+fn configured_builtin_command_executes_and_is_listed() {
+    let directory = TestDirectory::new("custom command");
+    let config = directory.path().join("config.toml");
+    fs::write(
+        &config,
+        r#"version = 1
+[commands.assistance]
+kind = "builtin"
+target = "help"
+append_args = false
+description = "Show shell help"
+"#,
+    )
+    .expect("configuration should be written");
+
+    let executed = run_cli_with_config(directory.path(), &["assistance"], &config);
+    assert!(executed.status.success(), "stderr: {}", stderr(&executed));
+    assert!(stdout(&executed).contains("Available commands:"));
+
+    let listed = run_cli_with_config(directory.path(), &["commands", "list"], &config);
+    assert!(listed.status.success(), "stderr: {}", stderr(&listed));
+    assert!(stdout(&listed).contains("assistance"));
+    assert!(stdout(&listed).contains("[builtin] help"));
+}
+
+#[test]
+fn configured_process_command_executes_without_a_system_shell() {
+    let directory = TestDirectory::new("custom process command");
+    let config = directory.path().join("config.toml");
+    fs::write(
+        &config,
+        format!(
+            "version = 1\n[commands.self-help]\nkind = \"process\"\ntarget = {:?}\nargs = [\"help\"]\nappend_args = false\n",
+            env!("CARGO_BIN_EXE_terminal_rust")
+        ),
+    )
+    .expect("configuration should be written");
+
+    let output = run_cli_with_config(directory.path(), &["self-help"], &config);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(stdout(&output).contains("Available commands:"));
+}
+
+#[test]
+fn official_declarative_plugin_executes_and_can_be_disabled() {
+    let directory = TestDirectory::new("official plugin");
+    let data_root = directory.path().join("plugin data");
+    let plugin = plugin_root(&data_root).join("example.hello").join("0.1.0");
+    fs::create_dir_all(&plugin).expect("plugin directory should be created");
+    fs::write(
+        plugin.join("terminal-rust-plugin.toml"),
+        r#"schema_version = 1
+id = "example.hello"
+name = "Hello plugin"
+version = "0.1.0"
+description = "Official declarative plugin"
+host_api = "^1.0"
+terminal_version = ">=0.3, <2.0"
+permissions = ["command.register", "output.write"]
+
+[[commands]]
+name = "hello"
+summary = "Print the official plugin greeting"
+response = "Hello from the official Terminal Rust plugin!\n"
+"#,
+    )
+    .expect("plugin manifest should be written");
+    let config = directory.path().join("config.toml");
+    fs::write(
+        &config,
+        r#"version = 1
+[plugins]
+enabled = ["example.hello"]
+[plugins.grants]
+"example.hello" = ["command.register", "output.write"]
+"#,
+    )
+    .expect("plugin configuration should be written");
+
+    let executed = run_cli_with_plugin_data(directory.path(), &["hello"], &config, &data_root);
+
+    assert!(executed.status.success(), "stderr: {}", stderr(&executed));
+    assert_eq!(
+        stdout(&executed),
+        "Hello from the official Terminal Rust plugin!\n"
+    );
+
+    fs::write(
+        &config,
+        r#"version = 1
+[plugins]
+enabled = []
+[plugins.grants]
+"example.hello" = ["command.register", "output.write"]
+"#,
+    )
+    .expect("disabled plugin configuration should be written");
+    let disabled = run_cli_with_plugin_data(directory.path(), &["hello"], &config, &data_root);
+    let native = run_cli_with_plugin_data(directory.path(), &["pwd"], &config, &data_root);
+
+    assert!(!disabled.status.success());
+    assert_eq!(stderr(&disabled).trim(), "unknown command: hello");
+    assert!(native.status.success(), "stderr: {}", stderr(&native));
 }
 
 #[test]
@@ -327,14 +490,14 @@ fn interactive_prompt_stays_simple_outside_git() {
     let directory = TestDirectory::new("prompt outside git");
     let output = run_interactive(directory.path(), "exit\n");
     let rendered = stdout(&output);
-    let rendered_path = rendered
-        .strip_suffix("  > ")
-        .expect("the simple prompt should end with its symbol");
-
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert_eq!(
-        fs::canonicalize(rendered_path).expect("the rendered directory should exist"),
-        fs::canonicalize(directory.path()).expect("the fixture directory should exist")
+    assert!(
+        rendered.ends_with("  > "),
+        "prompt should end with its symbol"
+    );
+    assert!(
+        rendered.contains(&directory.path().display().to_string()),
+        "prompt should contain the current path: {rendered}"
     );
 }
 
@@ -371,13 +534,13 @@ fn interactive_prompt_shows_a_dirty_git_branch() {
 
     let output = run_interactive(directory.path(), "exit\n");
     let rendered = stdout(&output);
-    let rendered_path = rendered
-        .strip_suffix("  git:main*  > ")
-        .expect("the Git prompt should contain its branch and dirty marker");
-
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert_eq!(
-        fs::canonicalize(rendered_path).expect("the rendered directory should exist"),
-        fs::canonicalize(directory.path()).expect("the fixture directory should exist")
+    assert!(
+        rendered.ends_with("  git:main*  > "),
+        "the Git prompt should contain its branch and dirty marker: {rendered}"
+    );
+    assert!(
+        rendered.contains(&directory.path().display().to_string()),
+        "prompt should contain the current path: {rendered}"
     );
 }

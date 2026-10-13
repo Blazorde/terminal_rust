@@ -1,8 +1,15 @@
-# Guide de contribution
+# Contribution guide
 
-## Préparer l'environnement
+Terminal Rust is an open-source project under the MIT License. Contributions
+are welcome through GitHub issues and pull requests when they follow this guide
+and the repository documentation. Please keep changes focused, preserve
+Windows, macOS and Linux compatibility, include appropriate tests and document
+user-visible behavior. Report security vulnerabilities privately through
+[`SECURITY.md`](../../SECURITY.md), not in a public issue.
 
-Installer Rust avec `rustup`, puis vérifier :
+## Prepare the environment
+
+Install Rust with `rustup`, then verify:
 
 ```bash
 rustc --version
@@ -10,12 +17,11 @@ cargo --version
 git --version
 ```
 
-Git améliore le futur prompt mais ne doit pas être requis pour exécuter les
-commandes de base du shell.
+Git enriches the prompt but must not be required for core shell commands.
 
-## Choisir une branche
+## Choose a branch
 
-Partir de `develop` et choisir le préfixe correspondant au changement :
+Start from `develop` and select the matching prefix:
 
 ```bash
 git switch develop
@@ -23,42 +29,32 @@ git pull --ff-only origin develop
 git switch -c feat/short-description
 ```
 
-| Préfixe | Usage |
+| Prefix | Use |
 | --- | --- |
-| `feat/` | Nouvelle capacité utilisateur |
-| `fix/` | Correction de comportement |
-| `chore/` | Documentation, CI, maintenance |
-| `refractor/` | Refactor sans changement fonctionnel |
-| `hotfix/` | Correction urgente issue de production |
+| `feat/` | User-facing capability |
+| `fix/` | Behavior correction |
+| `chore/` | Documentation, CI or maintenance |
+| `refractor/` | Refactor without behavior change |
+| `hotfix/` | Urgent production correction |
 
-## Ajouter une commande
+## Add a command
 
-1. Créer le module dans `src/commands/`.
-2. Ajouter un type dans `src/errors/` si plusieurs échecs métier sont possibles.
-3. Exporter les modules nécessaires.
-4. Enregistrer la commande dans `app/command.rs`.
-5. Ajouter l'aide et vérifier la complétion.
-6. Tester le succès, les arguments invalides et les erreurs de fichiers.
-7. Documenter la commande dans le README.
+1. Create its module in `src/commands/`.
+2. Add a type in `src/errors/` when multiple domain failures are possible.
+3. Export the required modules.
+4. Register the command in `app/command.rs`.
+5. Add help and verify completion.
+6. Test success, invalid arguments and filesystem failures.
+7. Document the command in the README.
 
-## Changer l'architecture
+## Change architecture
 
-Créer un ADR si le changement :
+Create an ADR when a change introduces a structural dependency, modifies module
+boundaries, selects a cross-platform strategy, affects several future tickets
+or replaces an existing decision.
 
-- introduit une dépendance structurante ;
-- modifie les frontières de modules ;
-- choisit une stratégie multiplateforme ;
-- affecte plusieurs tickets futurs ;
-- abandonne une décision déjà documentée.
+## Pull requests
 
-## Pull request
-
-La PR cible `develop` et contient :
-
-- le problème ou ticket traité ;
-- les choix importants ;
-- les validations exécutées ;
-- les limites ou suites prévues.
-
-Les règles GitHub complètes sont décrites dans
-[`docs/workflows/README.md`](../workflows/README.md).
+Target `develop` and include the problem or ticket, important choices, executed
+validation and known limits or follow-up work. See the complete
+[GitHub workflow guide](../workflows/README.md).

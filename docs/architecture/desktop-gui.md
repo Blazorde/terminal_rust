@@ -1,67 +1,44 @@
-# Architecture cible de l'interface desktop
+# Desktop GUI architecture
 
-Ce document décrit les frontières prévues par T118. Le choix de Tauri reste
-proposé dans l'[ADR-0005](../decisions/0005-desktop-gui-stack.md) tant qu'il
-n'est pas confirmé.
-
-## Frontières
+T118 introduced this boundary. [ADR-0005](../decisions/0005-desktop-gui-stack.md)
+selects Tauri 2; T121 connects `portable-pty` on the Rust side to xterm.js in
+the presentation layer. T122 adds versioned settings whose validation and disk
+access remain in Rust.
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│ Interface desktop                                            │
-│ rendu terminal · réglages · focus · raccourcis · responsive │
-└───────────────────────┬──────────────────────────────────────┘
-                        │ messages typés / événements
-┌───────────────────────▼──────────────────────────────────────┐
-│ Adaptateur desktop Rust                                      │
-│ sessions PTY · cycle de vie · persistance · capacités OS    │
-└───────────────────────┬──────────────────────────────────────┘
-                        │ API Rust sans dépendance GUI
-┌───────────────────────▼──────────────────────────────────────┐
-│ terminal-core                                                │
-│ commandes · parser · contexte · prompt · Git · configuration │
-└───────────────┬───────────────────────────────┬──────────────┘
-                │                               │
-       ┌────────▼────────┐             ┌────────▼────────┐
-       │ Binaire CLI     │             │ Adaptateurs OS  │
-       │ rustyline       │             │ chemins · PTY   │
-       └─────────────────┘             └─────────────────┘
+desktop UI (terminal rendering, settings, focus, shortcuts, responsive layout)
+                              │ typed messages and events
+Rust desktop adapter (PTY sessions, lifecycle, persistence, OS capabilities)
+                              │ GUI-independent Rust API
+ShellEngine (results, commands, parser, prompt, Git, configuration)
+                     ┌────────┴────────┐
+                 CLI runner       OS adapters
 ```
 
-## Règles d'architecture
+## Rules
 
-- `terminal-core` ne dépend ni de Tauri, ni de React, ni d'un toolkit GUI.
-- Le CLI et le desktop appellent les mêmes fonctions métier et reçoivent les
-  mêmes erreurs typées.
-- La couche desktop ne construit pas des commandes shell par concaténation de
-  chaînes. Les entrées utilisateur voyagent comme données vers une API bornée.
-- Le processus Rust possède les PTY, les handles de processus, le dossier
-  courant et les accès au disque.
-- La WebView ne reçoit aucun secret et n'obtient pas d'accès générique au shell
-  ou au système de fichiers.
-- Les préférences partagées utilisent le schéma versionné existant ou une
-  extension rétrocompatible ; une donnée invalide garde un fallback sûr.
-- Les polices et assets livrés sont locaux. Une police système monospace reste
-  toujours disponible en dernier recours.
+- The Rust library depends on neither Tauri, React nor a GUI toolkit.
+- CLI and desktop consume the same engine behavior.
+- User input travels as data through bounded APIs, never concatenated shell text.
+- Rust owns PTYs, process handles, current directories and disk access.
+- The WebView receives no secrets or generic shell/filesystem capability.
+- Rust sends typed prompt layouts over private OSC `777`; the GUI does not probe Git or disk.
+- Each tab owns exactly one PTY and every event is checked against its native session ID.
+- Invalid settings use safe defaults; shipped assets are local with system-font fallbacks.
 
-## Séquence de livraison
+## Delivery sequence
 
-1. **T119** — valider l'ADR et la technologie.
-2. **T120** — extraire `terminal-core` sans modifier le comportement CLI.
-3. **T121** — ouvrir une fenêtre et connecter une session PTY réelle.
-4. **T122** — ajouter réglages, thèmes et persistance.
-5. **T123** — enrichir les segments de prompt partagés.
-6. **T124** — vérifier accessibilité, responsive, performance et trois OS.
+T119 selected the stack; T120 exposed the shared engine; T121 connected a real
+PTY; T122 added settings, themes and persistence; T123 shared typed prompt
+segments; T125 added isolated tabs. T124 retains final accessibility,
+performance and three-platform validation.
 
-Chaque étape possède sa propre branche et sa propre PR. Une fonctionnalité GUI
-ne peut pas être déclarée multiplateforme sur la seule preuve d'un poste local ;
-la matrice et les captures des trois systèmes sont nécessaires.
+A GUI cannot be called cross-platform from one machine's evidence. Windows,
+macOS and Linux each require build, PTY and manual evidence.
 
-## Référence Atelier
+## Atelier reference
 
-L'archive `Terminal de ligne de commande.zip` fournie par le propriétaire est
-une référence de composition : fond quadrillé, fenêtre translucide, barre de
-titre, zone terminal, pied de contexte et tiroir de réglages. Son code React,
-ses commandes simulées et ses données fictives ne sont pas importés. Les écarts
-nécessaires seront consignés au fil des tickets GUI.
-
+The owner-provided `Terminal de ligne de commande.zip` is a composition
+reference only. Its simulated commands, fake data and remote fonts are not
+imported. The outer decorative grid was removed so the terminal fills the native
+window, following product feedback from 2026-10-11.

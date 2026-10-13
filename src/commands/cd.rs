@@ -32,19 +32,16 @@ fn resolve_target(target: Option<&str>, previous_dir: Option<&Path>) -> Result<P
 mod tests {
     use super::*;
     use crate::errors::cd::CdError;
+    use crate::test_support::cwd_lock;
+    use crate::utils::path::temp_path;
     use std::fs::{self, File};
-    use std::sync::{Mutex, OnceLock};
-
-    fn cwd_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
 
     #[test]
     fn cd_changes_current_directory() {
         let _guard = cwd_lock().lock().expect("cwd lock is poisoned");
         let original_dir = env::current_dir().expect("current dir should be readable");
-        let target_dir = original_dir.join("target");
+        let target_dir = temp_path("cd", "directory");
+        fs::create_dir(&target_dir).expect("target directory should be created");
 
         let previous_dir = cd(
             Some(target_dir.to_str().expect("target path should be UTF-8")),
@@ -57,13 +54,14 @@ mod tests {
         assert_eq!(previous_dir, original_dir);
 
         env::set_current_dir(original_dir).expect("test should restore current directory");
+        fs::remove_dir(target_dir).expect("target directory should be removed");
     }
 
     #[test]
     fn cd_rejects_files() {
         let _guard = cwd_lock().lock().expect("cwd lock is poisoned");
         let original_dir = env::current_dir().expect("current dir should be readable");
-        let file_path = original_dir.join("target").join("cd-test-file.txt");
+        let file_path = temp_path("cd", "file.txt");
 
         File::create(&file_path).expect("test file should be created");
         let error = cd(
@@ -82,7 +80,8 @@ mod tests {
     fn cd_dash_uses_previous_directory() {
         let _guard = cwd_lock().lock().expect("cwd lock is poisoned");
         let original_dir = env::current_dir().expect("current dir should be readable");
-        let target_dir = original_dir.join("target");
+        let target_dir = temp_path("cd", "previous-directory");
+        fs::create_dir(&target_dir).expect("target directory should be created");
 
         env::set_current_dir(&target_dir).expect("test should enter target directory");
         cd(Some("-"), Some(&original_dir)).expect("cd - should use previous directory");
@@ -91,5 +90,6 @@ mod tests {
         assert_eq!(current_dir, original_dir);
 
         env::set_current_dir(original_dir).expect("test should restore current directory");
+        fs::remove_dir(target_dir).expect("target directory should be removed");
     }
 }

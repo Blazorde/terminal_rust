@@ -1,13 +1,39 @@
 use std::path::PathBuf;
 
 use crate::app::help;
-use crate::commands::{cat, cd, clear, dashboard, git_command, ls, mkdir, pwd, rm, theme, touch};
+use crate::commands::{
+    cat, cd, clear, dashboard, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
+};
+use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
+use crate::plugin::DeclarativeCommandRegistry;
 use crate::render;
 
-#[derive(Default)]
 pub struct ShellState {
     previous_dir: Option<PathBuf>,
+    plugin_commands: DeclarativeCommandRegistry,
+    user_commands: user::UserCommandRegistry,
+}
+
+impl ShellState {
+    pub(crate) fn new(
+        user_commands: user::UserCommandRegistry,
+        plugin_commands: DeclarativeCommandRegistry,
+    ) -> Self {
+        Self {
+            previous_dir: None,
+            plugin_commands,
+            user_commands,
+        }
+    }
+
+    pub(crate) fn user_command_names(&self) -> impl Iterator<Item = &str> {
+        self.user_commands.names()
+    }
+
+    pub(crate) fn plugin_command_names(&self) -> impl Iterator<Item = &str> {
+        self.plugin_commands.names()
+    }
 }
 
 #[derive(Eq, PartialEq)]
@@ -21,6 +47,8 @@ type CommandHandler = fn(&[String], &mut ShellState) -> CommandResult;
 
 struct CommandSpec {
     name: &'static str,
+    usage: &'static str,
+    summary: &'static str,
     max_args: Option<usize>,
     handler: CommandHandler,
 }
@@ -28,71 +56,113 @@ struct CommandSpec {
 const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         name: "pwd",
+        usage: "pwd",
+        summary: "print current directory",
         max_args: Some(0),
         handler: run_pwd,
     },
     CommandSpec {
         name: "cd",
+        usage: "cd [path]",
+        summary: "change current directory",
         max_args: Some(1),
         handler: run_cd,
     },
     CommandSpec {
         name: "ls",
+        usage: "ls [-1aAdFhlpRrSt] [path...]",
+        summary: "list directory contents",
         max_args: None,
         handler: run_ls,
     },
     CommandSpec {
         name: "mkdir",
+        usage: "mkdir [directory]",
+        summary: "create a new directory",
         max_args: Some(1),
         handler: run_mkdir,
     },
     CommandSpec {
         name: "touch",
+        usage: "touch [file]",
+        summary: "create an empty file",
         max_args: Some(1),
         handler: run_touch,
     },
     CommandSpec {
         name: "cat",
+        usage: "cat [file]",
+        summary: "print file content",
         max_args: Some(1),
         handler: run_cat,
     },
     CommandSpec {
         name: "rm",
+        usage: "rm [-dfirRv] [path...]",
+        summary: "remove files or directories",
         max_args: None,
         handler: run_rm,
     },
     CommandSpec {
         name: "clear",
+        usage: "clear",
+        summary: "clear the terminal screen",
         max_args: Some(0),
         handler: run_clear,
     },
     CommandSpec {
         name: "dashboard",
+        usage: "dashboard",
+        summary: "open a live system performance dashboard",
         max_args: Some(0),
         handler: run_dashboard,
     },
     CommandSpec {
         name: "git",
+        usage: "git <status|branch|log> [options]",
+        summary: "run a safe read-only Git command",
         max_args: None,
         handler: run_git,
     },
     CommandSpec {
         name: "theme",
+        usage: "theme <list|preview NAME>",
+        summary: "list or preview built-in themes",
         max_args: None,
         handler: run_theme,
     },
     CommandSpec {
+        name: "plugins",
+        usage: "plugins list",
+        summary: "list locally installed plugins",
+        max_args: None,
+        handler: run_plugins,
+    },
+    CommandSpec {
+        name: "commands",
+        usage: "commands list",
+        summary: "list configured custom commands",
+        max_args: None,
+        handler: run_commands,
+    },
+    CommandSpec {
         name: "help",
+        usage: "help",
+        summary: "show this help",
         max_args: Some(0),
         handler: run_help,
     },
     CommandSpec {
         name: "exit",
+        usage: "exit",
+        summary: "close the terminal",
         max_args: Some(0),
         handler: run_exit,
     },
     CommandSpec {
         name: "quit",
+        usage: "quit",
+        summary: "close the terminal",
         max_args: Some(0),
         handler: run_exit,
     },
@@ -102,15 +172,22 @@ pub fn command_names() -> impl Iterator<Item = &'static str> {
     COMMANDS.iter().map(|command| command.name)
 }
 
+pub(crate) fn command_help() -> impl Iterator<Item = (&'static str, &'static str)> {
+    COMMANDS
+        .iter()
+        .map(|command| (command.usage, command.summary))
+}
+
 pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
     let Some(command_name) = args.first().map(String::as_str) else {
         return run_help(&[], state);
     };
 
     let Some(command) = find_command(command_name) else {
-        return CommandResult::Error(
-            CommandError::UnknownCommand(command_name.to_string()).to_string(),
-        );
+        if state.user_commands.get(command_name).is_some() {
+            return execute_user_command(command_name, &args[1..], state);
+        }
+        return execute_plugin_command(command_name, &args[1..], state);
     };
 
     let command_args = &args[1..];
@@ -119,6 +196,54 @@ pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
     }
 
     (command.handler)(command_args, state)
+}
+
+fn execute_user_command(
+    name: &str,
+    invocation_args: &[String],
+    state: &mut ShellState,
+) -> CommandResult {
+    let Some(command) = state.user_commands.get(name).cloned() else {
+        return CommandResult::Error(CommandError::UnknownCommand(name.to_string()).to_string());
+    };
+    let mut expanded_args = command.args.clone();
+    if command.append_args {
+        expanded_args.extend_from_slice(invocation_args);
+    } else if !invocation_args.is_empty() {
+        return CommandResult::Error(format!(
+            "{name}: this custom command does not accept arguments"
+        ));
+    }
+
+    match command.kind {
+        UserCommandKind::Builtin => {
+            expanded_args.insert(0, command.target);
+            execute(&expanded_args, state)
+        }
+        UserCommandKind::Process => {
+            map_display_error(user::run_process(name, &command, invocation_args))
+        }
+    }
+}
+
+fn execute_plugin_command(
+    name: &str,
+    invocation_args: &[String],
+    state: &mut ShellState,
+) -> CommandResult {
+    let Some(command) = state.plugin_commands.get(name).cloned() else {
+        if let Some(reason) = state.plugin_commands.blocked_reason(name) {
+            return CommandResult::Error(reason.to_string());
+        }
+        return CommandResult::Error(CommandError::UnknownCommand(name.to_string()).to_string());
+    };
+    if !invocation_args.is_empty() {
+        return CommandResult::Error(format!(
+            "{name}: declarative command from plugin '{}' does not accept arguments",
+            command.plugin_id
+        ));
+    }
+    map_prefixed_error(name, render::stdout(command.response))
 }
 
 fn find_command(name: &str) -> Option<&'static CommandSpec> {
@@ -195,8 +320,24 @@ fn run_theme(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_display_error(theme::theme(args))
 }
 
+fn run_plugins(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(plugins::plugins(args))
+}
+
+fn run_commands(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args != ["list"] {
+        return CommandResult::Error("commands: expected 'list'".into());
+    }
+    map_prefixed_error(
+        "commands",
+        render::stdout(state.user_commands.render_list()),
+    )
+}
+
 fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_result(help::print_help(), |error| format!("help: {error}"))
+    map_result(help::print_help(command_help()), |error| {
+        format!("help: {error}")
+    })
 }
 
 fn run_exit(_args: &[String], _state: &mut ShellState) -> CommandResult {
@@ -225,4 +366,20 @@ where
     E: std::fmt::Display,
 {
     map_result(result, |error| format!("{prefix}: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn command_metadata_is_complete_and_unique() {
+        let mut names = HashSet::new();
+        for command in COMMANDS {
+            assert!(names.insert(command.name), "duplicate command name");
+            assert!(command.usage.starts_with(command.name));
+            assert!(!command.summary.trim().is_empty());
+        }
+    }
 }

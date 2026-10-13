@@ -1,0 +1,36 @@
+{
+  "name": "terminal-rust-desktop-ui",
+  "private": true,
+  "version": "1.0.0-alpha.1",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Blazorde/terminal_rust.git",
+    "directory": "desktop"
+  },
+  "type": "module",
+  "scripts": {
+    "audit:ui": "node scripts/check-ui-contract.mjs",
+    "notices": "node scripts/generate-third-party-notices.mjs",
+    "notices:check": "node scripts/generate-third-party-notices.mjs --check",
+    "dev": "vite --config vite.config.ts --host 127.0.0.1 --port 1420",
+    "build": "tsc -b && vite build --config vite.config.ts",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.12.2",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.1",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.4"
+  }
+}

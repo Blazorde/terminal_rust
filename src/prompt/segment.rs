@@ -1,11 +1,21 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use serde::Serialize;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum SegmentKind {
+    User,
+    Host,
     Path,
     Git,
+    Status,
+    Runtime,
+    Duration,
+    Time,
     Symbol,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SegmentIcon {
     pub name: String,
     pub fallback: String,
@@ -20,7 +30,8 @@ impl SegmentIcon {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PromptSegment {
     pub kind: SegmentKind,
     pub label: Option<String>,
@@ -97,7 +108,17 @@ mod tests {
 
     #[test]
     fn model_supports_multiple_segment_kinds() {
-        for kind in [SegmentKind::Path, SegmentKind::Git, SegmentKind::Symbol] {
+        for kind in [
+            SegmentKind::User,
+            SegmentKind::Host,
+            SegmentKind::Path,
+            SegmentKind::Git,
+            SegmentKind::Status,
+            SegmentKind::Runtime,
+            SegmentKind::Duration,
+            SegmentKind::Time,
+            SegmentKind::Symbol,
+        ] {
             assert!(PromptSegment::new(kind, "value", "default").is_visible());
         }
     }

@@ -53,6 +53,10 @@ fn glyph(name: &str) -> Option<&'static str> {
         "git_branch" => Some("\u{e0a0}"),
         "error" => Some("\u{f071}"),
         "user" => Some("\u{f007}"),
+        "host" => Some("\u{f109}"),
+        "status" => Some("\u{f058}"),
+        "runtime" => Some("\u{e795}"),
+        "duration" => Some("\u{f252}"),
         "time" => Some("\u{f017}"),
         _ => None,
     }
@@ -87,7 +91,17 @@ mod tests {
 
     #[test]
     fn central_registry_contains_planned_prompt_icons() {
-        for name in ["folder", "git_branch", "error", "user", "time"] {
+        for name in [
+            "folder",
+            "git_branch",
+            "error",
+            "user",
+            "host",
+            "status",
+            "runtime",
+            "duration",
+            "time",
+        ] {
             assert!(glyph(name).is_some(), "missing {name} icon");
         }
     }

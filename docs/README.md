@@ -1,37 +1,42 @@
-# Documentation de Terminal Rust
+# Terminal Rust documentation
 
-Ce dossier est la porte d'entrée de la documentation technique. Le README à la
-racine reste orienté utilisateur ; les détails de conception et de contribution
-vivent ici.
+This directory is the technical documentation entry point. The root README is
+product-oriented; design and contribution details live here.
 
-## Parcours conseillé
+The same user-facing guides are also published in the
+[GitHub wiki](https://github.com/Blazorde/terminal_rust/wiki). Repository
+Markdown remains authoritative.
 
-| Besoin | Document |
+## Documentation map
+
+| Goal | Document |
 | --- | --- |
-| Comprendre le système | [Vue d'ensemble](architecture/overview.md) |
-| Préparer l'interface desktop | [Architecture GUI](architecture/desktop-gui.md) |
-| Concevoir le futur prompt | [Moteur de prompt](architecture/prompt-engine.md) |
-| Vérifier la portabilité | [Compatibilité multiplateforme](architecture/cross-platform.md) |
-| Comprendre une décision | [Registre des ADR](decisions/README.md) |
-| Personnaliser le prompt | [Personnalisation](customization.md) |
-| Configurer le shell | [Configuration utilisateur](configuration.md) |
-| Créer un thème | [Format des thèmes](themes.md) |
-| Contribuer | [Guide de contribution](development/contributing.md) |
-| Tester une évolution | [Stratégie de tests](development/testing.md) |
-| Valider le MVP | [Checklist qualité MVP](development/mvp-quality-checklist.md) |
-| Installer Terminal Rust | [Installation](install.md) |
-| Résoudre un problème | [Dépannage](troubleshooting.md) |
-| Produire un binaire | [Builds de distribution](release.md) |
-| Traiter un ticket | [Workflow des agents](agents/ticket-workflow.md) |
-| Configurer GitHub | [Workflows et protections](workflows/README.md) |
+| Understand the system | [Architecture overview](architecture/overview.md) |
+| Use the shared engine | [Shell engine API](architecture/shell-engine.md) |
+| Understand the desktop boundary | [Desktop GUI architecture](architecture/desktop-gui.md) |
+| Configure the shell | [User configuration](configuration.md) |
+| Use the live system dashboard | [Dashboard](dashboard.md) |
+| Use completion and inline suggestions | [Completion](completion.md) |
+| Customize the prompt | [Prompt customization](customization.md) |
+| Create user commands | [Custom commands](custom-commands.md) |
+| Create a theme | [Theme format](themes.md) |
+| Understand plugin direction | [Extensibility vision](vision-plugins.md) |
+| Build a first plugin | [Beginner plugin tutorial](plugins/getting-started.md) |
+| Review plugin security | [Permissions and security](plugins/security.md) |
+| Develop the desktop app | [Desktop guide](development/desktop.md) |
+| Check portability | [Cross-platform guide](architecture/cross-platform.md) |
+| Review decisions | [ADR register](decisions/README.md) |
+| Contribute | [Contribution guide](development/contributing.md) |
+| Test a change | [Testing strategy](development/testing.md) |
+| Install Terminal Rust | [Installation](install.md) |
+| Troubleshoot | [Troubleshooting](troubleshooting.md) |
+| Build a release | [Release builds](release.md) |
+| Review security and dependency policy | [Security](security.md) |
+| Configure GitHub | [Workflows and protections](workflows/README.md) |
 
-## Principes
+## Principles
 
-- La documentation décrit l'état réel ou indique clairement qu'une proposition
-  est future.
-- Une décision structurante reçoit un ADR plutôt qu'une note isolée dans une
-  PR.
-- Les exemples restent exécutables sur Windows, macOS et Linux, ou signalent
-  explicitement leur plateforme.
-- Les chemins internes sont relatifs à la racine du dépôt afin que les liens
-  fonctionnent sur GitHub et dans les éditeurs.
+- Documentation describes the current state or clearly labels future work.
+- Structural decisions receive an ADR instead of an isolated pull-request note.
+- Examples run on Windows, macOS and Linux or state their platform explicitly.
+- Internal links remain relative to the repository root for GitHub and editors.

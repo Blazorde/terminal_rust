@@ -2,7 +2,8 @@ version = 1
 theme = "default"
 
 [prompt]
-segments = ["path", "git", "symbol"]
+segments = ["user", "host", "path", "git", "symbol"]
+right_segments = ["status", "runtime", "duration", "time"]
 # auto | always | never; auto keeps ASCII unless Nerd Font support is confirmed
 icons = "auto"
 separator = "  "
@@ -16,3 +17,26 @@ show_status = true
 
 [segments.symbol]
 value = ">"
+
+[plugins]
+# Plugins are disabled by default. Add installed plugin identifiers here.
+enabled = []
+
+# Grants are explicit and persist independently from activation. A permission
+# must also be requested by the installed manifest.
+# [plugins.grants]
+# "example.hello" = ["command.register", "output.write"]
+
+# Plugin-specific options are preserved for the future plugin runtime:
+# [plugins.git]
+# show_branch = true
+# show_dirty = true
+
+[commands]
+# Custom commands use structured arguments and never invoke a system shell.
+# [commands.git-summary]
+# kind = "builtin" # builtin | process
+# target = "git"
+# args = ["status", "--short", "--branch"]
+# append_args = false
+# description = "Show a concise Git summary"

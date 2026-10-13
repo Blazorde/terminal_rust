@@ -1,33 +1,32 @@
-# ADR-NNNN — Titre
+# ADR-NNNN — Title
 
-- Statut : Proposée
-- Date : AAAA-MM-JJ
-- Décideurs : équipe Terminal Rust
+- Status: Proposed
+- Date: YYYY-MM-DD
+- Decision makers: Terminal Rust team
 
-## Contexte
+## Context
 
-Quel problème impose une décision ? Quelles contraintes comptent ?
+What problem requires a decision? Which constraints matter?
 
-## Décision
+## Decision
 
-Quel choix est retenu ? Décrire la règle de manière vérifiable.
+Which option was selected? State the rule in verifiable terms.
 
-## Options considérées
+## Options considered
 
-- Option A : avantages et limites.
-- Option B : avantages et limites.
+- Option A: benefits and limitations.
+- Option B: benefits and limitations.
 
-## Conséquences
+## Consequences
 
-### Positives
+### Positive
 
-- Conséquence utile.
+- Useful consequence.
 
-### Négatives
+### Negative
 
-- Coût ou limitation accepté.
+- Accepted cost or limitation.
 
 ## Validation
 
-Quels tests, mesures ou critères démontrent que la décision est correctement
-appliquée ?
+Which tests, measurements or criteria prove the decision is applied correctly?

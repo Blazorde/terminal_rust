@@ -5,8 +5,13 @@ use std::time::Duration;
 
 use crate::cache::GitPromptCache;
 use crate::config::{AppConfig, IconSetting};
-use crate::git::{self, PromptGitInfo};
+use crate::core::ExecutionStatus;
+use crate::git;
+#[cfg(test)]
+use crate::git::PromptGitInfo;
 use crate::prompt::builder;
+use crate::prompt::context::PromptContext;
+use crate::prompt::segment::{PromptSegment, SegmentKind};
 use crate::render;
 use crate::render::ansi;
 use crate::render::icons::IconMode;
@@ -15,6 +20,8 @@ use crate::render::separators::Separator;
 use crate::theme::{self, ThemeError};
 
 const GIT_CACHE_TTL: Duration = Duration::from_millis(250);
+pub(crate) const GUI_PROMPT_ENV: &str = "TERMINAL_RUST_GUI";
+const GUI_PROMPT_OSC: u16 = 777;
 
 pub struct Prompt {
     git_cache: GitPromptCache,
@@ -22,6 +29,8 @@ pub struct Prompt {
     icon_mode: IconMode,
     separator: Option<Separator>,
     config: AppConfig,
+    last_status: Option<ExecutionStatus>,
+    last_duration: Option<Duration>,
 }
 
 impl Default for Prompt {
@@ -32,6 +41,8 @@ impl Default for Prompt {
             icon_mode: IconMode::from_environment(),
             separator: None,
             config: AppConfig::default(),
+            last_status: None,
+            last_duration: None,
         }
     }
 }
@@ -55,7 +66,14 @@ impl Prompt {
             icon_mode,
             separator: theme.separator,
             config: config.clone(),
+            last_status: None,
+            last_duration: None,
         })
+    }
+
+    pub fn record_execution(&mut self, status: ExecutionStatus, duration: Duration) {
+        self.last_status = Some(status);
+        self.last_duration = Some(duration);
     }
 
     pub fn render(&mut self) -> io::Result<String> {
@@ -66,15 +84,71 @@ impl Prompt {
         let is_terminal = io::stdout().is_terminal();
         let color = ansi::color_enabled(is_terminal);
         let icons = self.icon_mode.enabled(is_terminal);
-        Ok(render_for_path(
-            &current_dir,
-            git.as_ref(),
+        let context = PromptContext::collect(
+            current_dir.clone(),
+            git.clone(),
+            self.last_status,
+            self.last_duration,
+        );
+        let layout = builder::build_layout(&context, &self.config);
+        let rendered = render_segments(
+            &layout.left,
             color,
             icons,
             self.separator.as_ref(),
             &self.palette,
             &self.config,
-        ))
+        );
+
+        if env::var_os(GUI_PROMPT_ENV).is_some() {
+            Ok(format!("{}{}", gui_metadata(&layout)?, rendered))
+        } else {
+            Ok(rendered)
+        }
+    }
+
+    pub fn render_for_editor(&mut self) -> io::Result<(String, String)> {
+        self.render_for_editor_mode(env::var_os(GUI_PROMPT_ENV).is_some())
+    }
+
+    fn render_for_editor_mode(&mut self, gui: bool) -> io::Result<(String, String)> {
+        let current_dir = env::current_dir()?;
+        let git = self
+            .git_cache
+            .get_or_refresh(&current_dir, git::prompt_info);
+        let is_terminal = io::stdout().is_terminal();
+        let color = ansi::color_enabled(is_terminal);
+        let icons = self.icon_mode.enabled(is_terminal);
+        let context =
+            PromptContext::collect(current_dir, git, self.last_status, self.last_duration);
+        let layout = builder::build_layout(&context, &self.config);
+        let editor_segments = if gui {
+            compact_gui_segments(&layout.left, &context.path)
+        } else {
+            layout.left.clone()
+        };
+        let raw = render_segments(
+            &editor_segments,
+            false,
+            icons,
+            self.separator.as_ref(),
+            &self.palette,
+            &self.config,
+        );
+        let rendered = render_segments(
+            &editor_segments,
+            color,
+            icons,
+            self.separator.as_ref(),
+            &self.palette,
+            &self.config,
+        );
+        let styled = if gui {
+            format!("{}{}", gui_metadata(&layout)?, rendered)
+        } else {
+            rendered
+        };
+        Ok((raw, styled))
     }
 
     pub fn print(&mut self) -> io::Result<()> {
@@ -82,6 +156,31 @@ impl Prompt {
     }
 }
 
+fn compact_gui_segments(segments: &[PromptSegment], current_dir: &Path) -> Vec<PromptSegment> {
+    segments
+        .iter()
+        .filter(|segment| {
+            matches!(
+                segment.kind,
+                SegmentKind::Path | SegmentKind::Git | SegmentKind::Symbol
+            )
+        })
+        .cloned()
+        .map(|mut segment| {
+            if segment.kind == SegmentKind::Path {
+                segment.value = Some(
+                    current_dir
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| current_dir.display().to_string()),
+                );
+            }
+            segment
+        })
+        .collect()
+}
+
+#[cfg(test)]
 fn render_for_path(
     path: &Path,
     git: Option<&PromptGitInfo>,
@@ -92,8 +191,19 @@ fn render_for_path(
     config: &AppConfig,
 ) -> String {
     let segments = builder::build(path, git, config);
+    render_segments(&segments, color, icons, separator, palette, config)
+}
+
+fn render_segments(
+    segments: &[crate::prompt::segment::PromptSegment],
+    color: bool,
+    icons: bool,
+    separator: Option<&Separator>,
+    palette: &Palette,
+    config: &AppConfig,
+) -> String {
     render::prompt_segments(
-        &segments,
+        segments,
         color,
         icons,
         separator,
@@ -103,10 +213,51 @@ fn render_for_path(
     )
 }
 
+fn gui_metadata(layout: &builder::PromptLayout) -> io::Result<String> {
+    let payload = serde_json::to_string(layout).map_err(io::Error::other)?;
+    // Windows ConPTY may insert hard line wraps into long, unknown OSC payloads.
+    // Temporarily disabling autowrap keeps the structured frame intact without
+    // changing the visible prompt width used by Rustyline.
+    Ok(format!(
+        "\u{1b}[?7l\u{1b}]{GUI_PROMPT_OSC};{payload}\u{7}\u{1b}[?7h"
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::prompt::segment::SegmentKind;
+
+    #[test]
+    fn editor_prompt_keeps_gui_metadata_out_of_visible_width() {
+        let mut prompt = Prompt::default();
+        let (raw, styled) = prompt
+            .render_for_editor_mode(true)
+            .expect("editor prompt should render");
+
+        assert!(!raw.contains("\x1b]777;"));
+        assert!(styled.starts_with("\x1b[?7l\x1b]777;"));
+        assert!(styled.ends_with(&raw));
+        assert!(!raw.contains("user:"));
+        assert!(!raw.contains("host:"));
+    }
+
+    #[test]
+    fn gui_editor_prompt_compacts_the_path_and_keeps_git_context() {
+        let workspace = std::path::PathBuf::from("deep").join("workspace");
+        let segments = vec![
+            PromptSegment::new(SegmentKind::User, "user", "muted"),
+            PromptSegment::new(SegmentKind::Path, workspace.to_string_lossy(), "primary"),
+            PromptSegment::new(SegmentKind::Git, "develop", "secondary"),
+            PromptSegment::new(SegmentKind::Symbol, ">", "secondary"),
+        ];
+
+        let compact = compact_gui_segments(&segments, &workspace);
+
+        assert_eq!(compact.len(), 3);
+        assert_eq!(compact[0].value.as_deref(), Some("workspace"));
+        assert_eq!(compact[1].value.as_deref(), Some("develop"));
+    }
 
     #[test]
     fn renders_a_simple_prompt_without_git() {

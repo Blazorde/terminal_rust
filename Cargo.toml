@@ -1,6 +1,6 @@
 [package]
 name = "terminal_rust"
-version = "0.3.0"
+version = "1.0.0-alpha.1"
 edition = "2024"
 description = "Mini shell Rust for developers on macOS, Linux, and Windows. A simple command-line interface for executing commands and managing files."
 readme = "README.md"
@@ -10,8 +10,23 @@ homepage = "https://github.com/Blazorde/terminal_rust"
 keywords = ["shell", "terminal", "rust", "multiplatform", "git"]
 categories = ["command-line-utilities"]
 
+[features]
+default = []
+
+[workspace]
+members = [
+    "crates/terminal-rust-plugin-sdk",
+    "desktop/src-tauri",
+    "plugins/example-plugin",
+]
+resolver = "2"
+
 [dependencies]
+crossterm = "0.29"
+jiff = "0.2.38"
 rustyline = "18.0.0"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+semver = { version = "1.0", features = ["serde"] }
 sysinfo = { version = "0.39.6", default-features = false, features = ["disk", "network", "system"] }
 toml = "0.9"

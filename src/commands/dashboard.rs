@@ -1,8 +1,17 @@
 use std::env;
-use std::io::{self, IsTerminal};
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
+use std::time::{Duration, Instant};
 
+use crossterm::cursor::{Hide, MoveTo, Show};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::execute;
+use crossterm::style::Print;
+use crossterm::terminal::{
+    self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
+    enable_raw_mode,
+};
 use sysinfo::{Disks, MINIMUM_CPU_UPDATE_INTERVAL, Networks, System};
 
 use crate::git;
@@ -13,14 +22,21 @@ const BAR_WIDTH: usize = 18;
 const CYAN: &str = "\u{1b}[36m";
 const BOLD: &str = "\u{1b}[1m";
 const RESET: &str = "\u{1b}[0m";
+const LIVE_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
+const MIN_LIVE_WIDTH: u16 = (CONTENT_WIDTH + 2) as u16;
+const MIN_LIVE_HEIGHT: u16 = 24;
 
 pub fn dashboard() -> io::Result<()> {
-    let snapshot = SystemSnapshot::collect()?;
     let style = DashboardStyle::detect();
-    render::stdout(render_dashboard(&snapshot, style))
+    if should_run_live_dashboard() {
+        run_live_dashboard(style)
+    } else {
+        let snapshot = SystemProbe::new()?.snapshot()?;
+        render::stdout(render_dashboard(&snapshot, style))
+    }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct SystemSnapshot {
     os: String,
     kernel: String,
@@ -42,27 +58,42 @@ struct SystemSnapshot {
     inside_git_repository: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct DiskSnapshot {
     mount_point: PathBuf,
     used: u64,
     total: u64,
 }
 
-impl SystemSnapshot {
-    fn collect() -> io::Result<Self> {
-        let current_dir = env::current_dir()?;
+struct SystemProbe {
+    system: System,
+    disks: Disks,
+    networks: Networks,
+}
+
+impl SystemProbe {
+    fn new() -> io::Result<Self> {
         let mut system = System::new_all();
 
-        // CPU usage is computed from two measurements. Keep the delay limited to
-        // the minimum recommended by sysinfo so the command remains responsive.
+        // CPU usage requires two measurements. This is the only explicit wait;
+        // later live samples use the dashboard refresh interval as their gap.
         thread::sleep(MINIMUM_CPU_UPDATE_INTERVAL);
         system.refresh_cpu_usage();
 
-        let disks = Disks::new_with_refreshed_list();
-        let networks = Networks::new_with_refreshed_list();
+        Ok(Self {
+            system,
+            disks: Disks::new_with_refreshed_list(),
+            networks: Networks::new_with_refreshed_list(),
+        })
+    }
+
+    fn snapshot(&mut self) -> io::Result<SystemSnapshot> {
+        let current_dir = env::current_dir()?;
+        self.system.refresh_all();
+        self.disks.refresh(true);
+        self.networks.refresh(true);
         let (network_received, network_transmitted) =
-            networks
+            self.networks
                 .iter()
                 .fold((0_u64, 0_u64), |(received, transmitted), (_, data)| {
                     (
@@ -71,7 +102,8 @@ impl SystemSnapshot {
                     )
                 });
 
-        let cpu_name = system
+        let cpu_name = self
+            .system
             .cpus()
             .first()
             .map(|cpu| cpu.brand().trim())
@@ -79,26 +111,165 @@ impl SystemSnapshot {
             .unwrap_or("Unknown CPU")
             .to_string();
 
-        Ok(Self {
+        Ok(SystemSnapshot {
             os: System::long_os_version().unwrap_or_else(|| env::consts::OS.to_string()),
             kernel: System::kernel_version().unwrap_or_else(|| "unknown".to_string()),
             host: System::host_name().unwrap_or_else(|| "unknown".to_string()),
             uptime_seconds: System::uptime(),
             cpu_name,
-            cpu_usage: system.global_cpu_usage(),
-            logical_cores: system.cpus().len(),
+            cpu_usage: self.system.global_cpu_usage(),
+            logical_cores: self.system.cpus().len(),
             physical_cores: System::physical_core_count(),
-            memory_used: system.used_memory(),
-            memory_total: system.total_memory(),
-            swap_used: system.used_swap(),
-            swap_total: system.total_swap(),
-            process_count: system.processes().len(),
-            disk: current_disk(&disks, &current_dir),
+            memory_used: self.system.used_memory(),
+            memory_total: self.system.total_memory(),
+            swap_used: self.system.used_swap(),
+            swap_total: self.system.total_swap(),
+            process_count: self.system.processes().len(),
+            disk: current_disk(&self.disks, &current_dir),
             network_received,
             network_transmitted,
             inside_git_repository: git::is_inside_work_tree(&current_dir),
             current_dir,
         })
+    }
+}
+
+fn should_run_live_dashboard() -> bool {
+    let stdin_terminal = io::stdin().is_terminal();
+    let stdout_terminal = io::stdout().is_terminal();
+    let desktop_pty = env::var_os("TERMINAL_RUST_GUI").is_some();
+    let dumb_terminal = env::var("TERM").is_ok_and(|term| term == "dumb");
+    let size = terminal::size().ok();
+
+    live_dashboard_supported(
+        stdin_terminal,
+        stdout_terminal,
+        desktop_pty,
+        dumb_terminal,
+        size,
+    )
+}
+
+fn live_dashboard_supported(
+    stdin_terminal: bool,
+    stdout_terminal: bool,
+    desktop_pty: bool,
+    dumb_terminal: bool,
+    size: Option<(u16, u16)>,
+) -> bool {
+    let terminal_pair = (stdin_terminal && stdout_terminal) || desktop_pty;
+    let enough_space = size
+        .map(|(width, height)| width >= MIN_LIVE_WIDTH && height >= MIN_LIVE_HEIGHT)
+        .unwrap_or(desktop_pty);
+
+    terminal_pair && !dumb_terminal && enough_space
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DashboardAction {
+    Refresh,
+    Exit,
+}
+
+trait LiveDashboardRuntime {
+    fn snapshot(&mut self) -> io::Result<SystemSnapshot>;
+    fn draw(&mut self, frame: &str) -> io::Result<()>;
+    fn wait_for_action(&mut self, timeout: Duration) -> io::Result<DashboardAction>;
+}
+
+struct CrosstermDashboardRuntime {
+    probe: SystemProbe,
+}
+
+impl CrosstermDashboardRuntime {
+    fn new() -> io::Result<Self> {
+        Ok(Self {
+            probe: SystemProbe::new()?,
+        })
+    }
+}
+
+impl LiveDashboardRuntime for CrosstermDashboardRuntime {
+    fn snapshot(&mut self) -> io::Result<SystemSnapshot> {
+        self.probe.snapshot()
+    }
+
+    fn draw(&mut self, frame: &str) -> io::Result<()> {
+        let mut stdout = io::stdout().lock();
+        execute!(stdout, MoveTo(0, 0), Clear(ClearType::All), Print(frame))?;
+        stdout.flush()
+    }
+
+    fn wait_for_action(&mut self, timeout: Duration) -> io::Result<DashboardAction> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() || !event::poll(remaining)? {
+                return Ok(DashboardAction::Refresh);
+            }
+            if let Some(action) = dashboard_action(&event::read()?) {
+                return Ok(action);
+            }
+        }
+    }
+}
+
+struct TerminalSession;
+
+impl TerminalSession {
+    fn enter() -> io::Result<Self> {
+        enable_raw_mode()?;
+        let mut stdout = io::stdout().lock();
+        if let Err(error) = execute!(stdout, EnterAlternateScreen, Hide) {
+            let _ = disable_raw_mode();
+            return Err(error);
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for TerminalSession {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+        let mut stdout = io::stdout().lock();
+        let _ = execute!(stdout, Show, LeaveAlternateScreen);
+        let _ = stdout.flush();
+    }
+}
+
+fn run_live_dashboard(style: DashboardStyle) -> io::Result<()> {
+    let _session = TerminalSession::enter()?;
+    let mut runtime = CrosstermDashboardRuntime::new()?;
+    run_live_dashboard_with(&mut runtime, style)
+}
+
+fn run_live_dashboard_with(
+    runtime: &mut impl LiveDashboardRuntime,
+    style: DashboardStyle,
+) -> io::Result<()> {
+    loop {
+        let snapshot = runtime.snapshot()?;
+        let mut frame = render_dashboard(&snapshot, style);
+        frame.push_str(" Live refresh: 1s  |  q / Esc / Ctrl+C: close\n");
+        runtime.draw(&frame)?;
+
+        if runtime.wait_for_action(LIVE_REFRESH_INTERVAL)? == DashboardAction::Exit {
+            return Ok(());
+        }
+    }
+}
+
+fn dashboard_action(event: &Event) -> Option<DashboardAction> {
+    match event {
+        Event::Key(key) if key.kind == KeyEventKind::Press => match (key.code, key.modifiers) {
+            (KeyCode::Char('c'), modifiers) if modifiers.contains(KeyModifiers::CONTROL) => {
+                Some(DashboardAction::Exit)
+            }
+            (KeyCode::Char('q') | KeyCode::Esc, _) => Some(DashboardAction::Exit),
+            _ => None,
+        },
+        Event::Resize(_, _) => Some(DashboardAction::Refresh),
+        _ => None,
     }
 }
 
@@ -126,7 +297,7 @@ struct DashboardStyle {
 
 impl DashboardStyle {
     fn detect() -> Self {
-        let terminal = io::stdout().is_terminal();
+        let terminal = io::stdout().is_terminal() || env::var_os("TERMINAL_RUST_GUI").is_some();
         let dumb_terminal = env::var("TERM").is_ok_and(|term| term == "dumb");
 
         Self {
@@ -427,6 +598,7 @@ fn truncate(value: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::VecDeque;
 
     fn snapshot() -> SystemSnapshot {
         SystemSnapshot {
@@ -494,5 +666,142 @@ mod tests {
 
         assert_eq!(truncated, "aaaaaaa...");
         assert_eq!(truncated.chars().count(), 10);
+    }
+
+    #[test]
+    fn live_dashboard_requires_two_terminals_and_enough_space() {
+        assert!(live_dashboard_supported(
+            true,
+            true,
+            false,
+            false,
+            Some((80, 24))
+        ));
+        assert!(!live_dashboard_supported(
+            false,
+            true,
+            false,
+            false,
+            Some((80, 24))
+        ));
+        assert!(!live_dashboard_supported(
+            true,
+            false,
+            false,
+            false,
+            Some((80, 24))
+        ));
+        assert!(!live_dashboard_supported(
+            true,
+            true,
+            false,
+            true,
+            Some((80, 24))
+        ));
+        assert!(!live_dashboard_supported(
+            true,
+            true,
+            false,
+            false,
+            Some((69, 24))
+        ));
+        assert!(!live_dashboard_supported(
+            true,
+            true,
+            false,
+            false,
+            Some((80, 23))
+        ));
+        assert!(!live_dashboard_supported(true, true, false, false, None));
+        assert!(live_dashboard_supported(false, false, true, false, None));
+        assert!(!live_dashboard_supported(
+            false,
+            false,
+            true,
+            false,
+            Some((60, 20))
+        ));
+    }
+
+    #[test]
+    fn quit_keys_and_resize_map_to_live_actions() {
+        let press = |code, modifiers| Event::Key(crossterm::event::KeyEvent::new(code, modifiers));
+
+        assert_eq!(
+            dashboard_action(&press(KeyCode::Char('q'), KeyModifiers::NONE)),
+            Some(DashboardAction::Exit)
+        );
+        assert_eq!(
+            dashboard_action(&press(KeyCode::Esc, KeyModifiers::NONE)),
+            Some(DashboardAction::Exit)
+        );
+        assert_eq!(
+            dashboard_action(&press(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            Some(DashboardAction::Exit)
+        );
+        assert_eq!(
+            dashboard_action(&Event::Resize(100, 30)),
+            Some(DashboardAction::Refresh)
+        );
+        assert_eq!(
+            dashboard_action(&press(KeyCode::Char('x'), KeyModifiers::NONE)),
+            None
+        );
+    }
+
+    struct FakeRuntime {
+        actions: VecDeque<DashboardAction>,
+        frames: Vec<String>,
+        snapshot_count: usize,
+        timeouts: Vec<Duration>,
+    }
+
+    impl LiveDashboardRuntime for FakeRuntime {
+        fn snapshot(&mut self) -> io::Result<SystemSnapshot> {
+            self.snapshot_count += 1;
+            let mut next = snapshot();
+            next.cpu_usage = self.snapshot_count as f32;
+            Ok(next)
+        }
+
+        fn draw(&mut self, frame: &str) -> io::Result<()> {
+            self.frames.push(frame.to_string());
+            Ok(())
+        }
+
+        fn wait_for_action(&mut self, timeout: Duration) -> io::Result<DashboardAction> {
+            self.timeouts.push(timeout);
+            Ok(self.actions.pop_front().unwrap_or(DashboardAction::Exit))
+        }
+    }
+
+    #[test]
+    fn live_dashboard_refreshes_deterministically_until_exit() {
+        let mut runtime = FakeRuntime {
+            actions: VecDeque::from([DashboardAction::Refresh, DashboardAction::Exit]),
+            frames: Vec::new(),
+            snapshot_count: 0,
+            timeouts: Vec::new(),
+        };
+
+        run_live_dashboard_with(
+            &mut runtime,
+            DashboardStyle {
+                color: false,
+                unicode: false,
+            },
+        )
+        .expect("fake live dashboard should exit cleanly");
+
+        assert_eq!(runtime.snapshot_count, 2);
+        assert_eq!(runtime.frames.len(), 2);
+        assert!(
+            runtime
+                .frames
+                .iter()
+                .all(|frame| frame.contains("q / Esc / Ctrl+C"))
+        );
+        assert_ne!(runtime.frames[0], runtime.frames[1]);
+        assert_eq!(runtime.timeouts, vec![LIVE_REFRESH_INTERVAL; 2]);
     }
 }

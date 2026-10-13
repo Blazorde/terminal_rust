@@ -2,16 +2,16 @@ use std::env;
 use std::io::{self, BufRead, IsTerminal};
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::Instant;
 
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
-use rustyline::{CompletionType, Config, Editor};
+use rustyline::{ColorMode, CompletionType, Config, Editor};
 
-use crate::app::command::{self, CommandResult, ShellState};
 use crate::app::completion::ShellHelper;
-use crate::app::parser::parse_input;
-use crate::app::prompt::Prompt;
-use crate::config;
+use crate::app::prompt::{GUI_PROMPT_ENV, Prompt};
+use crate::config::{self, AppConfig};
+use crate::core::{ExecutionResult, ExecutionStatus, ShellEngine};
 use crate::render;
 
 const HISTORY_FILE_ENV: &str = "TERMINAL_RUST_HISTORY_FILE";
@@ -27,18 +27,18 @@ pub fn run() -> ExitCode {
 }
 
 fn run_once(args: &[String]) -> ExitCode {
-    let mut state = ShellState::default();
+    let app_config = load_config();
+    let mut engine = load_engine(&app_config);
+    let result = engine.execute_args(args);
+    emit_result(&result);
 
-    match command::execute(args, &mut state) {
-        CommandResult::Continue | CommandResult::Exit => ExitCode::SUCCESS,
-        CommandResult::Error(error) => {
-            let _ = render::stderr_line(error);
-            ExitCode::FAILURE
-        }
+    match result.status {
+        ExecutionStatus::Continue | ExecutionStatus::Exit => ExitCode::SUCCESS,
+        ExecutionStatus::Failed => ExitCode::FAILURE,
     }
 }
 
-fn run_interactive() -> ExitCode {
+pub fn run_interactive() -> ExitCode {
     if io::stdin().is_terminal() {
         run_interactive_editor()
     } else {
@@ -47,9 +47,18 @@ fn run_interactive() -> ExitCode {
 }
 
 fn run_interactive_editor() -> ExitCode {
-    let config = Config::builder()
-        .completion_type(CompletionType::List)
-        .build();
+    let app_config = load_config();
+    let mut engine = load_engine(&app_config);
+    let config = if env::var_os(GUI_PROMPT_ENV).is_some() {
+        Config::builder()
+            .completion_type(CompletionType::Circular)
+            .color_mode(ColorMode::Forced)
+            .build()
+    } else {
+        Config::builder()
+            .completion_type(CompletionType::Circular)
+            .build()
+    };
     let mut editor = match Editor::<ShellHelper, DefaultHistory>::with_config(config) {
         Ok(editor) => editor,
         Err(error) => {
@@ -57,7 +66,9 @@ fn run_interactive_editor() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    editor.set_helper(Some(ShellHelper::new()));
+    editor.set_helper(Some(ShellHelper::with_command_names(
+        engine.command_names(),
+    )));
 
     let history_path = history_path();
     if let Some(path) = history_path.as_deref() {
@@ -73,11 +84,10 @@ fn run_interactive_editor() -> ExitCode {
         }
     }
 
-    let mut state = ShellState::default();
-    let mut shell_prompt = load_prompt();
+    let mut shell_prompt = load_prompt(&app_config);
 
     let exit_code = loop {
-        let prompt = match shell_prompt.render() {
+        let prompt = match shell_prompt.render_for_editor() {
             Ok(prompt) => prompt,
             Err(error) => {
                 let _ = render::stderr_line(format_args!("prompt: {error}"));
@@ -91,7 +101,7 @@ fn run_interactive_editor() -> ExitCode {
                 if !trimmed.is_empty() {
                     let _ = editor.add_history_entry(trimmed);
                 }
-                if handle_input(&input, &mut state) == CommandResult::Exit {
+                if handle_input(&input, &mut engine, &mut shell_prompt) == ExecutionStatus::Exit {
                     break ExitCode::SUCCESS;
                 }
             }
@@ -128,8 +138,9 @@ fn run_interactive_plain() -> ExitCode {
     let stdin = io::stdin();
     let mut stdin = stdin.lock();
     let mut input = String::new();
-    let mut state = ShellState::default();
-    let mut shell_prompt = load_prompt();
+    let app_config = load_config();
+    let mut engine = load_engine(&app_config);
+    let mut shell_prompt = load_prompt(&app_config);
 
     loop {
         if let Err(error) = shell_prompt.print() {
@@ -147,42 +158,59 @@ fn run_interactive_plain() -> ExitCode {
             }
         }
 
-        if handle_input(&input, &mut state) == CommandResult::Exit {
+        if handle_input(&input, &mut engine, &mut shell_prompt) == ExecutionStatus::Exit {
             return ExitCode::SUCCESS;
         }
     }
 }
 
-fn handle_input(input: &str, state: &mut ShellState) -> CommandResult {
-    let args = match parse_input(input) {
-        Ok(args) if args.is_empty() => return CommandResult::Continue,
-        Ok(args) => args,
-        Err(error) => {
-            let _ = render::stderr_line(error);
-            return CommandResult::Continue;
-        }
-    };
+fn handle_input(input: &str, engine: &mut ShellEngine, prompt: &mut Prompt) -> ExecutionStatus {
+    let started = Instant::now();
+    let result = engine.execute_line(input);
+    prompt.record_execution(result.status, started.elapsed());
+    emit_result(&result);
+    result.status
+}
 
-    match command::execute(&args, state) {
-        CommandResult::Error(error) => {
-            let _ = render::stderr_line(error);
-            CommandResult::Continue
-        }
-        result => result,
+fn emit_result(result: &ExecutionResult) {
+    if !result.stdout.is_empty() {
+        let _ = render::stdout(&result.stdout);
+    }
+    if !result.stderr.is_empty() {
+        let _ = render::stderr(&result.stderr);
+    }
+    if let Some(error) = &result.error {
+        let _ = render::stderr_line(error);
     }
 }
 
-fn load_prompt() -> Prompt {
+fn load_config() -> AppConfig {
     match config::load_user_config() {
-        Ok(config) => match Prompt::from_config(&config) {
-            Ok(prompt) => prompt,
-            Err(error) => {
-                let _ = render::stderr_line(format_args!("theme: {error}; using defaults"));
-                Prompt::default()
-            }
-        },
+        Ok(config) => config,
         Err(error) => {
             let _ = render::stderr_line(format_args!("config: {error}; using defaults"));
+            AppConfig::default()
+        }
+    }
+}
+
+fn load_engine(config: &AppConfig) -> ShellEngine {
+    match ShellEngine::from_config(config) {
+        Ok(engine) => engine,
+        Err(error) => {
+            let _ = render::stderr_line(format_args!(
+                "config: invalid custom commands: {error}; custom commands disabled"
+            ));
+            ShellEngine::new()
+        }
+    }
+}
+
+fn load_prompt(config: &AppConfig) -> Prompt {
+    match Prompt::from_config(config) {
+        Ok(prompt) => prompt,
+        Err(error) => {
+            let _ = render::stderr_line(format_args!("theme: {error}; using defaults"));
             Prompt::default()
         }
     }

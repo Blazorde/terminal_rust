@@ -1,22 +1,17 @@
-# Dépannage
+# Troubleshooting
 
-## Le script d'installation échoue
+## Installation script fails
 
-- Relancer sans droits administrateur dans un terminal standard.
-- Vérifier l'accès à `github.com` et l'espace disponible dans le dossier
-  temporaire.
-- Sous Linux ou macOS, installer `curl` ou `wget`, puis `sha256sum` ou `shasum`.
-- Sous Windows, utiliser `-NoPathUpdate` si une politique interdit la modification
-  du `PATH` utilisateur.
-- Utiliser l'installation manuelle de `docs/install.md` si l'exécution des
-  scripts est interdite par la politique de la machine.
+- Run without administrator rights in a normal terminal.
+- Check access to `github.com` and temporary disk space.
+- On Linux/macOS, install `curl` or `wget` and `sha256sum` or `shasum`.
+- On Windows, use `-NoPathUpdate` if policy blocks user PATH changes.
+- Fall back to the manual steps in [install.md](install.md).
 
-## La commande est introuvable
+## Command not found
 
-- Vérifier que le dossier contenant le binaire figure dans le `PATH`.
-- Fermer puis rouvrir le terminal après une modification du `PATH`.
-- Tester d'abord avec le chemin complet du binaire.
-- Sous Windows, conserver l'extension `.exe` lors du diagnostic.
+Confirm the binary directory is in PATH, reopen the terminal after changes and
+test the full path first:
 
 ```powershell
 & "$env:LOCALAPPDATA\Programs\TerminalRust\terminal_rust.exe" help
@@ -26,54 +21,32 @@
 "$HOME/.local/bin/terminal_rust" help
 ```
 
-## Permission refusée sous Linux ou macOS
+On Linux/macOS, restore the executable bit with
+`chmod +x "$HOME/.local/bin/terminal_rust"`.
 
-Le bit exécutable peut être perdu après un téléchargement ou une extraction :
+## Platform blocks the binary
 
-```bash
-chmod +x "$HOME/.local/bin/terminal_rust"
-```
+On macOS, verify the release origin and SHA-256 before allowing the unsigned
+binary in Privacy & Security. Do not disable Gatekeeper. `bad CPU type in
+executable` usually means an Intel Mac with the current Apple Silicon archive.
 
-## macOS refuse d'ouvrir le binaire
+On Windows, extract the ZIP, verify the official release and checksum, and
+inspect publisher/provenance before a one-time SmartScreen allowance. Do not
+disable SmartScreen globally.
 
-L'archive officielle n'est pas encore signée par Apple. Vérifier qu'elle vient
-de la page Releases et comparer sa somme SHA-256 avant de l'autoriser dans
-**Réglages Système > Confidentialité et sécurité**. Ne désactiver ni Gatekeeper
-ni les protections globales du système.
+## Checksum mismatch
 
-Le message `bad CPU type in executable` indique généralement un Mac Intel :
-l'archive publiée actuellement cible Apple Silicon (`arm64`). Compiler depuis
-les sources sur la machine en attendant un artefact Intel.
+Do not execute the binary. Delete it, download again from the official release
+and recheck. Report a second mismatch through the repository's security channel.
 
-## Windows bloque ou masque le programme
+## Git or history missing
 
-- Extraire le fichier `.zip` avant de lancer le programme.
-- Vérifier que le téléchargement vient de la release officielle.
-- Comparer la somme avec `SHA256SUMS.txt`.
-- Si Windows affiche une protection, examiner l'éditeur et la provenance avant
-  de choisir une autorisation ponctuelle ; ne pas désactiver SmartScreen.
+Git is optional. Check `git --version` and that the current directory is inside
+a repository; core commands remain available without it. For persistent history,
+set `TERMINAL_RUST_HISTORY_FILE` to a file whose parent directory already exists.
 
-## La somme SHA-256 ne correspond pas
+## Ask for help
 
-Ne pas exécuter le binaire. Supprimer l'archive locale, la télécharger à nouveau
-depuis la release officielle et refaire la vérification. Une seconde différence
-doit être signalée dans les issues du dépôt.
-
-## Git n'apparaît pas dans le prompt
-
-Le segment Git est optionnel. Vérifier `git --version` et confirmer que le
-dossier courant appartient à un dépôt. L'absence de Git n'empêche pas les
-commandes internes de fonctionner ; seules les informations Git et la commande
-`git` intégrée sont indisponibles.
-
-## L'historique n'est pas conservé
-
-Définir `TERMINAL_RUST_HISTORY_FILE` avec un chemin de fichier dont le dossier
-parent existe. L'historique est enregistré lors d'une fermeture normale du
-shell.
-
-## Obtenir de l'aide
-
-Noter le système, l'architecture, la version de Terminal Rust, la commande
-utilisée et le message complet, puis ouvrir une issue sur
-[GitHub](https://github.com/Blazorde/terminal_rust/issues).
+Record operating system, architecture, Terminal Rust version, command and full
+error, then open a [GitHub issue](https://github.com/Blazorde/terminal_rust/issues)
+unless the report contains a security vulnerability.

@@ -28,8 +28,30 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Linux desktop bundle dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop dependencies
+        run: npm ci --prefix desktop
+
       - name: Build release binary
-        run: cargo build --release --locked
+        run: cargo build --release --locked -p terminal_rust --bin terminal_rust
 
       - name: Smoke test release binary
         if: runner.os != 'Windows'
@@ -40,21 +62,47 @@ jobs:
         shell: pwsh
         run: .\target\release\terminal_rust.exe help
 
+      - name: Build Linux desktop bundles
+        if: runner.os == 'Linux'
+        run: npm run tauri build --prefix desktop -- --bundles deb,appimage --ci --no-sign
+
+      - name: Build macOS desktop bundle
+        if: runner.os == 'macOS'
+        run: npm run tauri build --prefix desktop -- --bundles dmg --ci --no-sign
+
+      - name: Build Windows desktop bundle
+        if: runner.os == 'Windows'
+        run: npm run tauri build --prefix desktop -- --bundles nsis --ci --no-sign
+
       - name: Stage release files
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          mkdir -p dist/package
-          cp target/release/terminal_rust LICENSE README.md CHANGELOG.md dist/package/
+          mkdir -p dist/package/desktop
+          cp target/release/terminal_rust LICENSE README.md CHANGELOG.md THIRD_PARTY_NOTICES.md dist/package/
           cp -R config dist/package/config
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            find target/release/bundle -type f \( -name '*.deb' -o -name '*.AppImage' \) \
+              -exec cp '{}' dist/package/desktop/ \;
+          else
+            find target/release/bundle -type f -name '*.dmg' \
+              -exec cp '{}' dist/package/desktop/ \;
+          fi
+          test -n "$(find dist/package/desktop -type f -print -quit)"
 
       - name: Stage release files on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path dist\package -Force | Out-Null
-          Copy-Item target\release\terminal_rust.exe, LICENSE, README.md, CHANGELOG.md -Destination dist\package
+          New-Item -ItemType Directory -Path dist\package\desktop -Force | Out-Null
+          Copy-Item target\release\terminal_rust.exe, LICENSE, README.md, CHANGELOG.md, THIRD_PARTY_NOTICES.md -Destination dist\package
           Copy-Item config -Destination dist\package\config -Recurse
+          $bundles = @(Get-ChildItem target\release\bundle -Recurse -File -Filter '*.exe')
+          if ($bundles.Count -eq 0) {
+            throw 'No Windows desktop installer was produced.'
+          }
+          Copy-Item $bundles.FullName -Destination dist\package\desktop
 
       - name: Package Linux binary
         if: runner.os == 'Linux'
@@ -138,8 +186,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          release_channel=(--latest)
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            release_channel=(--prerelease)
+          fi
           gh release create "$GITHUB_REF_NAME" dist/* \
             --verify-tag \
             --title "Terminal Rust $GITHUB_REF_NAME" \
             --notes-file release-notes.md \
-            --latest
+            "${release_channel[@]}"

@@ -1,29 +1,21 @@
-# Builds de distribution
+# Distribution builds
 
-Le workflow `.github/workflows/release.yml` produit des archives contenant le
-binaire optimisé de Terminal Rust pour Windows, Linux et macOS.
-
-## Déclenchement
-
-Le workflow peut être lancé manuellement depuis l'onglet **Actions** de GitHub.
-Il est aussi exécuté lorsqu'un tag respectant la forme `v*.*.*`, par exemple
-`v0.1.0`, est poussé.
-
-Pour un lancement manuel, les archives restent disponibles comme artefacts du
-workflow. Pour un tag de version, le workflow publie aussi une GitHub Release,
-ses trois archives, leurs sommes SHA-256 et les notes extraites de
+`.github/workflows/release.yml` builds optimized Windows, Linux and macOS
+archives containing the CLI and the native Tauri desktop bundle. It runs
+manually or for tags matching `v*.*.*`. Manual runs retain artifacts for 14
+days; tag runs also create a GitHub Release, checksums and notes from
 `CHANGELOG.md`.
 
-## Contenu des artefacts
-
-Chaque système compile avec :
+Each platform runs:
 
 ```bash
 cargo build --release --locked
 ```
 
-Le binaire est testé avec la commande `help` avant sa mise en archive. Les noms
-d'artefacts incluent le système et l'architecture fournie par le runner :
+The CLI binary is smoke-tested with `help`. Archives contain that binary at
+their root plus `LICENSE`, `THIRD_PARTY_NOTICES.md`, `README.md`, `CHANGELOG.md`,
+`config/` and a `desktop/` directory. The desktop directory contains an NSIS
+installer on Windows, Debian and AppImage bundles on Linux, or a DMG on macOS:
 
 ```text
 terminal_rust-linux-<architecture>.tar.gz
@@ -31,81 +23,48 @@ terminal_rust-macos-<architecture>.tar.gz
 terminal_rust-windows-<architecture>.zip
 ```
 
-Chaque archive place le binaire à sa racine et inclut aussi `LICENSE`,
-`README.md`, `CHANGELOG.md` et le dossier `config/` avec les exemples de
-configuration et de thèmes. Les installateurs existants restent donc
-compatibles tout en distribuant les informations légales et d'utilisation.
+Users download the archive and desktop installer built for their own operating
+system: Windows receives NSIS, Linux receives DEB/AppImage, and macOS receives a
+DMG. A package from one platform is never presented as compatible with another.
 
-Les artefacts sont conservés pendant 14 jours dans l'exécution GitHub Actions.
+The native desktop bundle also embeds `LICENSE`, `THIRD_PARTY_NOTICES.md` and
+the default configuration so installed copies retain their legal notices and
+offline defaults.
 
-## Télécharger une version stable
+Use [GitHub Releases](https://github.com/Blazorde/terminal_rust/releases/latest)
+for stable downloads and verify `SHA256SUMS.txt`. A local build validates only
+its own host; cross-platform proof requires executed jobs and manual desktop
+evidence where applicable.
 
-La [page Releases](https://github.com/Blazorde/terminal_rust/releases/latest)
-fournit les archives Windows, Linux et macOS sans nécessiter de compte GitHub.
-Le fichier `SHA256SUMS.txt` permet de vérifier leur intégrité.
+Desktop bundles are currently unsigned. Verify the release checksum and source
+before accepting an operating-system warning. Never disable Windows protection
+or macOS Gatekeeper globally. Code-signing and notarization require maintainer
+credentials and must be added without committing private keys.
 
-## Télécharger un build temporaire
+## Versioning and publication
 
-1. Ouvrir l'onglet **Actions** du dépôt.
-2. Choisir le workflow **Release builds**.
-3. Ouvrir une exécution terminée avec succès.
-4. Télécharger l'artefact correspondant à son système.
-5. Extraire l'archive avant de lancer le binaire.
+Terminal Rust follows Semantic Versioning. Keep unreleased work under
+`## [Unreleased]`. For a release, move those notes to
+`## [x.y.z] - YYYY-MM-DD` and create a new empty Unreleased section. The
+versions in `Cargo.toml`, `Cargo.lock`, Tauri metadata, changelog and Git tag
+must agree.
 
-Sous Linux et macOS, si le système a perdu le bit exécutable pendant le
-téléchargement ou l'extraction :
+1. Update all version metadata and changelog notes.
+2. Run the complete local and platform validation.
+3. Merge a focused release preparation PR into `develop`.
+4. Open the `develop` to `main` PR only after the owner's explicit approval.
+5. After approval and merge, create lowercase tag `vx.y.z` on the `main` commit.
+6. Verify all build and publish jobs, archives, checksums and release notes.
 
-```bash
-chmod +x terminal_rust
-./terminal_rust help
-```
+Tags with a SemVer prerelease suffix, such as `v1.0.0-alpha.1`, are published as
+GitHub prereleases and do not replace the latest stable release. Tag creation is
+the publication trigger and requires a separate explicit owner approval after
+the final `main` commit has been presented.
 
-Sous Windows :
+For the first v1 alpha, keep the release snapshot limited to product source,
+public documentation, legal notices, installer scripts and validation workflows.
+Internal planning notes, evidence logs and repository-automation instructions
+remain on `develop` and are not part of the `main` product snapshot.
 
-```powershell
-.\terminal_rust.exe help
-```
-
-## Validation locale
-
-Un poste local ne valide que son propre système. Sous Windows, par exemple :
-
-```powershell
-cargo build --release --locked
-.\target\release\terminal_rust.exe help
-```
-
-La preuve multiplateforme est fournie par les trois jobs du workflow GitHub
-Actions. Un échec de compilation, de smoke test, d'archivage ou d'upload fait
-échouer le job correspondant.
-
-## Publier une version
-
-Terminal Rust suit [Semantic Versioning](https://semver.org/) :
-
-- `PATCH` (`0.2.1`) pour une correction rétrocompatible ;
-- `MINOR` (`0.3.0`) pour une fonctionnalité rétrocompatible ;
-- `MAJOR` (`1.0.0`) pour une rupture de compatibilité publique.
-
-Avant `1.0.0`, une rupture importante peut aussi faire évoluer la version
-mineure. Elle doit être signalée sous `### Changed` dans le changelog et dans
-les notes de release. La version de `Cargo.toml`, celle de `Cargo.lock`, le titre
-du changelog et le tag Git doivent toujours correspondre.
-
-Les changements destinés à la prochaine version restent dans
-`## [Unreleased]`. Lors de la préparation d'une release, cette section est
-transformée en `## [x.y.z] - YYYY-MM-DD`, puis une nouvelle section
-`## [Unreleased]` vide est créée. La prochaine version prévue est `0.3.0`.
-
-### Checklist
-
-1. Mettre à jour la version dans `Cargo.toml` et `Cargo.lock`.
-2. Déplacer les notes de `Unreleased` vers une section datée `## [x.y.z]`.
-3. Exécuter la validation obligatoire et ouvrir une PR vers `develop`.
-4. Fusionner `develop` dans `main` par pull request après le passage de la CI.
-5. Créer et pousser un tag minuscule `vx.y.z` sur ce commit de `main`.
-6. Vérifier que les trois builds et le job **Publish GitHub Release** réussissent.
-7. Contrôler les archives, `SHA256SUMS.txt` et les notes sur la page Releases.
-
-Le job de publication refuse un tag sans section correspondante dans le
-changelog et vérifie que le tag existe déjà sur GitHub.
+The publication job rejects a tag without a matching changelog section. An
+Actions job that fails before executing steps is not release evidence.

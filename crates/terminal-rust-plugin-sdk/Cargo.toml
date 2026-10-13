@@ -1,0 +1,12 @@
+[package]
+name = "terminal-rust-plugin-sdk"
+version = "1.0.0-alpha.1"
+edition = "2024"
+description = "Runtime-independent DTOs for Terminal Rust plugins"
+license = "MIT"
+repository = "https://github.com/Blazorde/terminal_rust"
+publish = false
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

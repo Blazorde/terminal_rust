@@ -1,0 +1,11 @@
+[package]
+name = "terminal-rust-example-plugin"
+version = "1.0.0-alpha.1"
+edition = "2024"
+description = "Copyable hello-world template for Terminal Rust plugins"
+license = "MIT"
+repository = "https://github.com/Blazorde/terminal_rust"
+publish = false
+
+[dependencies]
+terminal-rust-plugin-sdk = { path = "../../crates/terminal-rust-plugin-sdk" }
