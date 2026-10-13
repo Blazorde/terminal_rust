@@ -33,11 +33,11 @@ Never store it in a script or commit. Unix installation additionally uses `gh`.
 
 ## Archives
 
-| System | Archive |
-| --- | --- |
-| Windows x86_64 | `terminal_rust-windows-X64.zip` |
-| Linux x86_64 | `terminal_rust-linux-X64.tar.gz` |
-| macOS Apple Silicon | `terminal_rust-macos-ARM64.tar.gz` |
+| System | Archive | Desktop bundle inside `desktop/` |
+| --- | --- | --- |
+| Windows x86_64 | `terminal_rust-windows-X64.zip` | NSIS `.exe` installer |
+| Linux x86_64 | `terminal_rust-linux-X64.tar.gz` | `.deb` and `.AppImage` |
+| macOS Apple Silicon | `terminal_rust-macos-ARM64.tar.gz` | `.dmg` |
 
 No macOS Intel archive is currently published; build from source on Intel Macs.
 
@@ -54,9 +54,10 @@ shasum -a 256 terminal_rust-macos-ARM64.tar.gz
 
 On Linux/macOS, extract, mark executable and install to `~/.local/bin`. On
 Windows, extract the ZIP to a stable directory and add that directory to the
-user PATH if desired. The macOS binary is not Apple-signed; verify its checksum
-and origin before granting a one-time allowance in Privacy & Security. Never
-disable Gatekeeper globally.
+user PATH if desired. To install the GUI, open the platform bundle under
+`desktop/` after verifying the archive checksum. Desktop bundles are not yet
+code-signed or notarized; verify their origin before granting a one-time
+allowance. Never disable Windows protection or macOS Gatekeeper globally.
 
 ## Build from source
 

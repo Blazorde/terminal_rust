@@ -32,7 +32,11 @@ cannot execute shell commands.
 
 Stable archives are published on [GitHub Releases](https://github.com/Blazorde/terminal_rust/releases).
 Verify downloads with `SHA256SUMS.txt`. Each archive includes the MIT license,
-third-party notices, changelog, README and default configuration.
+third-party notices, changelog, README and default configuration. It also has a
+`desktop/` directory with an NSIS installer on Windows, `.deb` and `.AppImage`
+bundles on Linux, or a `.dmg` on macOS. These desktop bundles are currently
+unsigned; verify their checksum and origin before granting a one-time OS
+allowance.
 
 See the full [installation guide](https://github.com/Blazorde/terminal_rust/blob/develop/docs/install.md)
 for supported archive shapes, source prerequisites and current platform limits.
