@@ -28,6 +28,13 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "publisher": "Blazorde",
     "homepage": "https://github.com/Blazorde/terminal_rust",
     "license": "MIT",
@@ -36,6 +43,7 @@
     "shortDescription": "A cross-platform terminal powered by a Rust shell engine.",
     "longDescription": "Terminal Rust combines a native Rust shell engine with a configurable desktop terminal for Windows, macOS and Linux.",
     "resources": {
+      "../../LICENSE": "LICENSE",
       "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
       "../../config/": "config/"
     }

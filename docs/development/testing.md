@@ -77,3 +77,22 @@ docker run --rm --volume "$PWD:/source:ro" \
 This proves Linux compilation and headless Rust/PTY behavior. It does not prove
 that a visible WebKitGTK window renders correctly; the manual GUI evidence in
 the desktop audit is still required for that claim.
+
+The same pinned image includes Node.js 24 and `patchelf`, so it can also build
+the Linux desktop installers without depending on host tooling:
+
+```bash
+docker run --rm --volume "$PWD:/source:ro" \
+  terminal-rust-linux-validation bash -c '
+    tar --exclude=.git --exclude=target --exclude=node_modules \
+      --exclude=desktop/node_modules --exclude=desktop/dist \
+      -C /source -cf - . | tar -C /workspace -xf - &&
+    cd /workspace &&
+    npm ci --prefix desktop &&
+    npm run tauri --prefix desktop -- build --bundles deb,appimage --ci --no-sign
+  '
+```
+
+Successful DEB and AppImage creation is build evidence only. Launch the bundle
+in a graphical Linux session and execute a real PTY command before marking the
+desktop acceptance criterion complete.
