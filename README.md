@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src="docs/assets/terminal-rust-cover.png" alt="Terminal Rust cover: the command prompt mark surrounded by native terminal workspaces" width="100%">
+
 **A compact, cross-platform shell with a real Rust core and a focused desktop workspace.**
 
 [![Release](https://img.shields.io/github/v/release/Blazorde/terminal_rust?display_name=tag&style=flat-square&color=ff6b3d)](https://github.com/Blazorde/terminal_rust/releases/latest)
@@ -80,6 +82,11 @@ The built-in `ls` supports `-1`, `-a`, `-A`, `-d`, `-F`, `-h`, `-l`, `-p`,
 cautious than common Unix shells: recursive removal asks for confirmation even
 when combined with `--force`.
 
+Interactive `ls` wraps entries to the current terminal width and highlights
+directories, project manifests, source files, scripts and archives with portable
+ANSI colors. Use `ls -1` for one entry per line or redirect output for stable
+plain text.
+
 In an interactive terminal, `dashboard` refreshes in place once per second
 until you press `q`, `Escape` or `Ctrl+C`. Redirected output and small or dumb
 terminals receive one stable snapshot instead. See the [dashboard guide](docs/dashboard.md).
@@ -89,6 +96,11 @@ terminals receive one stable snapshot instead. See the [dashboard guide](docs/da
 The desktop app opens real native PTY sessions managed by Rust. The WebView
 renders terminal output and settings but cannot spawn arbitrary processes or
 access the filesystem directly.
+
+![Terminal Rust desktop running a real Git-aware PTY with adaptive colored ls output](docs/assets/terminal-rust-desktop.png)
+
+*Real Windows desktop session; the same Rust shell and native PTY contract are
+used by the Linux and macOS bundles.*
 
 ### Launch the native window from source
 
