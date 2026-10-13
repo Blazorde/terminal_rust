@@ -9,6 +9,7 @@ pub struct LsOptions {
     pub directory_itself: bool,
     pub human_readable: bool,
     pub long_format: bool,
+    pub one_per_line: bool,
     pub slash_directories: bool,
     pub recursive: bool,
     pub reverse: bool,
@@ -50,7 +51,7 @@ pub fn parse_args(args: &[String]) -> Result<(LsOptions, Vec<PathBuf>), LsError>
 fn apply_short_flags(arg: &str, options: &mut LsOptions) -> Result<(), LsError> {
     for flag in arg.chars().skip(1) {
         match flag {
-            '1' => {}
+            '1' => options.one_per_line = true,
             'a' => options.all = true,
             'A' => options.almost_all = true,
             'd' => options.directory_itself = true,
@@ -115,6 +116,13 @@ mod tests {
         assert!(options.all);
         assert!(options.human_readable);
         assert_eq!(targets, vec![PathBuf::from("src")]);
+    }
+
+    #[test]
+    fn one_per_line_flag_disables_adaptive_columns() {
+        let (options, _) = parse_args(&args(&["-1"])).expect("one-per-line flag should parse");
+
+        assert!(options.one_per_line);
     }
 
     #[test]

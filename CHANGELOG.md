@@ -66,6 +66,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Changed
 
+- Redesigned the desktop shell around a frameless native window with branded
+  title chrome, clear PTY state, compact session tabs and responsive controls.
+- Desktop prompts now keep the editable line compact while the status bar owns
+  full path, user, host, runtime and timing context.
+- Interactive `ls` output now wraps to the available width and uses portable
+  semantic colors for directories, project manifests, source, tools and archives.
 - Linux desktop packaging now declares the complete native icon set and embeds
   the MIT license alongside third-party notices and bundled configuration.
 - Expanded the desktop palette to Graphite, Bone, Nord, Amber, Moss and Dusk,
@@ -73,6 +79,14 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 - The desktop terminal now refreshes xterm font metrics and dimensions after
   font, density, tab, viewport and window changes so typed text stays aligned
   with every cursor style.
+
+### Fixed
+
+- Prevented structured prompt metadata from appearing as raw JSON or shifting
+  Rustyline's visible prompt width in Windows and Linux PTY sessions.
+- Serialized desktop keyboard writes so rapid input and long paths cannot reach
+  the native PTY out of order or lose characters.
+- Restored native drag and edge/corner resize behavior for the frameless window.
 - Standardized contributor, architecture, configuration, desktop, plugin,
   installation, release and troubleshooting documentation in concise English.
 - Clarified the source commands that open the native Tauri terminal window and

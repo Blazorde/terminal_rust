@@ -31,6 +31,74 @@ interface TerminalPaneProps {
 }
 
 const encoder = new TextEncoder()
+const promptMetadataMarkers = ['\x1b]777;', '\u2190]777;']
+const noWrapStartMarkers = ['\x1b[?7l', '\u2190[?7l']
+const noWrapEndMarkers = ['\x1b[?7h', '\u2190[?7h']
+
+function stripTrailingMarker(value: string, markers: string[]): string {
+  const marker = markers.find((candidate) => value.endsWith(candidate))
+  return marker ? value.slice(0, -marker.length) : value
+}
+
+function stripLeadingMarker(value: string, markers: string[]): string {
+  const marker = markers.find((candidate) => value.startsWith(candidate))
+  return marker ? value.slice(marker.length) : value
+}
+
+function createPromptMetadataFilter(onPromptLayout: (layout: PromptLayout) => void) {
+  const decoder = new TextDecoder()
+  let pending = ''
+
+  return (data: Uint8Array): string => {
+    pending += decoder.decode(data, { stream: true })
+    let visible = ''
+
+    while (pending.length > 0) {
+      const marker = promptMetadataMarkers
+        .map((value) => ({ index: pending.indexOf(value), value }))
+        .filter(({ index }) => index >= 0)
+        .sort((left, right) => left.index - right.index)[0]
+
+      if (!marker) {
+        const partialLength = promptMetadataMarkers.reduce((longest, value) => {
+          for (let length = Math.min(value.length - 1, pending.length); length > longest; length -= 1) {
+            if (pending.endsWith(value.slice(0, length))) return length
+          }
+          return longest
+        }, 0)
+        visible += pending.slice(0, pending.length - partialLength)
+        pending = pending.slice(pending.length - partialLength)
+        break
+      }
+
+      visible += stripTrailingMarker(pending.slice(0, marker.index), noWrapStartMarkers)
+      const payloadStart = marker.index + marker.value.length
+      let payloadEnd = -1
+      let promptLayout: PromptLayout | null = null
+      for (let index = payloadStart; index < pending.length; index += 1) {
+        if (pending[index] !== '}') continue
+        const candidate = pending.slice(payloadStart, index + 1).replace(/[\r\n]/g, '')
+        promptLayout = parsePromptLayout(candidate)
+        if (promptLayout) {
+          payloadEnd = index + 1
+          break
+        }
+      }
+      if (payloadEnd < 0 || !promptLayout) {
+        pending = pending.slice(marker.index)
+        break
+      }
+
+      onPromptLayout(promptLayout)
+      pending = pending.slice(payloadEnd)
+      if (pending.startsWith('\x07')) pending = pending.slice(1)
+      if (pending.startsWith('\x1b\\')) pending = pending.slice(2)
+      pending = stripLeadingMarker(pending, noWrapEndMarkers)
+    }
+
+    return visible
+  }
+}
 
 function TerminalPane({
   active,
@@ -78,7 +146,9 @@ function TerminalPane({
     let terminalDisposables: Array<{ dispose: () => void }> = []
     let trafficTimer: number | null = null
     let fitFrame: number | null = null
+    let inputQueue: Promise<void> = Promise.resolve()
     let disposed = false
+    const filterPromptMetadata = createPromptMetadataFilter((promptLayout) => onPatch(tabId, { promptLayout }))
 
     const fitToHost = () => {
       if (disposed || element.clientWidth === 0 || element.clientHeight === 0) return
@@ -120,17 +190,14 @@ function TerminalPane({
 
       onPatch(tabId, { connection: 'connecting', error: null })
       terminalDisposables = [
-        term.parser.registerOscHandler(777, (payload) => {
-          const promptLayout = parsePromptLayout(payload)
-          if (promptLayout) onPatch(tabId, { promptLayout })
-          return true
-        }),
         term.onData((data) => {
           if (sessionId === null) return
-          void invoke('write_session', {
-            sessionId,
-            data: Array.from(encoder.encode(data)),
-          }).catch(() => undefined)
+          const targetSessionId = sessionId
+          const bytes = Array.from(encoder.encode(data))
+          inputQueue = inputQueue
+            .then(() => invoke('write_session', { sessionId: targetSessionId, data: bytes }))
+            .then(() => undefined)
+            .catch(() => undefined)
         }),
         term.onResize(({ cols, rows }) => {
           onPatch(tabId, { dimensions: `${cols} × ${rows}` })
@@ -143,7 +210,8 @@ function TerminalPane({
       listeners = await Promise.all([
         listen<PtyOutput>('pty-output', ({ payload }) => {
           if (payload.sessionId !== sessionId) return
-          term.write(new Uint8Array(payload.data))
+          const visible = filterPromptMetadata(new Uint8Array(payload.data))
+          if (visible) term.write(visible)
           onPatch(tabId, { trafficActive: true })
           if (trafficTimer !== null) window.clearTimeout(trafficTimer)
           trafficTimer = window.setTimeout(() => onPatch(tabId, { trafficActive: false }), 140)
