@@ -3,6 +3,10 @@
 This directory is the technical documentation entry point. The root README is
 product-oriented; design and contribution details live here.
 
+The repository also keeps the source of its navigable GitHub wiki in
+[`wiki/`](../wiki/). Repository Markdown is authoritative; the GitHub wiki is a
+published mirror.
+
 ## Documentation map
 
 | Goal | Document |
@@ -32,6 +36,7 @@ product-oriented; design and contribution details live here.
 | Review security and dependency policy | [Security](security.md) |
 | Process a ticket | [Ticket workflow](agents/ticket-workflow.md) |
 | Configure GitHub | [Workflows and protections](workflows/README.md) |
+| Synchronize the GitHub wiki | [Wiki development page](../wiki/Development.md#synchronize-this-wiki) |
 
 ## Principles
 
