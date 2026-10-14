@@ -29,4 +29,4 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 semver = { version = "1.0", features = ["serde"] }
 sysinfo = { version = "0.39.6", default-features = false, features = ["disk", "network", "system"] }
-toml = "0.9"
+toml = "1.1"
