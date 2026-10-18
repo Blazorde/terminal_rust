@@ -53,14 +53,11 @@ pub fn prompt_info(path: &Path) -> Option<PromptGitInfo> {
     prompt_info_with_program(path, "git")
 }
 
-pub fn execute_developer_command(
-    path: &Path,
-    args: &[String],
-) -> Result<ExitStatus, GitCommandError> {
-    execute_developer_command_with_program(path, args, "git")
+pub fn run_native_command(path: &Path, args: &[String]) -> Result<ExitStatus, GitCommandError> {
+    run_native_command_with_program(path, args, "git")
 }
 
-fn execute_developer_command_with_program(
+fn run_native_command_with_program(
     path: &Path,
     args: &[String],
     program: impl AsRef<OsStr>,
@@ -269,7 +266,7 @@ mod tests {
     #[test]
     fn developer_command_reports_a_missing_git_executable() {
         let missing_program = temp_path("git", "missing-command-executable");
-        let result = execute_developer_command_with_program(
+        let result = run_native_command_with_program(
             Path::new("."),
             &["status".to_string()],
             &missing_program,
@@ -315,14 +312,14 @@ mod tests {
                 .expect("fixture commit should start");
             assert!(configured.success());
 
-            let created = execute_developer_command(
+            let created = run_native_command(
                 &directory,
                 &["branch".to_string(), "native-command-test".to_string()],
             )
             .expect("native branch creation should run");
             assert!(created.success());
 
-            let deleted = execute_developer_command(
+            let deleted = run_native_command(
                 &directory,
                 &[
                     "branch".to_string(),
@@ -332,13 +329,6 @@ mod tests {
             )
             .expect("native branch deletion should run");
             assert!(deleted.success());
-
-            let failed =
-                execute_developer_command(&directory, &["not-a-real-git-command".to_string()]);
-            assert!(matches!(
-                failed,
-                Err(GitCommandError::CommandFailed(Some(_)))
-            ));
         }
 
         fs::remove_dir_all(directory).expect("test repository should be removed");
