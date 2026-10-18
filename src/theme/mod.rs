@@ -139,21 +139,77 @@ pub fn preview(name: &str, is_terminal: bool) -> Result<String, ThemeError> {
         IconSetting::Never => IconMode::Never,
     };
     let icons = icon_mode.enabled(is_terminal);
-    let segments = [
-        PromptSegment::new(SegmentKind::Path, "terminal-rust", "primary").with_icon("folder", ""),
-        PromptSegment::new(SegmentKind::Git, "main*", "warning").with_icon("git_branch", "git:"),
-        PromptSegment::new(SegmentKind::Symbol, ">", "secondary"),
-    ];
+    let color = crate::render::ansi::color_enabled(is_terminal);
+    let separator = theme.separator.as_ref();
+    let prompt = |path: &str, branch: &str| {
+        let segments = [
+            PromptSegment::new(SegmentKind::Path, path, "primary").with_icon("folder", ""),
+            PromptSegment::new(SegmentKind::Git, branch, "warning").with_icon("git_branch", "git:"),
+            PromptSegment::new(SegmentKind::Symbol, ">", "secondary"),
+        ];
+        render::prompt_segments(
+            &segments,
+            color,
+            icons,
+            separator,
+            "  ",
+            false,
+            &theme.palette,
+        )
+    };
+    let command = |line: &str| {
+        crate::render::ansi::paint(
+            line,
+            crate::render::ansi::style_for_key("secondary", &theme.palette),
+            color,
+        )
+    };
+    let output = |line: &str, role: &str| {
+        crate::render::ansi::paint(
+            line,
+            crate::render::ansi::style_for_key(role, &theme.palette),
+            color,
+        )
+    };
 
-    Ok(render::prompt_segments(
-        &segments,
-        crate::render::ansi::color_enabled(is_terminal),
-        icons,
-        theme.separator.as_ref(),
-        "  ",
-        false,
-        &theme.palette,
-    ))
+    let mut demo = String::new();
+    demo.push_str(&format!(
+        "{}{}\n",
+        prompt("terminal-rust", "main*"),
+        command("ls")
+    ));
+    demo.push_str(&format!(
+        "{}\n",
+        output("src/  tests/  Cargo.toml  README.md", "muted")
+    ));
+    demo.push_str(&format!(
+        "{}{}\n",
+        prompt("terminal-rust", "main*"),
+        command("git status --short")
+    ));
+    demo.push_str(&format!("{}\n", output(" M src/theme/mod.rs", "warning")));
+    demo.push_str(&format!(
+        "{}{}\n",
+        prompt("terminal-rust", "main*"),
+        command("cargo test --lib")
+    ));
+    demo.push_str(&format!(
+        "{}\n",
+        output(
+            "test theme::tests::loads_every_documented_builtin_theme ... ok",
+            "success"
+        )
+    ));
+    demo.push_str(&format!(
+        "{}{}\n",
+        prompt("terminal-rust", "main*"),
+        command("cat missing.txt")
+    ));
+    demo.push_str(&format!(
+        "{}\n",
+        output("cat: missing.txt: No such file or directory", "error")
+    ));
+    Ok(demo)
 }
 
 fn validate(requested_name: &str, definition: &ThemeFile) -> Result<(), ThemeError> {
@@ -222,14 +278,15 @@ mod tests {
     }
 
     #[test]
-    fn preview_uses_fixed_demo_data_and_plain_fallbacks() {
-        assert_eq!(
-            preview("default", false).expect("default preview should render"),
-            "terminal-rust  git:main*  > "
-        );
-        assert_eq!(
-            preview("powerline", false).expect("powerline preview should render"),
-            "terminal-rust | git:main* | > "
-        );
+    fn preview_shows_commands_and_varied_output_with_plain_fallbacks() {
+        let default = preview("default", false).expect("default preview should render");
+        assert!(default.contains("terminal-rust  git:main*  > ls\n"));
+        assert!(default.contains("git status --short"));
+        assert!(default.contains("cargo test --lib"));
+        assert!(default.contains("cat: missing.txt: No such file or directory"));
+
+        let powerline = preview("powerline", false).expect("powerline preview should render");
+        assert!(powerline.contains("terminal-rust | git:main* | > ls\n"));
+        assert!(!powerline.contains("\u{1b}["));
     }
 }

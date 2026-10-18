@@ -31,9 +31,14 @@ terminal_rust theme preview minimal
 terminal_rust theme preview powerline
 ```
 
-Preview data is fixed and explicitly illustrative: folder `terminal-rust`, dirty
-branch `main*` and symbol `>`. Redirected output uses plain ASCII. Unknown names
-list valid choices and return a failing exit code.
+The preview clears an interactive terminal, then shows a fixed, illustrative
+session with several prompts and representative command output. It does not run
+the displayed commands. The sample includes directory listing, Git status,
+successful test output and an error so colors and spacing can be judged with more
+content on screen. The command returns to the shell as soon as the sample is
+printed; run it again to preview another preset. Redirected output is not cleared
+and uses plain ASCII. Unknown names list valid choices and return a failing exit
+code.
 
 The `render::icons` registry owns glyphs for `folder`, `git_branch`, `error`,
 `user` and `time`; themes reference symbolic names rather than copying Unicode.
