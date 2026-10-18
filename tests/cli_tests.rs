@@ -454,10 +454,13 @@ fn theme_list_and_preview_are_available_without_starting_the_shell() {
 
     let preview = run_cli(directory.path(), &["theme", "preview", "minimal"]);
     assert!(preview.status.success(), "stderr: {}", stderr(&preview));
-    assert_eq!(
-        stdout(&preview),
-        "Theme: minimal\nterminal-rust  git:main*  > \n"
-    );
+    let preview = stdout(&preview);
+    assert!(preview.starts_with("Theme: minimal\n\n"));
+    assert!(preview.contains("terminal-rust  git:main*  > ls\n"));
+    assert!(preview.contains("git status --short"));
+    assert!(preview.contains("cargo test --lib"));
+    assert!(preview.contains("cat: missing.txt: No such file or directory"));
+    assert!(!preview.contains("\u{1b}["));
 }
 
 #[test]
