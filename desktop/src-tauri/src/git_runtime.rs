@@ -57,7 +57,8 @@ impl GitRuntime {
                 .map_err(|error| format!("cannot create bundled Git directory: {error}"))?;
             extract_runtime(&archive_path, &runtime_dir)?;
             run_relocation_fixup(&runtime_dir)?;
-            Self::discover(&runtime_dir)?;
+            let runtime = Self::discover(&runtime_dir)?;
+            configure_credential_helper(&runtime_dir, &runtime)?;
             fs::write(&ready_path, marker_contents)
                 .map_err(|error| format!("cannot mark bundled Git runtime as ready: {error}"))?;
         }
@@ -81,6 +82,7 @@ impl GitRuntime {
             &[
                 "libexec/git-core",
                 "Library/libexec/git-core",
+                "Library/ucrt64/libexec/git-core",
                 "lib/git-core",
                 "Library/lib/git-core",
                 "mingw64/libexec/git-core",
@@ -93,6 +95,7 @@ impl GitRuntime {
             &[
                 "share/git-core/templates",
                 "Library/share/git-core/templates",
+                "Library/ucrt64/share/git-core/templates",
                 "mingw64/share/git-core/templates",
             ],
         );
@@ -109,6 +112,7 @@ impl GitRuntime {
         let path_entries = [
             "bin",
             "Library/bin",
+            "Library/ucrt64/bin",
             "Library/usr/bin",
             "Scripts",
             "cmd",
@@ -216,6 +220,50 @@ fn run_relocation_fixup(root: &Path) -> Result<(), String> {
         return Err(format!(
             "bundled Git relocation failed with status {}",
             status
+        ));
+    }
+    Ok(())
+}
+
+fn configure_credential_helper(root: &Path, runtime: &GitRuntime) -> Result<(), String> {
+    let config_path = first_existing(
+        root,
+        if cfg!(windows) {
+            &["Library/etc/gitconfig", "etc/gitconfig"]
+        } else {
+            &["etc/gitconfig", "Library/etc/gitconfig"]
+        },
+    )
+    .ok_or_else(|| "bundled Git archive does not contain its system configuration".to_string())?;
+
+    let mut command = Command::new(&runtime.executable);
+    command
+        .args([
+            "config",
+            "--file",
+            config_path.to_string_lossy().as_ref(),
+            "--replace-all",
+            "credential.helper",
+            "manager",
+        ])
+        .env("GIT_EXEC_PATH", &runtime.exec_path);
+    let current_path = std::env::var_os("PATH").unwrap_or_default();
+    let path_entries = runtime
+        .path_entries
+        .iter()
+        .cloned()
+        .chain(std::env::split_paths(&current_path));
+    command.env(
+        "PATH",
+        std::env::join_paths(path_entries)
+            .map_err(|error| format!("cannot configure Git credential manager path: {error}"))?,
+    );
+    let status = command
+        .status()
+        .map_err(|error| format!("cannot configure bundled Git credentials: {error}"))?;
+    if !status.success() {
+        return Err(format!(
+            "cannot configure bundled Git credentials (status {status})"
         ));
     }
     Ok(())
@@ -343,6 +391,49 @@ mod tests {
         assert!(version.status.success());
         assert!(String::from_utf8_lossy(&version.stdout).contains("git version 2.56.0"));
 
+        let configured_helper = runtime_command(
+            &runtime,
+            &["config", "--system", "--get", "credential.helper"],
+        )
+        .output()
+        .expect("Git should read its bundled credential helper setting");
+        assert!(configured_helper.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&configured_helper.stdout).trim(),
+            "manager"
+        );
+
+        let credential_manager = runtime_command(&runtime, &["credential-manager", "--version"])
+            .output()
+            .expect("the bundled credential manager should start");
+        assert!(
+            credential_manager.status.success(),
+            "credential manager stderr: {}",
+            String::from_utf8_lossy(&credential_manager.stderr)
+        );
+
+        let lfs = runtime_command(&runtime, &["lfs", "version"])
+            .output()
+            .expect("Git LFS should start");
+        assert!(
+            lfs.status.success(),
+            "Git LFS stderr: {}",
+            String::from_utf8_lossy(&lfs.stderr)
+        );
+
+        let ssh_program = if cfg!(windows) { "ssh.exe" } else { "ssh" };
+        let mut ssh = Command::new(ssh_program);
+        configure_runtime_path(&mut ssh, &runtime);
+        let ssh_version = ssh
+            .arg("-V")
+            .output()
+            .expect("the bundled SSH client should start");
+        assert!(
+            ssh_version.status.success(),
+            "SSH stderr: {}",
+            String::from_utf8_lossy(&ssh_version.stderr)
+        );
+
         let helper_path = runtime_command(&runtime, &["--exec-path"])
             .output()
             .expect("Git should report its helper path");
@@ -379,6 +470,11 @@ mod tests {
         if let Some(ca_bundle) = runtime.ca_bundle.as_ref() {
             command.env("GIT_SSL_CAINFO", ca_bundle);
         }
+        configure_runtime_path(&mut command, runtime);
+        command
+    }
+
+    fn configure_runtime_path(command: &mut Command, runtime: &GitRuntime) {
         let current_path = std::env::var_os("PATH").unwrap_or_default();
         let path = runtime
             .path_entries
@@ -389,6 +485,5 @@ mod tests {
             "PATH",
             std::env::join_paths(path).expect("runtime paths should form a valid PATH"),
         );
-        command
     }
 }
