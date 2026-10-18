@@ -195,6 +195,39 @@ response = "Hello from the official Terminal Rust plugin!\n"
     }
 
     #[test]
+    fn cat_and_rm_accept_quoted_paths_with_spaces() {
+        let root = temp_path("engine", "quoted paths");
+        fs::create_dir(&root).expect("quoted-path fixture directory should be created");
+        let double_quoted_file = root.join("file with spaces.txt");
+        let single_quoted_file = root.join("another file.txt");
+        fs::write(&double_quoted_file, "double quoted content")
+            .expect("double-quoted fixture should be written");
+        fs::write(&single_quoted_file, "single quoted content")
+            .expect("single-quoted fixture should be written");
+
+        let mut engine = ShellEngine::new();
+        let cat_double = engine.execute_line(&format!("cat \"{}\"", double_quoted_file.display()));
+        assert_eq!(cat_double.status, ExecutionStatus::Continue);
+        assert_eq!(cat_double.stdout, "double quoted content");
+
+        let cat_single = engine.execute_line(&format!("cat '{}'", single_quoted_file.display()));
+        assert_eq!(cat_single.status, ExecutionStatus::Continue);
+        assert_eq!(cat_single.stdout, "single quoted content");
+
+        let rm_single = engine.execute_line(&format!("rm '{}'", single_quoted_file.display()));
+        assert_eq!(rm_single.status, ExecutionStatus::Continue);
+        assert!(!single_quoted_file.exists());
+
+        let empty_directory = root.join("empty directory");
+        fs::create_dir(&empty_directory).expect("empty directory fixture should be created");
+        let rm_double = engine.execute_line(&format!("rm -d \"{}\"", empty_directory.display()));
+        assert_eq!(rm_double.status, ExecutionStatus::Continue);
+        assert!(!empty_directory.exists());
+
+        fs::remove_dir_all(root).expect("quoted-path fixtures should be removed");
+    }
+
+    #[test]
     fn reports_parse_errors_as_typed_failures() {
         let mut engine = ShellEngine::new();
 

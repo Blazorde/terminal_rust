@@ -14,6 +14,21 @@ Run `help` inside Terminal Rust for the authoritative command list.
 | `commands list` | Inspect configured user commands |
 | `exit`, `quit` | Close the session |
 
+## Paths containing spaces
+
+Quote a path containing spaces with single or double quotes so the command
+receives it as one argument:
+
+```text
+cat "notes from today.txt"
+rm 'notes from today.txt'
+rm -d "old project"
+```
+
+The quotes are removed by the command parser. You can also escape spaces with
+a backslash (`cat notes\ from\ today.txt`). Native path separators are
+preserved, including backslashes in Windows paths.
+
 The dashboard refreshes once per second. Press `q`, `Escape` or `Ctrl+C` to
 leave it. Redirected output and limited terminals receive a stable text
 snapshot.
