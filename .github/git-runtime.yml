@@ -3,5 +3,6 @@ channels:
   - conda-forge
 dependencies:
   - git=2.56.0
+  - git-credential-manager=3.0.1
   - less=704
   - python=3.13

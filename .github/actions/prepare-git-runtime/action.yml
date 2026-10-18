@@ -19,8 +19,10 @@ runs:
       shell: bash
       run: |
         mkdir -p desktop/src-tauri/resources
-        conda install --name base --yes --channel conda-forge conda-pack=0.8.1
-        conda run --name base conda-pack --name git-runtime \
+        conda install --name git-runtime --yes --channel conda-forge openssh=10.5p1 git-lfs=3.7.1
+        conda env create --yes --file .github/git-pack-tool.yml
+        git_runtime_prefix="$(conda run --name git-runtime python -c 'import sys; print(sys.prefix)')"
+        conda run --name git-pack-tool conda-pack --prefix "$git_runtime_prefix" \
           --output desktop/src-tauri/resources/git-runtime.tar.gz
         conda run --name git-runtime git --version | sed 's/^git version //' \
           > desktop/src-tauri/resources/git-runtime-version.txt
@@ -41,8 +43,9 @@ runs:
       shell: pwsh
       run: |
         New-Item -ItemType Directory -Path desktop\src-tauri\resources -Force | Out-Null
-        conda install --name base --yes --channel conda-forge conda-pack=0.8.1
-        conda run --name base conda-pack --name git-runtime `
+        conda env create --yes --file .github\git-pack-tool.yml
+        $gitRuntimePrefix = (conda run --name git-runtime python -c "import sys; print(sys.prefix)").Trim()
+        conda run --name git-pack-tool conda-pack --prefix $gitRuntimePrefix `
           --output desktop\src-tauri\resources\git-runtime.tar.gz
         $gitVersion = (conda run --name git-runtime git --version).Replace('git version ', '').Trim()
         Set-Content -Path desktop\src-tauri\resources\git-runtime-version.txt `
