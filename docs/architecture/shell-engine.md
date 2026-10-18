@@ -29,6 +29,12 @@ The engine retains session state for `cd -`. Each instance therefore belongs
 to one session and must not be shared between concurrent terminals. The PTY
 adapter owns external commands, interactive confirmations and process lifetime.
 
+`execute_line` tokenizes single- and double-quoted arguments before dispatch.
+Quotes keep whitespace inside one argument and are removed from the resulting
+value; escaped whitespace is also supported. Backslashes in native Windows
+paths are preserved. `execute_args` accepts an already-tokenized argument list
+and does not parse quote characters.
+
 ## Compatibility
 
 The API uses `PathBuf` and does not depend on Unix or PowerShell commands.
