@@ -609,3 +609,71 @@ fn interactive_prompt_shows_a_dirty_git_branch() {
         "prompt should contain the current path: {rendered}"
     );
 }
+
+#[test]
+fn git_read_only_helpers_work_from_a_path_with_spaces_and_unicode() {
+    let directory = TestDirectory::new("git repo with spaces été");
+    let git_available = Command::new("git")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success());
+
+    if !git_available {
+        return;
+    }
+
+    let initialized = Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git should start");
+    assert!(initialized.success());
+
+    let named_branch = Command::new("git")
+        .args(["symbolic-ref", "HEAD", "refs/heads/main"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git should name the initial branch");
+    assert!(named_branch.success());
+
+    for (key, value) in [
+        ("user.name", "Terminal Rust test"),
+        ("user.email", "terminal-rust-test@example.invalid"),
+    ] {
+        let configured = Command::new("git")
+            .args(["config", key, value])
+            .current_dir(directory.path())
+            .status()
+            .expect("git config should start");
+        assert!(configured.success());
+    }
+
+    fs::write(directory.path().join("tracked file.txt"), "fixture")
+        .expect("the tracked fixture should be written");
+    let added = Command::new("git")
+        .args(["add", "--", "tracked file.txt"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git add should start");
+    assert!(added.success());
+    let committed = Command::new("git")
+        .args(["commit", "--quiet", "-m", "cross-platform fixture"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git commit should start");
+    assert!(committed.success());
+
+    let status = run_cli(directory.path(), &["git", "status", "--short"]);
+    assert!(status.status.success(), "stderr: {}", stderr(&status));
+    assert!(stdout(&status).is_empty(), "working tree should be clean");
+
+    let branch = run_cli(directory.path(), &["git", "branch", "--show-current"]);
+    assert!(branch.status.success(), "stderr: {}", stderr(&branch));
+    assert_eq!(stdout(&branch).trim(), "main");
+
+    let log = run_cli(directory.path(), &["git", "log", "-1", "--oneline"]);
+    assert!(log.status.success(), "stderr: {}", stderr(&log));
+    assert!(stdout(&log).contains("cross-platform fixture"));
+}
