@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use crate::app::help;
 use crate::commands::{
     cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
+    whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -167,18 +168,25 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_exit,
     },
     CommandSpec {
-        name: "quit",
-        usage: "quit",
-        summary: "close the terminal",
-        max_args: Some(0),
-        handler: run_exit,
-    },
-    CommandSpec {
         name: "echo",
         usage: "echo [-n] [text...]",
         summary: "print text to the terminal",
         max_args: None,
         handler: run_echo,
+    },
+    CommandSpec {
+        name: "whoami",
+        usage: "whoami",
+        summary: "display the current user",
+        max_args: Some(0),
+        handler: run_whoami,
+    },
+    CommandSpec {
+        name: "quit",
+        usage: "quit",
+        summary: "close the terminal",
+        max_args: Some(0),
+        handler: run_exit,
     },
 ];
 
@@ -279,6 +287,10 @@ fn validate_arg_count(command: &CommandSpec, arg_count: usize) -> Result<(), Com
 
 fn optional_arg(args: &[String]) -> Option<&str> {
     args.first().map(String::as_str)
+}
+
+fn run_whoami(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("whoami", whoami::whoami())
 }
 
 fn run_pwd(_args: &[String], _state: &mut ShellState) -> CommandResult {

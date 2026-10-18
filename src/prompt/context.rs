@@ -39,7 +39,7 @@ impl PromptContext {
     }
 }
 
-fn first_non_empty_env(names: &[&str]) -> Option<String> {
+pub fn first_non_empty_env(names: &[&str]) -> Option<String> {
     names
         .iter()
         .find_map(|name| env::var(name).ok().filter(|value| !value.trim().is_empty()))
