@@ -607,5 +607,18 @@ fn interactive_prompt_shows_a_dirty_git_branch() {
     assert!(
         rendered.contains(&directory.path().display().to_string()),
         "prompt should contain the current path: {rendered}"
-    );
+    ); 
+}
+
+#[test]
+fn echo_prints_the_given_text() {
+    let directory = TestDirectory::new("echo");
+    let output = run_cli(directory.path(), &["echo", "Hello, World!"]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(output.stderr.is_empty());
+
+    let binding = stdout(&output);
+    let reported_text = binding.trim();
+    assert_eq!(reported_text, "Hello, World!");
 }
