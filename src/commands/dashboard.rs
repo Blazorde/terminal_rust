@@ -195,8 +195,13 @@ impl LiveDashboardRuntime for CrosstermDashboardRuntime {
     }
 
     fn draw(&mut self, frame: &str) -> io::Result<()> {
-        let mut stdout = io::stdout().lock();
-        execute!(stdout, MoveTo(0, 0), Clear(ClearType::All), Print(frame))?;
+        let mut stdout: io::StdoutLock<'_> = io::stdout().lock();
+        execute!(
+            stdout,
+            MoveTo(0, 0),
+            Clear(ClearType::All),
+            Print(raw_mode_frame(frame))
+        )?;
         stdout.flush()
     }
 
@@ -212,6 +217,10 @@ impl LiveDashboardRuntime for CrosstermDashboardRuntime {
             }
         }
     }
+}
+
+fn raw_mode_frame(frame: &str) -> String {
+    frame.replace('\n', "\r\n")
 }
 
 struct TerminalSession;
@@ -502,7 +511,7 @@ fn section(title: &str, border: &Border, color: bool) -> String {
 
 fn row(label: &str, value: &str, border: &Border) -> String {
     let label_width = 13;
-    let value_width = CONTENT_WIDTH.saturating_sub(label_width + 2);
+    let value_width = CONTENT_WIDTH.saturating_sub(label_width + 3);
     let value = truncate(value, value_width);
 
     format!(
@@ -803,5 +812,31 @@ mod tests {
         );
         assert_ne!(runtime.frames[0], runtime.frames[1]);
         assert_eq!(runtime.timeouts, vec![LIVE_REFRESH_INTERVAL; 2]);
+    }
+
+    #[test]
+    fn dashboard_lines_share_the_same_width() {
+        let output = render_dashboard(
+            &snapshot(),
+            DashboardStyle {
+                color: false,
+                unicode: false,
+            },
+        );
+
+        let expected_width = output.lines().next().unwrap().chars().count();
+
+        for line in output.lines() {
+            assert_eq!(
+                line.chars().count(),
+                expected_width,
+                "misaligned line: {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn raw_mode_frame_returns_to_line_start() {
+        assert_eq!(raw_mode_frame("a\nb\n"), "a\r\nb\r\n");
     }
 }

@@ -254,10 +254,22 @@ response = "Hello from the official Terminal Rust plugin!\n"
             result.directory_change,
             Some(DirectoryChange {
                 previous: original_dir.clone(),
-                current: target_dir.clone(),
+                current: result
+                    .current_dir
+                    .clone()
+                    .expect("current directory should be available"),
             })
         );
-        assert_eq!(result.current_dir.as_deref(), Some(target_dir.as_path()));
+        assert_eq!(
+            fs::canonicalize(
+                result
+                    .current_dir
+                    .as_deref()
+                    .expect("current directory should be available")
+            )
+            .expect("current directory should resolve"),
+            fs::canonicalize(&target_dir).expect("target directory should resolve")
+        );
 
         env::set_current_dir(&original_dir).expect("test should restore current directory");
         fs::remove_dir(target_dir).expect("test directory should be removed");

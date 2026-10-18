@@ -293,18 +293,20 @@ fn help_lists_every_public_command() {
 }
 
 #[test]
-fn git_help_explains_supported_commands_and_read_only_limits() {
+fn git_help_is_forwarded_to_native_git() {
     let directory = TestDirectory::new("git help");
-    let output = run_cli(directory.path(), &["git", "help"]);
+    let output = run_cli(directory.path(), &["git", "help", "-a"]);
     let rendered = stdout(&output);
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert!(output.stderr.is_empty());
-    assert!(rendered.contains("git status [options]"));
-    assert!(rendered.contains("git branch [options]"));
-    assert!(rendered.contains("git log [options]"));
-    assert!(rendered.contains("git log -5 --oneline"));
-    assert!(rendered.contains("push, reset and clean"));
+    assert!(
+        rendered.contains("status"),
+        "native Git help output: {rendered}"
+    );
+    assert!(
+        rendered.contains("commit"),
+        "native Git help output: {rendered}"
+    );
 }
 
 #[test]
@@ -621,4 +623,91 @@ fn echo_prints_the_given_text() {
     let binding = stdout(&output);
     let reported_text = binding.trim();
     assert_eq!(reported_text, "Hello, World!");
+}
+
+fn native_git_commands_work_from_a_path_with_spaces_and_unicode() {
+    let directory = TestDirectory::new("git repo with spaces été");
+    let git_available = Command::new("git")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success());
+
+    if !git_available {
+        return;
+    }
+
+    let initialized = Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git should start");
+    assert!(initialized.success());
+
+    let named_branch = Command::new("git")
+        .args(["symbolic-ref", "HEAD", "refs/heads/main"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git should name the initial branch");
+    assert!(named_branch.success());
+
+    for (key, value) in [
+        ("user.name", "Terminal Rust test"),
+        ("user.email", "terminal-rust-test@example.invalid"),
+    ] {
+        let configured = Command::new("git")
+            .args(["config", key, value])
+            .current_dir(directory.path())
+            .status()
+            .expect("git config should start");
+        assert!(configured.success());
+    }
+
+    fs::write(directory.path().join("tracked file.txt"), "fixture")
+        .expect("the tracked fixture should be written");
+    let added = Command::new("git")
+        .args(["add", "--", "tracked file.txt"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git add should start");
+    assert!(added.success());
+    let committed = Command::new("git")
+        .args(["commit", "--quiet", "-m", "cross-platform fixture"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git commit should start");
+    assert!(committed.success());
+
+    let status = run_cli(directory.path(), &["git", "status", "--short"]);
+    assert!(status.status.success(), "stderr: {}", stderr(&status));
+    assert!(stdout(&status).is_empty(), "working tree should be clean");
+
+    let branch = run_cli(directory.path(), &["git", "branch", "--show-current"]);
+    assert!(branch.status.success(), "stderr: {}", stderr(&branch));
+    assert_eq!(stdout(&branch).trim(), "main");
+
+    let log = run_cli(directory.path(), &["git", "log", "-1", "--oneline"]);
+    assert!(log.status.success(), "stderr: {}", stderr(&log));
+    assert!(stdout(&log).contains("cross-platform fixture"));
+
+    let create_branch = run_cli(
+        directory.path(),
+        &["git", "branch", "native-pass-through-test"],
+    );
+    assert!(
+        create_branch.status.success(),
+        "stderr: {}",
+        stderr(&create_branch)
+    );
+
+    let delete_branch = run_cli(
+        directory.path(),
+        &["git", "branch", "--delete", "native-pass-through-test"],
+    );
+    assert!(
+        delete_branch.status.success(),
+        "stderr: {}",
+        stderr(&delete_branch)
+    );
 }
