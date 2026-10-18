@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
-    whoami,
+    cat, cd, clear, dashboard, date, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch,
+    user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -182,6 +182,13 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_whoami,
     },
     CommandSpec {
+        name: "date",
+        usage: "date [format]",
+        summary: "display the current date",
+        max_args: Some(1),
+        handler: run_date,
+    },
+    CommandSpec {
         name: "quit",
         usage: "quit",
         summary: "close the terminal",
@@ -287,6 +294,10 @@ fn validate_arg_count(command: &CommandSpec, arg_count: usize) -> Result<(), Com
 
 fn optional_arg(args: &[String]) -> Option<&str> {
     args.first().map(String::as_str)
+}
+
+fn run_date(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("date", date::date(args))
 }
 
 fn run_whoami(_args: &[String], _state: &mut ShellState) -> CommandResult {
