@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::app::help;
 use crate::commands::{
     cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
-    whoami, arch,
+    whoami, arch, nproc,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -189,6 +189,13 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_arch,
     },
     CommandSpec {
+        name: "nproc",
+        usage: "nproc",
+        summary: "display the number of available processors",
+        max_args: Some(0),
+        handler: run_nproc,
+    },
+    CommandSpec {
         name: "quit",
         usage: "quit",
         summary: "close the terminal",
@@ -298,6 +305,10 @@ fn optional_arg(args: &[String]) -> Option<&str> {
 
 fn run_arch(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("arch", arch::arch())
+}
+
+fn run_nproc(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("nproc", nproc::nproc())
 }
 
 fn run_whoami(_args: &[String], _state: &mut ShellState) -> CommandResult {
