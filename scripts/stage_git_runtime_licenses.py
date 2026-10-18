@@ -59,6 +59,13 @@ def main() -> int:
                 shutil.copy2(license_file, target)
                 copied_files.append(target.relative_to(output).as_posix())
 
+        if name == "git" and not copied_files:
+            print(
+                "the bundled Git package has no license files in its conda record",
+                file=sys.stderr,
+            )
+            return 1
+
         rows.append(
             (
                 name,

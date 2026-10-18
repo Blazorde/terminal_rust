@@ -86,6 +86,8 @@ jobs:
         run: cargo test --all-targets --all-features
 
       - name: Run desktop tests
+        env:
+          TERMINAL_RUST_REQUIRE_BUNDLED_GIT_TEST: "1"
         run: cargo test -p terminal-rust-desktop --all-targets --all-features
 
       - name: Run plugin SDK and template tests

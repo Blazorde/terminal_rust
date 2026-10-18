@@ -323,6 +323,11 @@ mod tests {
     fn bundled_runtime_relocates_and_runs_git_from_a_path_with_spaces() {
         let resources = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
         if !resources.join(ARCHIVE_NAME).is_file() {
+            assert_ne!(
+                std::env::var("TERMINAL_RUST_REQUIRE_BUNDLED_GIT_TEST").as_deref(),
+                Ok("1"),
+                "CI requires the bundled Git archive to be present"
+            );
             return;
         }
 
