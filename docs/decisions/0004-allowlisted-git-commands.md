@@ -10,10 +10,11 @@ exposing destructive or remote Git operations through an unrestricted passthroug
 
 ## Decision
 
-The built-in `git` command delegates only `status`, `branch` and `log` to the
-installed executable. It preserves stdout, stderr and exit status, forces
-`--no-pager`, and rejects mutating branch arguments and `log --output` before
-launch. It runs `git -C <current directory>` consistently on all platforms.
+The built-in `git` command provides local `git help` output and delegates only
+`status`, `branch` and `log` to the installed executable. Help remains available
+without Git installed. Delegated commands preserve stdout, stderr and exit status,
+force `--no-pager`, and reject mutating branch arguments and `log --output` before
+launch. They run `git -C <current directory>` consistently on all platforms.
 
 ## Consequences
 

@@ -293,6 +293,21 @@ fn help_lists_every_public_command() {
 }
 
 #[test]
+fn git_help_explains_supported_commands_and_read_only_limits() {
+    let directory = TestDirectory::new("git help");
+    let output = run_cli(directory.path(), &["git", "help"]);
+    let rendered = stdout(&output);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(output.stderr.is_empty());
+    assert!(rendered.contains("git status [options]"));
+    assert!(rendered.contains("git branch [options]"));
+    assert!(rendered.contains("git log [options]"));
+    assert!(rendered.contains("git log -5 --oneline"));
+    assert!(rendered.contains("push, reset and clean"));
+}
+
+#[test]
 fn plugin_alias_and_help_explain_the_available_plugin_actions() {
     let directory = TestDirectory::new("plugin help");
 
