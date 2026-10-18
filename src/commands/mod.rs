@@ -13,3 +13,4 @@ pub mod theme;
 pub mod touch;
 pub mod user;
 pub mod whoami;
+pub mod arch;

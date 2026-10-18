@@ -16,6 +16,9 @@ Run `help` inside Terminal Rust for the authoritative command list.
 | `commands help` | Explain custom commands and where to configure them |
 | `echo [-n] [text...]` | Print text, without a trailing newline with `-n` |
 | `whoami` | Prints the username of the current user. |
+| `arch` | Prints the system architecture. |
+| `nproc` | Prints the number of processing units available. |
+| `uptime` | Prints how long the system has been running. |
 | `exit`, `quit` | Close the session |
 
 ## Paths containing spaces
