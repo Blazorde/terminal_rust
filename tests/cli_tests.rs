@@ -293,18 +293,20 @@ fn help_lists_every_public_command() {
 }
 
 #[test]
-fn git_help_explains_supported_commands_and_read_only_limits() {
+fn git_help_is_forwarded_to_native_git() {
     let directory = TestDirectory::new("git help");
-    let output = run_cli(directory.path(), &["git", "help"]);
+    let output = run_cli(directory.path(), &["git", "help", "-a"]);
     let rendered = stdout(&output);
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert!(output.stderr.is_empty());
-    assert!(rendered.contains("git status [options]"));
-    assert!(rendered.contains("git branch [options]"));
-    assert!(rendered.contains("git log [options]"));
-    assert!(rendered.contains("git log -5 --oneline"));
-    assert!(rendered.contains("push, reset and clean"));
+    assert!(
+        rendered.contains("status"),
+        "native Git help output: {rendered}"
+    );
+    assert!(
+        rendered.contains("commit"),
+        "native Git help output: {rendered}"
+    );
 }
 
 #[test]
@@ -611,7 +613,7 @@ fn interactive_prompt_shows_a_dirty_git_branch() {
 }
 
 #[test]
-fn git_read_only_helpers_work_from_a_path_with_spaces_and_unicode() {
+fn native_git_commands_work_from_a_path_with_spaces_and_unicode() {
     let directory = TestDirectory::new("git repo with spaces été");
     let git_available = Command::new("git")
         .arg("--version")
@@ -676,4 +678,24 @@ fn git_read_only_helpers_work_from_a_path_with_spaces_and_unicode() {
     let log = run_cli(directory.path(), &["git", "log", "-1", "--oneline"]);
     assert!(log.status.success(), "stderr: {}", stderr(&log));
     assert!(stdout(&log).contains("cross-platform fixture"));
+
+    let create_branch = run_cli(
+        directory.path(),
+        &["git", "branch", "native-pass-through-test"],
+    );
+    assert!(
+        create_branch.status.success(),
+        "stderr: {}",
+        stderr(&create_branch)
+    );
+
+    let delete_branch = run_cli(
+        directory.path(),
+        &["git", "branch", "--delete", "native-pass-through-test"],
+    );
+    assert!(
+        delete_branch.status.success(),
+        "stderr: {}",
+        stderr(&delete_branch)
+    );
 }

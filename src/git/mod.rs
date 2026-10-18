@@ -2,22 +2,7 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::io;
 use std::path::Path;
-use std::process::{Command, Stdio};
-
-const SUPPORTED_SUBCOMMANDS: [&str; 4] = ["help", "status", "branch", "log"];
-const GIT_HELP: &str = "Terminal Rust Git helpers (read-only):\n\
-  git status [options]  Show the working-tree status.\n\
-  git branch [options]  List branches. Branch creation, deletion and renaming are not supported.\n\
-  git log [options]     Show commit history. Writing output to a file is not supported.\n\
-  git help              Show this help.\n\
-\n\
-Examples:\n\
-  git status --short\n\
-  git branch --all\n\
-  git log -5 --oneline\n\
-\n\
-These helpers require Git to be installed for status, branch and log.\n\
-Other Git subcommands, including push, reset and clean, are unavailable.\n";
+use std::process::{Command, ExitStatus, Stdio};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PromptGitInfo {
@@ -25,52 +10,22 @@ pub struct PromptGitInfo {
     pub dirty: bool,
 }
 
-pub struct GitCommandOutput {
-    pub stdout: String,
-    pub stderr: String,
-    pub status_code: Option<i32>,
-    pub success: bool,
-}
-
 #[derive(Debug)]
 pub enum GitCommandError {
-    MissingSubcommand,
-    HelpDoesNotAcceptArguments,
-    UnsupportedSubcommand(String),
-    UnsafeArgument(String),
     GitUnavailable(io::Error),
     CurrentDirectory(io::Error),
-    Output(io::Error),
     CommandFailed(Option<i32>),
 }
 
 impl fmt::Display for GitCommandError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingSubcommand => write!(
-                formatter,
-                "git: missing subcommand (supported: {})",
-                SUPPORTED_SUBCOMMANDS.join(", ")
-            ),
-            Self::HelpDoesNotAcceptArguments => write!(formatter, "git: usage is 'git help'"),
-            Self::UnsupportedSubcommand(subcommand) => write!(
-                formatter,
-                "git: unsupported subcommand '{subcommand}' (supported: {})",
-                SUPPORTED_SUBCOMMANDS.join(", ")
-            ),
-            Self::UnsafeArgument(argument) => {
-                write!(
-                    formatter,
-                    "git: argument '{argument}' is not allowed in read-only mode"
-                )
-            }
             Self::GitUnavailable(error) => {
                 write!(formatter, "git: executable unavailable: {error}")
             }
             Self::CurrentDirectory(error) => {
                 write!(formatter, "git: unable to read current directory: {error}")
             }
-            Self::Output(error) => write!(formatter, "git: unable to write output: {error}"),
             Self::CommandFailed(Some(code)) => {
                 write!(formatter, "git: command failed with exit code {code}")
             }
@@ -101,7 +56,7 @@ pub fn prompt_info(path: &Path) -> Option<PromptGitInfo> {
 pub fn execute_developer_command(
     path: &Path,
     args: &[String],
-) -> Result<GitCommandOutput, GitCommandError> {
+) -> Result<ExitStatus, GitCommandError> {
     execute_developer_command_with_program(path, args, "git")
 }
 
@@ -109,82 +64,24 @@ fn execute_developer_command_with_program(
     path: &Path,
     args: &[String],
     program: impl AsRef<OsStr>,
-) -> Result<GitCommandOutput, GitCommandError> {
-    let Some(subcommand) = args.first() else {
-        return Err(GitCommandError::MissingSubcommand);
-    };
-
-    if subcommand == "help" {
-        if args.len() != 1 {
-            return Err(GitCommandError::HelpDoesNotAcceptArguments);
-        }
-        return Ok(GitCommandOutput {
-            stdout: GIT_HELP.to_string(),
-            stderr: String::new(),
-            status_code: Some(0),
-            success: true,
-        });
-    }
-
-    if !SUPPORTED_SUBCOMMANDS.contains(&subcommand.as_str()) {
-        return Err(GitCommandError::UnsupportedSubcommand(subcommand.clone()));
-    }
-    validate_read_only_args(subcommand, &args[1..])?;
-
-    let output = Command::new(program)
-        .arg("--no-pager")
-        .arg("-C")
-        .arg(path)
+) -> Result<ExitStatus, GitCommandError> {
+    Command::new(program)
+        .current_dir(path)
         .args(args)
-        .output()
-        .map_err(GitCommandError::GitUnavailable)?;
-
-    Ok(GitCommandOutput {
-        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-        status_code: output.status.code(),
-        success: output.status.success(),
-    })
-}
-
-fn validate_read_only_args(subcommand: &str, args: &[String]) -> Result<(), GitCommandError> {
-    match subcommand {
-        "branch" => {
-            const MUTATING_FLAGS: [&str; 12] = [
-                "-d",
-                "-D",
-                "-m",
-                "-M",
-                "-c",
-                "-C",
-                "--delete",
-                "--move",
-                "--copy",
-                "--edit-description",
-                "--set-upstream-to",
-                "--unset-upstream",
-            ];
-
-            if let Some(argument) = args.iter().find(|argument| {
-                !argument.starts_with('-')
-                    || MUTATING_FLAGS.iter().any(|flag| {
-                        argument.as_str() == *flag || argument.starts_with(&format!("{flag}="))
-                    })
-            }) {
-                return Err(GitCommandError::UnsafeArgument(argument.clone()));
+        // Inherit all three standard streams so Git can use the terminal for
+        // pagers, editors, SSH prompts, credential helpers, and other tools.
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .map_err(GitCommandError::GitUnavailable)
+        .and_then(|status| {
+            if status.success() {
+                Ok(status)
+            } else {
+                Err(GitCommandError::CommandFailed(status.code()))
             }
-        }
-        "log" => {
-            if let Some(argument) = args.iter().find(|argument| {
-                argument.as_str() == "--output" || argument.starts_with("--output=")
-            }) {
-                return Err(GitCommandError::UnsafeArgument(argument.clone()));
-            }
-        }
-        _ => {}
-    }
-
-    Ok(())
+        })
 }
 
 fn is_inside_work_tree_with_program(path: &Path, program: impl AsRef<OsStr>) -> bool {
@@ -370,63 +267,6 @@ mod tests {
     }
 
     #[test]
-    fn developer_command_requires_a_supported_subcommand() {
-        let missing = execute_developer_command(Path::new("."), &[]);
-        assert!(matches!(missing, Err(GitCommandError::MissingSubcommand)));
-
-        let unsupported = execute_developer_command(Path::new("."), &["push".to_string()]);
-        assert!(matches!(
-            unsupported,
-            Err(GitCommandError::UnsupportedSubcommand(subcommand)) if subcommand == "push"
-        ));
-    }
-
-    #[test]
-    fn help_is_available_without_running_git() {
-        let missing_program = temp_path("git", "missing-help-executable");
-        let output = execute_developer_command_with_program(
-            Path::new("."),
-            &["help".to_string()],
-            missing_program,
-        )
-        .expect("built-in help should not need the Git executable");
-
-        assert!(output.success);
-        assert_eq!(output.status_code, Some(0));
-        assert!(output.stderr.is_empty());
-        assert!(output.stdout.contains("git status [options]"));
-        assert!(output.stdout.contains("git branch --all"));
-        assert!(output.stdout.contains("git log -5 --oneline"));
-        assert!(output.stdout.contains("push, reset and clean"));
-    }
-
-    #[test]
-    fn help_rejects_extra_arguments() {
-        let result =
-            execute_developer_command(Path::new("."), &["help".to_string(), "status".to_string()]);
-
-        assert!(matches!(
-            result,
-            Err(GitCommandError::HelpDoesNotAcceptArguments)
-        ));
-    }
-
-    #[test]
-    fn developer_commands_reject_mutating_arguments() {
-        for args in [
-            ["branch", "new-branch"].as_slice(),
-            ["branch", "--delete"].as_slice(),
-            ["log", "--output=history.txt"].as_slice(),
-        ] {
-            let args: Vec<String> = args.iter().map(ToString::to_string).collect();
-            assert!(matches!(
-                execute_developer_command(Path::new("."), &args),
-                Err(GitCommandError::UnsafeArgument(_))
-            ));
-        }
-    }
-
-    #[test]
     fn developer_command_reports_a_missing_git_executable() {
         let missing_program = temp_path("git", "missing-command-executable");
         let result = execute_developer_command_with_program(
@@ -439,8 +279,8 @@ mod tests {
     }
 
     #[test]
-    fn developer_status_runs_inside_an_initialized_repository() {
-        let directory = temp_path("git", "developer-command-repository");
+    fn native_git_commands_run_inside_a_repository() {
+        let directory = temp_path("git", "native-command-repository");
         fs::create_dir(&directory).expect("test repository should be created");
 
         let git_available = Command::new("git")
@@ -458,13 +298,47 @@ mod tests {
                 .expect("git should start");
             assert!(initialized.success());
 
-            let output = execute_developer_command(
+            let configured = Command::new("git")
+                .args([
+                    "-c",
+                    "user.name=Terminal Rust",
+                    "-c",
+                    "user.email=test@example.invalid",
+                    "commit",
+                    "--allow-empty",
+                    "--quiet",
+                    "-m",
+                    "fixture",
+                ])
+                .current_dir(&directory)
+                .status()
+                .expect("fixture commit should start");
+            assert!(configured.success());
+
+            let created = execute_developer_command(
                 &directory,
-                &["status".to_string(), "--short".to_string()],
+                &["branch".to_string(), "native-command-test".to_string()],
             )
-            .expect("git status should run");
-            assert!(output.success);
-            assert!(output.stderr.is_empty());
+            .expect("native branch creation should run");
+            assert!(created.success());
+
+            let deleted = execute_developer_command(
+                &directory,
+                &[
+                    "branch".to_string(),
+                    "--delete".to_string(),
+                    "native-command-test".to_string(),
+                ],
+            )
+            .expect("native branch deletion should run");
+            assert!(deleted.success());
+
+            let failed =
+                execute_developer_command(&directory, &["not-a-real-git-command".to_string()]);
+            assert!(matches!(
+                failed,
+                Err(GitCommandError::CommandFailed(Some(_)))
+            ));
         }
 
         fs::remove_dir_all(directory).expect("test repository should be removed");
