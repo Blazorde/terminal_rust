@@ -152,7 +152,7 @@ fn remove_directory(options: &RmOptions, path: &Path) -> Result<(), RmError> {
 }
 
 fn should_confirm(options: &RmOptions, path: &Path) -> bool {
-    options.interactive || is_dangerous_removal(options, path)
+    options.interactive || (!options.force && is_dangerous_removal(options, path))
 }
 
 fn is_dangerous_removal(options: &RmOptions, path: &Path) -> bool {
@@ -212,6 +212,10 @@ mod tests {
 
     fn confirm_no(_message: &str) -> io::Result<bool> {
         Ok(false)
+    }
+
+    fn confirm_unexpected(_message: &str) -> io::Result<bool> {
+        panic!("forced removal must not request confirmation")
     }
 
     #[test]
@@ -289,5 +293,41 @@ mod tests {
         assert!(path.exists());
 
         fs::remove_dir_all(path).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn rm_recursive_force_skips_confirmation() {
+        let path = temp_path("rm", "recursive-force");
+        fs::create_dir(&path).expect("test directory should be created");
+        fs::write(path.join("file.txt"), "hello").expect("test file should be written");
+
+        let options = RmOptions {
+            force: true,
+            recursive: true,
+            ..RmOptions::default()
+        };
+
+        remove_targets(&options, std::slice::from_ref(&path), confirm_unexpected)
+            .expect("rm -rf should remove the directory without prompting");
+
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn rm_interactive_still_confirms_even_with_force() {
+        let path = temp_path("rm", "interactive-force");
+        fs::write(&path, "hello").expect("test file should be written");
+
+        let options = RmOptions {
+            force: true,
+            interactive: true,
+            ..RmOptions::default()
+        };
+
+        remove_targets(&options, std::slice::from_ref(&path), confirm_no)
+            .expect("declined interactive removal should not fail");
+
+        assert!(path.exists());
+        fs::remove_file(path).expect("test file should be removed");
     }
 }

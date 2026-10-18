@@ -509,6 +509,25 @@ fn file_commands_complete_a_cross_platform_workflow() {
 }
 
 #[test]
+fn interactive_rm_force_returns_to_the_prompt_without_consuming_the_next_command() {
+    let directory = TestDirectory::new("rm force prompt");
+    let target = directory.path().join("tree to remove");
+    fs::create_dir(&target).expect("target directory should be created");
+    fs::write(target.join("file.txt"), "content").expect("target file should be created");
+
+    let input = format!("rm -rf \"{}\"\npwd\nexit\n", target.display());
+    let output = run_interactive(directory.path(), &input);
+    let rendered = stdout(&output);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(rendered.contains(&directory.path().display().to_string()));
+    assert!(
+        !target.exists(),
+        "rm -rf should remove the target without prompting"
+    );
+}
+
+#[test]
 fn dashboard_renders_important_sections_without_a_terminal() {
     let directory = TestDirectory::new("dashboard");
     let output = run_cli(directory.path(), &["dashboard"]);

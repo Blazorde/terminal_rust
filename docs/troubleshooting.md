@@ -45,6 +45,13 @@ Git is optional. Check `git --version` and that the current directory is inside
 a repository; core commands remain available without it. For persistent history,
 set `TERMINAL_RUST_HISTORY_FILE` to a file whose parent directory already exists.
 
+## Removing a directory
+
+`rm -r <directory>` asks for confirmation before recursively removing a
+directory. Add `-f` to skip that confirmation (`rm -rf <directory>`); the next
+shell command can then run immediately. `rm -i` always asks for confirmation,
+including when combined with `-f`.
+
 ## Ask for help
 
 Record operating system, architecture, Terminal Rust version, command and full
