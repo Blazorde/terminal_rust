@@ -4,6 +4,9 @@ Custom commands create portable shortcuts without changing the binary. Each
 command is a structured TOML table; Terminal Rust never passes its value to
 `sh -c`, `cmd /C` or PowerShell.
 
+Run `commands help` in the terminal for a short overview and `commands list` to
+inspect the shortcuts currently loaded from your user configuration.
+
 ## Built-in alias
 
 ```toml

@@ -10,8 +10,10 @@ Run `help` inside Terminal Rust for the authoritative command list.
 | `dashboard` | Open the live system and project dashboard |
 | `git status\|branch\|log` | Run an allowlisted read-only Git operation |
 | `theme list`, `theme preview` | Inspect built-in prompt themes |
-| `plugins list` | Inspect plugin manifests and permissions |
-| `commands list` | Inspect configured user commands |
+| `plugins list`, `plugin list` | Inspect plugin manifests and permissions |
+| `plugins help`, `plugin help` | Explain what plugins support and how to inspect them |
+| `commands list` | Inspect configured custom commands |
+| `commands help` | Explain custom commands and where to configure them |
 | `exit`, `quit` | Close the session |
 
 ## Paths containing spaces
@@ -35,6 +37,13 @@ snapshot.
 
 `Tab` and `Shift+Tab` cycle completions. Accept a dim history suggestion with
 `Right Arrow` and hide it with `Left Arrow`.
+
+Plugins are declarative extensions described by local manifests. `plugins list`
+shows their status and requested permissions; `plugin` is an alias for
+`plugins`. Custom commands are shortcuts from the user configuration:
+`commands list` shows configured shortcuts, and `commands help` explains them.
+See [custom commands](../docs/custom-commands.md) and the
+[plugin tutorial](../docs/plugins/getting-started.md) for setup details.
 
 Desktop sessions are isolated per tab. Use `Ctrl/Command+T` to create a tab,
 `Ctrl/Command+W` to close it, `Ctrl+Tab` to switch tabs and `Ctrl/Command+,` to

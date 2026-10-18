@@ -133,15 +133,22 @@ const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "plugins",
-        usage: "plugins list",
-        summary: "list locally installed plugins",
+        usage: "plugins <list|help>",
+        summary: "list plugins or explain plugin support",
+        max_args: None,
+        handler: run_plugins,
+    },
+    CommandSpec {
+        name: "plugin",
+        usage: "plugin <list|help>",
+        summary: "alias for plugins",
         max_args: None,
         handler: run_plugins,
     },
     CommandSpec {
         name: "commands",
-        usage: "commands list",
-        summary: "list configured custom commands",
+        usage: "commands <list|help>",
+        summary: "list custom commands or explain them",
         max_args: None,
         handler: run_commands,
     },
@@ -325,14 +332,22 @@ fn run_plugins(args: &[String], _state: &mut ShellState) -> CommandResult {
 }
 
 fn run_commands(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args == ["help"] {
+        return map_prefixed_error("commands", render::stdout(COMMANDS_HELP));
+    }
     if args != ["list"] {
-        return CommandResult::Error("commands: expected 'list'".into());
+        return CommandResult::Error("commands: expected 'list' or 'help'".into());
     }
     map_prefixed_error(
         "commands",
         render::stdout(state.user_commands.render_list()),
     )
 }
+
+const COMMANDS_HELP: &str = "Custom commands are shortcuts configured in the user TOML file.\n\
+Use 'commands list' to inspect configured shortcuts. Built-in shortcuts call a\n\
+Terminal Rust command; process shortcuts start a configured program directly.\n\
+See docs/custom-commands.md for configuration and security details.\n";
 
 fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_result(help::print_help(command_help()), |error| {

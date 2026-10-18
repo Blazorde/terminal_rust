@@ -277,6 +277,7 @@ fn help_lists_every_public_command() {
         "git",
         "theme",
         "plugins",
+        "plugin",
         "commands",
         "help",
         "exit",
@@ -289,6 +290,33 @@ fn help_lists_every_public_command() {
             "help should list {command}:\n{rendered}"
         );
     }
+}
+
+#[test]
+fn plugin_alias_and_help_explain_the_available_plugin_actions() {
+    let directory = TestDirectory::new("plugin help");
+
+    let plural = run_cli(directory.path(), &["plugins", "help"]);
+    let singular = run_cli(directory.path(), &["plugin", "help"]);
+
+    assert!(plural.status.success(), "stderr: {}", stderr(&plural));
+    assert!(singular.status.success(), "stderr: {}", stderr(&singular));
+    assert_eq!(stdout(&plural), stdout(&singular));
+    assert!(stdout(&plural).contains("plugins list"));
+    assert!(stdout(&plural).contains("requested permissions"));
+    assert!(stdout(&plural).contains("declarative"));
+}
+
+#[test]
+fn commands_help_explains_custom_commands_and_listing() {
+    let directory = TestDirectory::new("commands help");
+    let output = run_cli(directory.path(), &["commands", "help"]);
+    let rendered = stdout(&output);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(rendered.contains("shortcuts configured"));
+    assert!(rendered.contains("commands list"));
+    assert!(rendered.contains("docs/custom-commands.md"));
 }
 
 #[test]
