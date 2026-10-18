@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation and usage help
+    url: https://github.com/Blazorde/terminal_rust/wiki
+    about: Check the project wiki for command and feature documentation.
+  - name: Security vulnerability
+    url: https://github.com/Blazorde/terminal_rust/blob/main/SECURITY.md
+    about: Follow the security policy to report a vulnerability.
