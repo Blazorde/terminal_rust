@@ -3,7 +3,12 @@
 Terminal Rust is licensed under MIT. The following locked dependencies retain
 their own copyright and license terms. This inventory is generated from Cargo
 metadata and the npm lockfile; it is not legal advice and does not
-replace the license files distributed by upstream projects.
+replace the license files distributed by upstream projects. Desktop releases
+also bundle a platform-specific Git runtime; its package inventory and copied
+license texts are in `GIT-RUNTIME-NOTICES.md` and `GIT-RUNTIME-LICENSES/` inside
+the application resources, alongside Git's upstream `COPYING` and `COPYING.LIB`.
+The corresponding Git source is available at
+https://github.com/git/git/tree/v2.56.0.
 
 Regenerate with `npm run notices --prefix desktop` after `npm ci --prefix desktop`.
 CI rejects a stale inventory with `npm run notices:check --prefix desktop`.

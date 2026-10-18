@@ -36,6 +36,10 @@ mod tests {
     use crate::utils::path::temp_path;
     use std::fs::{self, File};
 
+    fn same_directory(left: &Path, right: &Path) -> bool {
+        fs::canonicalize(left).ok() == fs::canonicalize(right).ok()
+    }
+
     #[test]
     fn cd_changes_current_directory() {
         let _guard = cwd_lock().lock().expect("cwd lock is poisoned");
@@ -50,7 +54,7 @@ mod tests {
         .expect("cd should change the current directory");
 
         let current_dir = env::current_dir().expect("current dir should be readable");
-        assert_eq!(current_dir, target_dir);
+        assert!(same_directory(&current_dir, &target_dir));
         assert_eq!(previous_dir, original_dir);
 
         env::set_current_dir(original_dir).expect("test should restore current directory");
@@ -87,7 +91,7 @@ mod tests {
         cd(Some("-"), Some(&original_dir)).expect("cd - should use previous directory");
 
         let current_dir = env::current_dir().expect("current dir should be readable");
-        assert_eq!(current_dir, original_dir);
+        assert!(same_directory(&current_dir, &original_dir));
 
         env::set_current_dir(original_dir).expect("test should restore current directory");
         fs::remove_dir(target_dir).expect("target directory should be removed");

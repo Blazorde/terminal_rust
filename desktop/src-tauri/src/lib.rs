@@ -1,17 +1,21 @@
 use std::collections::HashMap;
+use std::env;
 use std::io::{Read, Write};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+mod git_runtime;
 mod settings;
 
+use git_runtime::GitRuntime;
 use settings::{DesktopSettings, SettingsLoad, SettingsState};
 
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
+static GIT_RUNTIME: OnceLock<Result<Option<GitRuntime>, String>> = OnceLock::new();
 
 #[derive(Default)]
 struct PtyState {
@@ -79,6 +83,7 @@ fn start_session(
     cols: u16,
     rows: u16,
 ) -> Result<u64, String> {
+    let git_runtime = bundled_git_runtime(&app)?;
     let pair = native_pty_system()
         .openpty(pty_size(cols, rows))
         .map_err(|error| format!("cannot open native PTY: {error}"))?;
@@ -89,6 +94,9 @@ fn start_session(
     command.arg("--pty-shell");
     command.env("TERMINAL_RUST_GUI", "1");
     command.env("TERM", "xterm-256color");
+    if let Some(runtime) = git_runtime.as_ref() {
+        configure_git_environment(&mut command, runtime)?;
+    }
 
     let mut child = pair
         .slave
@@ -151,6 +159,43 @@ fn start_session(
     });
 
     Ok(session_id)
+}
+
+fn bundled_git_runtime(app: &AppHandle) -> Result<Option<GitRuntime>, String> {
+    GIT_RUNTIME
+        .get_or_init(|| {
+            let resources = app
+                .path()
+                .resource_dir()
+                .map_err(|error| format!("cannot locate application resources: {error}"))?;
+            let app_data = app
+                .path()
+                .app_local_data_dir()
+                .map_err(|error| format!("cannot locate application data directory: {error}"))?;
+            GitRuntime::prepare(&resources.join("resources"), &app_data)
+        })
+        .clone()
+}
+
+fn configure_git_environment(
+    command: &mut CommandBuilder,
+    runtime: &GitRuntime,
+) -> Result<(), String> {
+    command.env("TERMINAL_RUST_GIT", &runtime.executable);
+    command.env("TERMINAL_RUST_GIT_EXEC_PATH", &runtime.exec_path);
+    if let Some(template_dir) = runtime.template_dir.as_ref() {
+        command.env("TERMINAL_RUST_GIT_TEMPLATE_DIR", template_dir);
+    }
+    if let Some(ca_bundle) = runtime.ca_bundle.as_ref() {
+        command.env("TERMINAL_RUST_GIT_CA_BUNDLE", ca_bundle);
+    }
+
+    let mut path_entries = runtime.path_entries.clone();
+    path_entries.extend(env::split_paths(&env::var_os("PATH").unwrap_or_default()));
+    let path = env::join_paths(path_entries)
+        .map_err(|error| format!("cannot configure bundled Git search path: {error}"))?;
+    command.env("PATH", path);
+    Ok(())
 }
 
 fn forward_output(session_id: u64, reader: &mut dyn Read, app: &AppHandle) {

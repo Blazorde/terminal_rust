@@ -119,8 +119,8 @@ const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "git",
-        usage: "git <status|branch|log> [options]",
-        summary: "run a safe read-only Git command",
+        usage: "git <command> [arguments...]",
+        summary: "run a native Git command",
         max_args: None,
         handler: run_git,
     },

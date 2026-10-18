@@ -1,0 +1,58 @@
+name: Prepare bundled Git runtime
+description: Build Git and stage its runtime licenses for the current release platform.
+runs:
+  using: composite
+  steps:
+    - name: Set up pinned Git runtime environment
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        miniforge-variant: Miniforge3
+        miniforge-version: latest
+        activate-environment: git-runtime
+        environment-file: .github/git-runtime.yml
+        use-mamba: true
+        channel-priority: strict
+        auto-activate-base: false
+
+    - name: Package Git runtime and licenses on Linux and macOS
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        mkdir -p desktop/src-tauri/resources
+        conda install --name base --yes --channel conda-forge conda-pack=0.8.1
+        conda run --name base conda-pack --name git-runtime \
+          --output desktop/src-tauri/resources/git-runtime.tar.gz
+        conda run --name git-runtime git --version | sed 's/^git version //' \
+          > desktop/src-tauri/resources/git-runtime-version.txt
+        curl --fail --silent --show-error --location \
+          https://raw.githubusercontent.com/git/git/v2.56.0/COPYING \
+          --output desktop/src-tauri/resources/GIT-COPYING
+        curl --fail --silent --show-error --location \
+          https://raw.githubusercontent.com/git/git/v2.56.0/COPYING.LIB \
+          --output desktop/src-tauri/resources/GIT-COPYING.LIB
+        conda run --name git-runtime python scripts/stage_git_runtime_licenses.py \
+          desktop/src-tauri/resources
+        test -s desktop/src-tauri/resources/git-runtime.tar.gz
+        test -s desktop/src-tauri/resources/GIT-COPYING
+        test -s desktop/src-tauri/resources/GIT-COPYING.LIB
+
+    - name: Package Git runtime and licenses on Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Path desktop\src-tauri\resources -Force | Out-Null
+        conda install --name base --yes --channel conda-forge conda-pack=0.8.1
+        conda run --name base conda-pack --name git-runtime `
+          --output desktop\src-tauri\resources\git-runtime.tar.gz
+        $gitVersion = (conda run --name git-runtime git --version).Replace('git version ', '').Trim()
+        Set-Content -Path desktop\src-tauri\resources\git-runtime-version.txt `
+          -Value $gitVersion -NoNewline
+        Invoke-WebRequest -Uri https://raw.githubusercontent.com/git/git/v2.56.0/COPYING `
+          -OutFile desktop\src-tauri\resources\GIT-COPYING
+        Invoke-WebRequest -Uri https://raw.githubusercontent.com/git/git/v2.56.0/COPYING.LIB `
+          -OutFile desktop\src-tauri\resources\GIT-COPYING.LIB
+        conda run --name git-runtime python scripts/stage_git_runtime_licenses.py `
+          desktop\src-tauri\resources
+        if ((Get-Item desktop\src-tauri\resources\git-runtime.tar.gz).Length -eq 0) {
+          throw 'The bundled Git archive is empty.'
+        }
