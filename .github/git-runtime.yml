@@ -1,0 +1,7 @@
+name: git-runtime
+channels:
+  - conda-forge
+dependencies:
+  - git=2.56.0
+  - less=704
+  - python=3.13

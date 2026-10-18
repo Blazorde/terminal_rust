@@ -1,4 +1,4 @@
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::io;
 use std::path::Path;
@@ -42,7 +42,7 @@ impl std::error::Error for GitCommandError {}
 /// repository are all treated as `false` so Git detection never prevents the
 /// shell from starting.
 pub fn is_inside_work_tree(path: &Path) -> bool {
-    is_inside_work_tree_with_program(path, "git")
+    is_inside_work_tree_with_program(path, git_program())
 }
 
 /// Collects the branch and working-tree state with one stable porcelain call.
@@ -50,11 +50,15 @@ pub fn is_inside_work_tree(path: &Path) -> bool {
 /// Git being unavailable, a directory outside a repository, or malformed
 /// output all disable the optional prompt segment instead of failing the shell.
 pub fn prompt_info(path: &Path) -> Option<PromptGitInfo> {
-    prompt_info_with_program(path, "git")
+    prompt_info_with_program(path, git_program())
 }
 
 pub fn run_native_command(path: &Path, args: &[String]) -> Result<ExitStatus, GitCommandError> {
-    run_native_command_with_program(path, args, "git")
+    run_native_command_with_program(path, args, git_program())
+}
+
+fn git_program() -> OsString {
+    std::env::var_os("TERMINAL_RUST_GIT").unwrap_or_else(|| OsString::from("git"))
 }
 
 fn run_native_command_with_program(
@@ -62,7 +66,9 @@ fn run_native_command_with_program(
     args: &[String],
     program: impl AsRef<OsStr>,
 ) -> Result<ExitStatus, GitCommandError> {
-    Command::new(program)
+    let mut command = Command::new(program);
+    apply_bundled_git_environment(&mut command);
+    command
         .current_dir(path)
         .args(args)
         // Inherit all three standard streams so Git can use the terminal for
@@ -82,7 +88,9 @@ fn run_native_command_with_program(
 }
 
 fn is_inside_work_tree_with_program(path: &Path, program: impl AsRef<OsStr>) -> bool {
-    let output = Command::new(program)
+    let mut command = Command::new(program);
+    apply_bundled_git_environment(&mut command);
+    let output = command
         .arg("-C")
         .arg(path)
         .args(["rev-parse", "--is-inside-work-tree"])
@@ -97,7 +105,9 @@ fn is_inside_work_tree_with_program(path: &Path, program: impl AsRef<OsStr>) -> 
 }
 
 fn prompt_info_with_program(path: &Path, program: impl AsRef<OsStr>) -> Option<PromptGitInfo> {
-    let output = Command::new(program)
+    let mut command = Command::new(program);
+    apply_bundled_git_environment(&mut command);
+    let output = command
         .arg("--no-optional-locks")
         .arg("-C")
         .arg(path)
@@ -116,6 +126,18 @@ fn prompt_info_with_program(path: &Path, program: impl AsRef<OsStr>) -> Option<P
     }
 
     parse_prompt_status(&output.stdout)
+}
+
+fn apply_bundled_git_environment(command: &mut Command) {
+    if let Some(exec_path) = std::env::var_os("TERMINAL_RUST_GIT_EXEC_PATH") {
+        command.env("GIT_EXEC_PATH", exec_path);
+    }
+    if let Some(template_dir) = std::env::var_os("TERMINAL_RUST_GIT_TEMPLATE_DIR") {
+        command.env("GIT_TEMPLATE_DIR", template_dir);
+    }
+    if let Some(ca_bundle) = std::env::var_os("TERMINAL_RUST_GIT_CA_BUNDLE") {
+        command.env("GIT_SSL_CAINFO", ca_bundle);
+    }
 }
 
 fn parse_prompt_status(stdout: &[u8]) -> Option<PromptGitInfo> {

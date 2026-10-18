@@ -55,6 +55,9 @@ jobs:
       - name: Install desktop dependencies
         run: npm ci --prefix desktop
 
+      - name: Prepare bundled Git runtime
+        uses: ./.github/actions/prepare-git-runtime
+
       - name: Build desktop frontend
         run: npm run build --prefix desktop
 
