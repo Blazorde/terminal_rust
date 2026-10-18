@@ -613,6 +613,18 @@ fn interactive_prompt_shows_a_dirty_git_branch() {
 }
 
 #[test]
+fn echo_prints_the_given_text() {
+    let directory = TestDirectory::new("echo");
+    let output = run_cli(directory.path(), &["echo", "Hello, World!"]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(output.stderr.is_empty());
+
+    let binding = stdout(&output);
+    let reported_text = binding.trim();
+    assert_eq!(reported_text, "Hello, World!");
+}
+
 fn native_git_commands_work_from_a_path_with_spaces_and_unicode() {
     let directory = TestDirectory::new("git repo with spaces été");
     let git_available = Command::new("git")

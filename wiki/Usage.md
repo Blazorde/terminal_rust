@@ -14,6 +14,7 @@ Run `help` inside Terminal Rust for the authoritative command list.
 | `plugins help`, `plugin help` | Explain what plugins support and how to inspect them |
 | `commands list` | Inspect configured custom commands |
 | `commands help` | Explain custom commands and where to configure them |
+| `echo [-n] [text...]` | Print text, without a trailing newline with `-n` |
 | `exit`, `quit` | Close the session |
 
 ## Paths containing spaces

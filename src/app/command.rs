@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    cat, cd, clear, dashboard, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
+    cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -173,6 +173,13 @@ const COMMANDS: &[CommandSpec] = &[
         max_args: Some(0),
         handler: run_exit,
     },
+    CommandSpec {
+        name: "echo",
+        usage: "echo [-n] [text...]",
+        summary: "print text to the terminal",
+        max_args: None,
+        handler: run_echo,
+    },
 ];
 
 pub fn command_names() -> impl Iterator<Item = &'static str> {
@@ -286,6 +293,10 @@ fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
         }
         Err(error) => CommandResult::Error(error.to_string()),
     }
+}
+
+fn run_echo(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("echo", echo::echo(args))
 }
 
 fn run_ls(args: &[String], _state: &mut ShellState) -> CommandResult {

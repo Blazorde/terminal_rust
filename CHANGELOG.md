@@ -5,7 +5,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
-No changes yet.
+### Added
+
+- Added an `echo` command that prints its arguments separated by spaces.
 
 ## [1.0.0-alpha.1] - 2026-10-13
 
