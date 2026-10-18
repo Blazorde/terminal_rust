@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::app::help;
 use crate::commands::{
     cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
-    whoami, arch, nproc,
+    whoami, arch, nproc, uptime,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -196,6 +196,13 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_nproc,
     },
     CommandSpec {
+        name: "uptime",
+        usage: "uptime",
+        summary: "display the system uptime",
+        max_args: Some(0),
+        handler: run_uptime,
+    },
+    CommandSpec {
         name: "quit",
         usage: "quit",
         summary: "close the terminal",
@@ -305,6 +312,10 @@ fn optional_arg(args: &[String]) -> Option<&str> {
 
 fn run_arch(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("arch", arch::arch())
+}
+
+fn run_uptime(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("uptime", uptime::uptime())
 }
 
 fn run_nproc(_args: &[String], _state: &mut ShellState) -> CommandResult {

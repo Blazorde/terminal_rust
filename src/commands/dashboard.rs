@@ -576,7 +576,7 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
-fn format_duration(seconds: u64) -> String {
+pub fn format_duration(seconds: u64) -> String {
     let days = seconds / 86_400;
     let hours = seconds % 86_400 / 3_600;
     let minutes = seconds % 3_600 / 60;

@@ -15,3 +15,4 @@ pub mod user;
 pub mod whoami;
 pub mod arch;
 pub mod nproc;
+pub mod uptime;
