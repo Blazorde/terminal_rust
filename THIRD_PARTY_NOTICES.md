@@ -3,11 +3,11 @@
 Terminal Rust is licensed under MIT. The following locked dependencies retain
 their own copyright and license terms. This inventory is generated from Cargo
 metadata and the npm lockfile; it is not legal advice and does not
-replace the license files distributed by upstream projects. Desktop releases
-also bundle a platform-specific Git runtime; its package inventory and copied
-license texts are in `GIT-RUNTIME-NOTICES.md` and `GIT-RUNTIME-LICENSES/` inside
-the application resources, alongside Git's upstream `COPYING` and `COPYING.LIB`.
-The corresponding Git source is available at
+replace the license files distributed by upstream projects.
+Desktop releases also bundle a platform-specific Git runtime. Its package
+inventory and copied license texts are in `GIT-RUNTIME-NOTICES.md` and
+`GIT-RUNTIME-LICENSES/` in application resources, alongside Git's upstream
+`COPYING` and `COPYING.LIB`. Corresponding Git source:
 https://github.com/git/git/tree/v2.56.0.
 
 Regenerate with `npm run notices --prefix desktop` after `npm ci --prefix desktop`.
@@ -192,6 +192,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | fdeflate | 0.3.7 | MIT OR Apache-2.0 | https://github.com/image-rs/fdeflate |
 | Rust | field-offset | 0.3.6 | MIT OR Apache-2.0 | https://github.com/Diggsey/rust-field-offset |
 | Rust | filedescriptor | 0.8.3 | MIT | https://github.com/wezterm/wezterm |
+| Rust | filetime | 0.2.29 | MIT/Apache-2.0 | https://github.com/alexcrichton/filetime |
 | Rust | find-msvc-tools | 0.1.14 | MIT OR Apache-2.0 | https://github.com/rust-lang/cc-rs |
 | Rust | flate2 | 1.1.10 | MIT OR Apache-2.0 | https://github.com/rust-lang/flate2-rs |
 | Rust | fnv | 1.0.7 | Apache-2.0 / MIT | https://github.com/servo/rust-fnv |
@@ -424,6 +425,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | system-deps | 6.2.2 | MIT OR Apache-2.0 | https://github.com/gdesmott/system-deps |
 | Rust | tao-macros | 0.1.4 | MIT OR Apache-2.0 | https://github.com/tauri-apps/tao |
 | Rust | tao | 0.37.1 | Apache-2.0 | https://github.com/tauri-apps/tao |
+| Rust | tar | 0.4.46 | MIT OR Apache-2.0 | https://github.com/composefs/tar-rs |
 | Rust | target-lexicon | 0.12.16 | Apache-2.0 WITH LLVM-exception | https://github.com/bytecodealliance/target-lexicon |
 | Rust | tauri-build | 2.7.2 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
 | Rust | tauri-codegen | 2.7.2 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
@@ -530,6 +532,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | wry | 0.57.0 | Apache-2.0 OR MIT | https://github.com/tauri-apps/wry |
 | Rust | x11-dl | 2.21.0 | MIT | https://github.com/AltF02/x11-rs.git |
 | Rust | x11 | 2.21.0 | MIT | https://github.com/AltF02/x11-rs.git |
+| Rust | xattr | 1.6.1 | MIT OR Apache-2.0 | https://github.com/Stebalien/xattr |
 | Rust | yoke-derive | 0.8.4 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
 | Rust | yoke | 0.8.3 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
 | Rust | zerofrom-derive | 0.1.8 | Unicode-3.0 | https://github.com/unicode-org/icu4x |

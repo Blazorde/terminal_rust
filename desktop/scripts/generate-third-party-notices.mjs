@@ -75,7 +75,7 @@ function render(packages) {
     "Desktop releases also bundle a platform-specific Git runtime. Its package",
     "inventory and copied license texts are in `GIT-RUNTIME-NOTICES.md` and",
     "`GIT-RUNTIME-LICENSES/` in application resources, alongside Git's upstream",
-    "`COPYING` and `COPYING.LIB`. Corresponding Git source: ",
+    "`COPYING` and `COPYING.LIB`. Corresponding Git source:",
     "https://github.com/git/git/tree/v2.56.0.",
     "",
     "Regenerate with `npm run notices --prefix desktop` after `npm ci --prefix desktop`.",
