@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    cat, cd, clear, dashboard, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user, echo
+    cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;

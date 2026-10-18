@@ -607,7 +607,7 @@ fn interactive_prompt_shows_a_dirty_git_branch() {
     assert!(
         rendered.contains(&directory.path().display().to_string()),
         "prompt should contain the current path: {rendered}"
-    ); 
+    );
 }
 
 #[test]
