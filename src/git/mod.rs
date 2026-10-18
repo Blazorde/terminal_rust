@@ -4,7 +4,20 @@ use std::io;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-const DEVELOPER_SUBCOMMANDS: [&str; 3] = ["status", "branch", "log"];
+const SUPPORTED_SUBCOMMANDS: [&str; 4] = ["help", "status", "branch", "log"];
+const GIT_HELP: &str = "Terminal Rust Git helpers (read-only):\n\
+  git status [options]  Show the working-tree status.\n\
+  git branch [options]  List branches. Branch creation, deletion and renaming are not supported.\n\
+  git log [options]     Show commit history. Writing output to a file is not supported.\n\
+  git help              Show this help.\n\
+\n\
+Examples:\n\
+  git status --short\n\
+  git branch --all\n\
+  git log -5 --oneline\n\
+\n\
+These helpers require Git to be installed for status, branch and log.\n\
+Other Git subcommands, including push, reset and clean, are unavailable.\n";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PromptGitInfo {
@@ -22,6 +35,7 @@ pub struct GitCommandOutput {
 #[derive(Debug)]
 pub enum GitCommandError {
     MissingSubcommand,
+    HelpDoesNotAcceptArguments,
     UnsupportedSubcommand(String),
     UnsafeArgument(String),
     GitUnavailable(io::Error),
@@ -36,12 +50,13 @@ impl fmt::Display for GitCommandError {
             Self::MissingSubcommand => write!(
                 formatter,
                 "git: missing subcommand (supported: {})",
-                DEVELOPER_SUBCOMMANDS.join(", ")
+                SUPPORTED_SUBCOMMANDS.join(", ")
             ),
+            Self::HelpDoesNotAcceptArguments => write!(formatter, "git: usage is 'git help'"),
             Self::UnsupportedSubcommand(subcommand) => write!(
                 formatter,
                 "git: unsupported subcommand '{subcommand}' (supported: {})",
-                DEVELOPER_SUBCOMMANDS.join(", ")
+                SUPPORTED_SUBCOMMANDS.join(", ")
             ),
             Self::UnsafeArgument(argument) => {
                 write!(
@@ -99,7 +114,19 @@ fn execute_developer_command_with_program(
         return Err(GitCommandError::MissingSubcommand);
     };
 
-    if !DEVELOPER_SUBCOMMANDS.contains(&subcommand.as_str()) {
+    if subcommand == "help" {
+        if args.len() != 1 {
+            return Err(GitCommandError::HelpDoesNotAcceptArguments);
+        }
+        return Ok(GitCommandOutput {
+            stdout: GIT_HELP.to_string(),
+            stderr: String::new(),
+            status_code: Some(0),
+            success: true,
+        });
+    }
+
+    if !SUPPORTED_SUBCOMMANDS.contains(&subcommand.as_str()) {
         return Err(GitCommandError::UnsupportedSubcommand(subcommand.clone()));
     }
     validate_read_only_args(subcommand, &args[1..])?;
@@ -351,6 +378,36 @@ mod tests {
         assert!(matches!(
             unsupported,
             Err(GitCommandError::UnsupportedSubcommand(subcommand)) if subcommand == "push"
+        ));
+    }
+
+    #[test]
+    fn help_is_available_without_running_git() {
+        let missing_program = temp_path("git", "missing-help-executable");
+        let output = execute_developer_command_with_program(
+            Path::new("."),
+            &["help".to_string()],
+            missing_program,
+        )
+        .expect("built-in help should not need the Git executable");
+
+        assert!(output.success);
+        assert_eq!(output.status_code, Some(0));
+        assert!(output.stderr.is_empty());
+        assert!(output.stdout.contains("git status [options]"));
+        assert!(output.stdout.contains("git branch --all"));
+        assert!(output.stdout.contains("git log -5 --oneline"));
+        assert!(output.stdout.contains("push, reset and clean"));
+    }
+
+    #[test]
+    fn help_rejects_extra_arguments() {
+        let result =
+            execute_developer_command(Path::new("."), &["help".to_string(), "status".to_string()]);
+
+        assert!(matches!(
+            result,
+            Err(GitCommandError::HelpDoesNotAcceptArguments)
         ));
     }
 
