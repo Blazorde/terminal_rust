@@ -16,6 +16,9 @@ pub enum PluginsCommandError {
 }
 
 pub fn plugins(args: &[String]) -> Result<(), PluginsCommandError> {
+    if args == ["help"] {
+        return render::stdout(PLUGINS_HELP).map_err(PluginsCommandError::Output);
+    }
     if args != ["list"] {
         return Err(PluginsCommandError::Usage);
     }
@@ -25,6 +28,12 @@ pub fn plugins(args: &[String]) -> Result<(), PluginsCommandError> {
         .map_err(PluginsCommandError::Registry)?;
     render::stdout(format_entries(&entries)).map_err(PluginsCommandError::Output)
 }
+
+const PLUGINS_HELP: &str = "Plugins extend Terminal Rust through local declarative manifests.\n\
+Use 'plugins list' (or 'plugin list') to inspect installed plugins, their\n\
+status, compatibility and requested permissions. Use 'plugins help' for this\n\
+message. This version supports declarative contributions; it does not load\n\
+arbitrary native plugin code. See docs/plugins/getting-started.md to learn more.\n";
 
 fn format_entries(entries: &[RegistryEntry]) -> String {
     if entries.is_empty() {
@@ -86,7 +95,7 @@ fn format_permissions(permissions: &[Permission]) -> String {
 impl fmt::Display for PluginsCommandError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Usage => write!(formatter, "plugins: expected 'list'"),
+            Self::Usage => write!(formatter, "plugins: expected 'list' or 'help'"),
             Self::Configuration(message) => write!(formatter, "plugins: {message}"),
             Self::Registry(error) => write!(formatter, "plugins: {error}"),
             Self::Output(error) => write!(formatter, "plugins: cannot write output: {error}"),
@@ -111,7 +120,7 @@ mod tests {
     fn rejects_unknown_actions() {
         assert_eq!(
             plugins(&[]).unwrap_err().to_string(),
-            "plugins: expected 'list'"
+            "plugins: expected 'list' or 'help'"
         );
     }
 
