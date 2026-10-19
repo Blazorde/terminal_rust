@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    arch, cat, cd, clear, dashboard, date, echo, git_command, hostname, ls, mkdir, nproc, plugins,
-    pwd, rm, theme, touch, uptime, user, whoami,
+    arch, cat, cd, clear, dashboard, date, echo, editor, git_command, hostname, ls, mkdir, nproc,
+    plugins, pwd, rm, theme, touch, uptime, user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -210,6 +210,27 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_date,
     },
     CommandSpec {
+        name: "nano",
+        usage: "nano [file...]",
+        summary: "edit files with Nano",
+        max_args: None,
+        handler: run_nano,
+    },
+    CommandSpec {
+        name: "nvim",
+        usage: "nvim [file...]",
+        summary: "edit files with Neovim",
+        max_args: None,
+        handler: run_nvim,
+    },
+    CommandSpec {
+        name: "neovim",
+        usage: "neovim [file...]",
+        summary: "alias for nvim",
+        max_args: None,
+        handler: run_neovim,
+    },
+    CommandSpec {
         name: "hostname",
         usage: "hostname",
         summary: "display the system hostname",
@@ -338,6 +359,18 @@ fn run_nproc(_args: &[String], _state: &mut ShellState) -> CommandResult {
 
 fn run_date(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("date", date::date(args))
+}
+
+fn run_nano(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(editor::run("nano", "nano", args))
+}
+
+fn run_nvim(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(editor::run("nvim", "nvim", args))
+}
+
+fn run_neovim(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(editor::run("neovim", "nvim", args))
 }
 
 fn run_hostname(_args: &[String], _state: &mut ShellState) -> CommandResult {

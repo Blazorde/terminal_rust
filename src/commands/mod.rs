@@ -5,6 +5,7 @@ pub mod clear;
 pub mod dashboard;
 pub mod date;
 pub mod echo;
+pub mod editor;
 pub mod git_command;
 pub mod hostname;
 pub mod ls;
