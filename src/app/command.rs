@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::app::help;
 use crate::commands::{
     cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
-    whoami,
+    whoami, hostname,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -182,6 +182,13 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_whoami,
     },
     CommandSpec {
+        name: "hostname",
+        usage: "hostname",
+        summary: "display the system hostname",
+        max_args: Some(0),
+        handler: run_hostname,
+    },
+    CommandSpec {
         name: "quit",
         usage: "quit",
         summary: "close the terminal",
@@ -287,6 +294,11 @@ fn validate_arg_count(command: &CommandSpec, arg_count: usize) -> Result<(), Com
 
 fn optional_arg(args: &[String]) -> Option<&str> {
     args.first().map(String::as_str)
+}
+
+
+fn run_hostname(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("hostname", hostname::hostname())
 }
 
 fn run_whoami(_args: &[String], _state: &mut ShellState) -> CommandResult {
