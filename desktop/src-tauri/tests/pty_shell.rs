@@ -67,6 +67,37 @@ fn wait_for_output(
     );
 }
 
+fn wait_for_output_occurrences(
+    receiver: &Receiver<Vec<u8>>,
+    output: &mut Vec<u8>,
+    needle: &str,
+    occurrences: usize,
+    writer: &mut dyn Write,
+    cursor_answered: &mut bool,
+) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
+            output.extend(chunk);
+        }
+        if cfg!(windows) && !*cursor_answered && output.windows(4).any(|bytes| bytes == b"\x1b[6n")
+        {
+            writer
+                .write_all(b"\x1b[1;1R")
+                .and_then(|()| writer.flush())
+                .expect("headless PTY should answer the cursor position query");
+            *cursor_answered = true;
+        }
+        if String::from_utf8_lossy(output).matches(needle).count() >= occurrences {
+            return;
+        }
+    }
+    panic!(
+        "desktop shell did not render {needle:?} {occurrences} times: {:?}",
+        String::from_utf8_lossy(output)
+    );
+}
+
 #[test]
 fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
     let pair = native_pty_system()
@@ -206,6 +237,163 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
             "{kind} prompt segment was missing from PTY output: {output}"
         );
     }
+}
+
+#[test]
+fn interactive_pty_keeps_history_directory_changes_and_long_line_edits() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock should follow the Unix epoch")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "terminal-rust-editing-{}-{nonce}",
+        std::process::id()
+    ));
+    let target = root.join("target");
+    fs::create_dir_all(&target).expect("PTY fixture directory should be created");
+
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows: 24,
+            cols: 100,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .expect("native PTY should open");
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .expect("PTY output should be readable");
+    let mut writer = pair
+        .master
+        .take_writer()
+        .expect("PTY input should be writable");
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut buffer = [0; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(length) => {
+                    if sender.send(buffer[..length].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    command.arg("--pty-shell");
+    command.cwd(&root);
+    command.env("TERMINAL_RUST_GUI", "1");
+    command.env("TERM", "xterm-256color");
+    let mut child = pair
+        .slave
+        .spawn_command(command)
+        .expect("desktop shell mode should start");
+    drop(pair.slave);
+
+    let mut output = Vec::new();
+    let mut cursor_answered = false;
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        1,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+
+    writer
+        .write_all(b"echo history-check\r")
+        .and_then(|()| writer.flush())
+        .expect("first history command should reach the PTY");
+    wait_for_output_occurrences(
+        &receiver,
+        &mut output,
+        "history-check",
+        2,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+    let first_history_count = String::from_utf8_lossy(&output)
+        .matches("history-check")
+        .count();
+
+    writer
+        .write_all(b"\x1b[A\r")
+        .and_then(|()| writer.flush())
+        .expect("history navigation should reach the PTY");
+    wait_for_output_occurrences(
+        &receiver,
+        &mut output,
+        "history-check",
+        first_history_count + 2,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+
+    let cd_command = format!("cd \"{}\"\r", target.display());
+    writer
+        .write_all(cd_command.as_bytes())
+        .and_then(|()| writer.flush())
+        .expect("cd command should reach the PTY");
+    writer
+        .write_all(b"pwd\r")
+        .and_then(|()| writer.flush())
+        .expect("pwd after cd should reach the PTY");
+    wait_for_output_occurrences(
+        &receiver,
+        &mut output,
+        &target.display().to_string(),
+        1,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+
+    let body = "a".repeat(110);
+    let expected = format!("{}Xa", "a".repeat(109));
+    let mut long_command = format!("echo {body}").into_bytes();
+    long_command.extend_from_slice(b"\x1b[DX\r");
+    writer
+        .write_all(&long_command)
+        .and_then(|()| writer.flush())
+        .expect("long edited command should reach the PTY");
+    wait_for_output_occurrences(
+        &receiver,
+        &mut output,
+        &expected,
+        1,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+
+    writer
+        .write_all(b"exit\r")
+        .and_then(|()| writer.flush())
+        .expect("interactive PTY should exit");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("shell status should be readable") {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            child.kill().expect("timed out shell should stop");
+            panic!(
+                "interactive PTY did not exit: {}",
+                String::from_utf8_lossy(&output)
+            );
+        }
+        thread::sleep(Duration::from_millis(20));
+    };
+
+    drop(writer);
+    drop(pair.master);
+    assert!(
+        status.success(),
+        "interactive PTY shell should exit cleanly"
+    );
+    fs::remove_dir_all(root).expect("PTY fixture directory should be removed");
 }
 
 #[test]
