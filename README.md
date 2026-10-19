@@ -27,7 +27,7 @@ Real commands. Native PTY sessions. Git-aware prompts. No simulated terminal.
 | **Interactive shell** | History, completion, safe file commands and external processes |
 | **Desktop app** | Real isolated PTY tabs, responsive settings and persisted themes |
 | **Prompt engine** | Configurable path, Git, status, runtime, duration and time segments |
-| **Developer tools** | Live system dashboard, safe Git shortcuts and a Fastfetch preset |
+| **Developer tools** | Live system dashboard, full native Git and bundled Nano/Neovim in desktop releases |
 | **Extension foundation** | Versioned manifests, permissions and declarative commands |
 
 Terminal Rust is intentionally smaller than Bash, PowerShell or Zsh. Rust owns

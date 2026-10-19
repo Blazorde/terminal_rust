@@ -9,6 +9,9 @@ use tar::Archive;
 
 const ARCHIVE_NAME: &str = "git-runtime.tar.gz";
 const VERSION_NAME: &str = "git-runtime-version.txt";
+#[cfg(windows)]
+const WINDOWS_NANO_NAME: &str = "nano-win64.exe";
+const NANO_SOURCE_NAME: &str = "NANO-SOURCE-9.2.tar.xz";
 const READY_NAME: &str = ".ready-version";
 const RUNTIME_DIRECTORY: &str = "git-runtime";
 
@@ -19,6 +22,8 @@ pub struct GitRuntime {
     pub template_dir: Option<PathBuf>,
     pub ca_bundle: Option<PathBuf>,
     pub path_entries: Vec<PathBuf>,
+    pub nano: PathBuf,
+    pub nvim: PathBuf,
 }
 
 impl GitRuntime {
@@ -40,11 +45,25 @@ impl GitRuntime {
         if version.is_empty() {
             return Err("bundled Git version file is empty".to_string());
         }
+        if !resources.join(NANO_SOURCE_NAME).is_file() {
+            return Err("bundled Nano source archive is missing".to_string());
+        }
+
+        #[cfg(windows)]
+        let nano_digest = {
+            let nano_path = resources.join(WINDOWS_NANO_NAME);
+            if !nano_path.is_file() {
+                return Err("bundled Windows Nano executable is missing".to_string());
+            }
+            digest_file(&nano_path)?
+        };
+        #[cfg(not(windows))]
+        let nano_digest = String::new();
 
         let runtime_dir = app_data.join(RUNTIME_DIRECTORY);
         let ready_path = runtime_dir.join(READY_NAME);
         let archive_digest = digest_file(&archive_path)?;
-        let marker_contents = format!("{version}\n{archive_digest}");
+        let marker_contents = format!("{version}\n{archive_digest}\n{nano_digest}");
         let ready = fs::read_to_string(&ready_path)
             .is_ok_and(|installed_marker| installed_marker.trim() == marker_contents)
             && Self::discover(&runtime_dir).is_ok();
@@ -57,6 +76,8 @@ impl GitRuntime {
                 .map_err(|error| format!("cannot create bundled Git directory: {error}"))?;
             extract_runtime(&archive_path, &runtime_dir)?;
             run_relocation_fixup(&runtime_dir)?;
+            #[cfg(windows)]
+            install_windows_nano(resources, &runtime_dir)?;
             let runtime = Self::discover(&runtime_dir)?;
             configure_credential_helper(&runtime_dir, &runtime)?;
             fs::write(&ready_path, marker_contents)
@@ -109,6 +130,24 @@ impl GitRuntime {
                 "Library/etc/ssl/cert.pem",
             ],
         );
+        let nano = first_existing(
+            root,
+            if cfg!(windows) {
+                &["bin/nano.exe", "Library/bin/nano.exe"]
+            } else {
+                &["bin/nano"]
+            },
+        )
+        .ok_or_else(|| "bundled runtime does not contain Nano".to_string())?;
+        let nvim = first_existing(
+            root,
+            if cfg!(windows) {
+                &["Library/bin/nvim.exe", "bin/nvim.exe"]
+            } else {
+                &["bin/nvim"]
+            },
+        )
+        .ok_or_else(|| "bundled runtime does not contain Neovim".to_string())?;
         let path_entries = [
             "bin",
             "Library/bin",
@@ -130,8 +169,21 @@ impl GitRuntime {
             template_dir,
             ca_bundle,
             path_entries,
+            nano,
+            nvim,
         })
     }
+}
+
+#[cfg(windows)]
+fn install_windows_nano(resources: &Path, runtime_dir: &Path) -> Result<(), String> {
+    let source = resources.join(WINDOWS_NANO_NAME);
+    let bin = runtime_dir.join("bin");
+    fs::create_dir_all(&bin)
+        .map_err(|error| format!("cannot create bundled editor directory: {error}"))?;
+    fs::copy(source, bin.join("nano.exe"))
+        .map_err(|error| format!("cannot install bundled Nano: {error}"))?;
+    Ok(())
 }
 
 fn digest_file(path: &Path) -> Result<String, String> {
@@ -236,35 +288,33 @@ fn configure_credential_helper(root: &Path, runtime: &GitRuntime) -> Result<(), 
     )
     .ok_or_else(|| "bundled Git archive does not contain its system configuration".to_string())?;
 
-    let mut command = Command::new(&runtime.executable);
-    command
-        .args([
-            "config",
-            "--file",
-            config_path.to_string_lossy().as_ref(),
-            "--replace-all",
-            "credential.helper",
-            "manager",
-        ])
-        .env("GIT_EXEC_PATH", &runtime.exec_path);
     let current_path = std::env::var_os("PATH").unwrap_or_default();
     let path_entries = runtime
         .path_entries
         .iter()
         .cloned()
         .chain(std::env::split_paths(&current_path));
-    command.env(
-        "PATH",
-        std::env::join_paths(path_entries)
-            .map_err(|error| format!("cannot configure Git credential manager path: {error}"))?,
-    );
-    let status = command
-        .status()
-        .map_err(|error| format!("cannot configure bundled Git credentials: {error}"))?;
-    if !status.success() {
-        return Err(format!(
-            "cannot configure bundled Git credentials (status {status})"
-        ));
+    let path = std::env::join_paths(path_entries)
+        .map_err(|error| format!("cannot configure bundled Git tool path: {error}"))?;
+    for (key, value) in [("credential.helper", "manager"), ("core.editor", "nano")] {
+        let status = Command::new(&runtime.executable)
+            .args([
+                "config",
+                "--file",
+                config_path.to_string_lossy().as_ref(),
+                "--replace-all",
+                key,
+                value,
+            ])
+            .env("GIT_EXEC_PATH", &runtime.exec_path)
+            .env("PATH", &path)
+            .status()
+            .map_err(|error| format!("cannot configure bundled Git setting {key}: {error}"))?;
+        if !status.success() {
+            return Err(format!(
+                "cannot configure bundled Git setting {key} (status {status})"
+            ));
+        }
     }
     Ok(())
 }

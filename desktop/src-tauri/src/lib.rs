@@ -183,6 +183,8 @@ fn configure_git_environment(
 ) -> Result<(), String> {
     command.env("TERMINAL_RUST_GIT", &runtime.executable);
     command.env("TERMINAL_RUST_GIT_EXEC_PATH", &runtime.exec_path);
+    command.env("TERMINAL_RUST_NANO", &runtime.nano);
+    command.env("TERMINAL_RUST_NVIM", &runtime.nvim);
     if let Some(template_dir) = runtime.template_dir.as_ref() {
         command.env("TERMINAL_RUST_GIT_TEMPLATE_DIR", template_dir);
     }
