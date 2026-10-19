@@ -41,9 +41,11 @@ def main() -> int:
     licenses_root.mkdir(parents=True)
 
     rows: list[tuple[str, str, str, str, str]] = []
+    included_packages: set[str] = set()
     for metadata_path in sorted(metadata_dir.glob("*.json")):
         record = json.loads(metadata_path.read_text(encoding="utf-8"))
         name = str(record.get("name", metadata_path.stem))
+        included_packages.add(name)
         version = str(record.get("version", "unknown"))
         license_name = str(record.get("license", "Not specified"))
         package_url = str(record.get("url", record.get("channel", "")))
@@ -59,9 +61,9 @@ def main() -> int:
                 shutil.copy2(license_file, target)
                 copied_files.append(target.relative_to(output).as_posix())
 
-        if name == "git" and not copied_files:
+        if name in {"git", "nvim", "nano"} and not copied_files:
             print(
-                "the bundled Git package has no license files in its conda record",
+                f"the bundled {name} package has no license files in its conda record",
                 file=sys.stderr,
             )
             return 1
@@ -76,11 +78,30 @@ def main() -> int:
             )
         )
 
+    required_packages = {"git", "nvim"}
+    if sys.platform != "win32":
+        required_packages.add("nano")
+    for required in sorted(required_packages):
+        if required not in included_packages:
+            print(f"the bundled runtime is missing the required {required} package", file=sys.stderr)
+            return 1
+    if sys.platform == "win32":
+        rows.append(
+            (
+                "nano-windows-binary",
+                "9.2",
+                "GPL-3.0-or-later",
+                "https://nano-editor.org/dist/windows/nano-v9.2-x64.exe",
+                "`NANO-SOURCE-9.2.tar.xz`",
+            )
+        )
+
     lines = [
-        "# Git runtime third-party notices",
+        "# Bundled command runtime third-party notices",
         "",
-        "This file is generated from the conda package records used to build the bundled Git runtime.",
+        "This file is generated from the conda package records used to build the bundled command runtime.",
         "The package license files found in those records are included under `GIT-RUNTIME-LICENSES/`.",
+        "The Windows Nano binary is accompanied by its upstream source archive in the application resources.",
         "",
         "| Package | Version | Declared license | Package source | Included license files |",
         "| --- | --- | --- | --- | --- |",

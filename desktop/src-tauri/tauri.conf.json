@@ -4,7 +4,7 @@
   "version": "1.0.0-alpha.1",
   "identifier": "dev.terminal-rust.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npm run prepare:dev-nano && npm run dev",
     "devUrl": "http://127.0.0.1:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"

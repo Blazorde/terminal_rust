@@ -16,7 +16,9 @@ Markdown remains authoritative.
 | Understand the desktop boundary | [Desktop GUI architecture](architecture/desktop-gui.md) |
 | Configure the shell | [User configuration](configuration.md) |
 | Use the live system dashboard | [Dashboard](dashboard.md) |
-| Use the built-in Git helpers | [Git commands](git.md) |
+| Use native Git commands | [Git commands](git.md) |
+| Use Nano or Neovim in the terminal | [Bundled editors](editors.md) |
+| Download the public Neovim configuration | [Neovim setup](../wiki/Neovim.md) |
 | Use completion and inline suggestions | [Completion](completion.md) |
 | Customize the prompt | [Prompt customization](customization.md) |
 | Create user commands | [Custom commands](custom-commands.md) |

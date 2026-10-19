@@ -4,6 +4,7 @@
 - [[Installation]]
 - [[Usage]]
 - [[Configuration]]
+- [[Neovim]]
 - [[Architecture]]
 - [[Plugins]]
 - [[Development]]
