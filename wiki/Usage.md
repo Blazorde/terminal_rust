@@ -17,6 +17,7 @@ Run `help` inside Terminal Rust for the authoritative command list.
 | `echo [-n] [text...]` | Print text, without a trailing newline with `-n` |
 | `whoami` | Prints the username of the current user. |
 | `date [format]` | Prints the current date and time. |
+| `hostname` | Prints the name of the current host.  |
 | `exit`, `quit` | Close the session |
 
 ## Paths containing spaces

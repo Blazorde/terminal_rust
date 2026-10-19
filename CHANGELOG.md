@@ -10,6 +10,7 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 - Added an `echo` command that prints its arguments separated by spaces.
 - Added a whoami command that prints the current user’s username.
 - Added a date command that prints the current date and time.
+- Added a hostname command that prints the current host’s name.
 
 ## [1.0.0-alpha.1] - 2026-10-13
 

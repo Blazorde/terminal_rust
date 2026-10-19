@@ -13,4 +13,5 @@ pub mod rm;
 pub mod theme;
 pub mod touch;
 pub mod user;
+pub mod hostname;
 pub mod whoami;
