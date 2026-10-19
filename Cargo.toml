@@ -17,6 +17,7 @@ default = []
 members = [
     "crates/terminal-rust-plugin-sdk",
     "desktop/src-tauri",
+    "desktop/native-prototype",
     "plugins/example-plugin",
 ]
 resolver = "2"

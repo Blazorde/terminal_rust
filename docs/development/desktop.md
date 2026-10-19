@@ -80,6 +80,31 @@ never fabricate command output. Use it for layout work only; use
 `npm run tauri --prefix desktop -- dev` whenever terminal input, commands, tabs
 or native settings need to be tested.
 
+## Native UI migration prototype
+
+The product target is a compiled Rust desktop UI without a WebView. The
+experimental application lives in `desktop/native-prototype/` and does not
+replace the Tauri app yet. It uses `eframe`/`egui`, the `egui_tty` terminal
+widget, Ghostty's VT engine and the existing Rust interactive runner over a
+real `portable-pty` session.
+
+Building the Ghostty VT engine requires Zig 0.15.x on `PATH`:
+
+```bash
+zig version
+cargo run -p terminal-rust-native-prototype
+```
+
+The prototype has one real shell session, selection-to-copy and right-click
+paste. Its right-click paste strips terminal control characters and wraps text
+in bracketed-paste markers. It does not yet have the production app's tabs,
+settings, accessibility review, packaging, OS default-terminal registration or
+cross-platform validation. Keep using the Tauri app for normal desktop use.
+
+Do not declare the native app the default terminal or remove Tauri until the
+Windows, Fedora/Linux and macOS migration gates in
+[ADR-0006](../decisions/0006-native-desktop-ui-prototype.md) pass.
+
 ## Rust validation
 
 ```bash

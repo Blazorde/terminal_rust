@@ -1,9 +1,10 @@
 # Desktop GUI architecture
 
-T118 introduced this boundary. [ADR-0005](../decisions/0005-desktop-gui-stack.md)
-selects Tauri 2; T121 connects `portable-pty` on the Rust side to xterm.js in
-the presentation layer. T122 adds versioned settings whose validation and disk
-access remain in Rust.
+The current supported desktop app uses the Tauri architecture recorded in
+[ADR-0005](../decisions/0005-desktop-gui-stack.md): `portable-pty` on the Rust
+side and xterm.js in the presentation layer. The product target has since
+changed to a native Rust UI; [ADR-0006](../decisions/0006-native-desktop-ui-prototype.md)
+records the reversible prototype and the gates required before replacing Tauri.
 
 ```text
 desktop UI (terminal rendering, settings, focus, shortcuts, responsive layout)
@@ -15,7 +16,7 @@ ShellEngine (results, commands, parser, prompt, Git, configuration)
                  CLI runner       OS adapters
 ```
 
-## Rules
+## Current application rules
 
 - The Rust library depends on neither Tauri, React nor a GUI toolkit.
 - CLI and desktop consume the same engine behavior.
@@ -27,7 +28,20 @@ ShellEngine (results, commands, parser, prompt, Git, configuration)
 - Each tab owns exactly one PTY and every event is checked against its native session ID.
 - Invalid settings use safe defaults; shipped assets are local with system-font fallbacks.
 
-## Delivery sequence
+## Native migration prototype
+
+`desktop/native-prototype/` is a separately built Rust application using
+`eframe`/`egui`, `egui_tty`, Ghostty's VT engine and `portable-pty`. It starts
+the existing Rust interactive runner in a real PTY. It is an experiment, not
+the default or production desktop app.
+
+The prototype is intentionally isolated: the current settings, tab model,
+Tauri adapter and packaging remain unchanged until the native terminal path is
+validated on Windows, Fedora/Linux and macOS. Selection-to-copy and
+right-click-to-paste behavior are being evaluated as native clipboard
+interactions.
+
+## Historical delivery sequence
 
 T119 selected the stack; T120 exposed the shared engine; T121 connected a real
 PTY; T122 added settings, themes and persistence; T123 shared typed prompt
