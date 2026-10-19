@@ -11,7 +11,6 @@ const ARCHIVE_NAME: &str = "git-runtime.tar.gz";
 const VERSION_NAME: &str = "git-runtime-version.txt";
 #[cfg(windows)]
 const WINDOWS_NANO_NAME: &str = "nano-win64.exe";
-const NANO_SOURCE_NAME: &str = "NANO-SOURCE-9.2.tar.xz";
 const READY_NAME: &str = ".ready-version";
 const RUNTIME_DIRECTORY: &str = "git-runtime";
 
@@ -45,8 +44,18 @@ impl GitRuntime {
         if version.is_empty() {
             return Err("bundled Git version file is empty".to_string());
         }
-        if !resources.join(NANO_SOURCE_NAME).is_file() {
-            return Err("bundled Nano source archive is missing".to_string());
+
+        // Development builds can encounter a runtime copied by an older build
+        // or CI workflow. Fall back to system tools until the bundled editor
+        // runtime has been prepared instead of preventing the terminal from
+        // starting. The source archive is only needed for distribution notices,
+        // so it must not be required at runtime.
+        #[cfg(debug_assertions)]
+        if !version.lines().any(|line| line.starts_with("nvim="))
+            || !version.lines().any(|line| line.starts_with("nano="))
+            || (cfg!(windows) && !resources.join(WINDOWS_NANO_NAME).is_file())
+        {
+            return Ok(None);
         }
 
         #[cfg(windows)]
