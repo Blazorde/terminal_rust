@@ -133,6 +133,24 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
         &mut cursor_answered,
     );
     writer
+        .write_all(b"echo multiline `\rline\r")
+        .and_then(|()| writer.flush())
+        .expect("multiline command should reach the PTY");
+    wait_for_output(
+        &receiver,
+        &mut output,
+        "multiline line",
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        3,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+    writer
         .write_all(b"exit\r")
         .and_then(|()| writer.flush())
         .expect("exit command should reach the PTY");

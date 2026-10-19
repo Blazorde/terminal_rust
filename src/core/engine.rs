@@ -48,6 +48,7 @@ impl ShellEngine {
             state: ShellState::new(
                 UserCommandRegistry::default(),
                 DeclarativeCommandRegistry::default(),
+                None,
             ),
         }
     }
@@ -61,26 +62,35 @@ impl ShellEngine {
         config: &AppConfig,
         entries: &[registry::RegistryEntry],
     ) -> Result<Self, String> {
-        let user_commands = UserCommandRegistry::new(&config.commands, command::command_names())?;
+        let user_commands =
+            UserCommandRegistry::new(&config.commands, &config.aliases, command::command_names())?;
         let reserved_names = command::command_names()
             .map(str::to_string)
-            .chain(user_commands.names().map(str::to_string));
+            .chain(user_commands.names());
         let plugin_commands = DeclarativeCommandRegistry::from_entries(
             entries,
             &config.plugins.grants,
             reserved_names,
         );
         Ok(Self {
-            state: ShellState::new(user_commands, plugin_commands),
+            state: ShellState::new(
+                user_commands,
+                plugin_commands,
+                config.startup_script.clone(),
+            ),
         })
     }
 
     pub(crate) fn command_names(&self) -> Vec<String> {
         command::command_names()
             .map(str::to_string)
-            .chain(self.state.user_command_names().map(str::to_string))
+            .chain(self.state.user_command_names())
             .chain(self.state.plugin_command_names().map(str::to_string))
             .collect()
+    }
+
+    pub(crate) fn startup_script(&self) -> Option<&str> {
+        self.state.startup_script()
     }
 
     pub fn execute_line(&mut self, input: &str) -> ExecutionResult {

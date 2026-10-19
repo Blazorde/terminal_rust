@@ -31,8 +31,9 @@ terminal_rust theme preview minimal
 terminal_rust theme preview powerline
 ```
 
-The preview clears an interactive terminal, then shows a fixed, illustrative
-session with several prompts and representative command output. It does not run
+The preview clears an interactive terminal screen and its scrollback, then shows
+a fixed, illustrative session with several prompts and representative command
+output. It does not run
 the displayed commands. The sample includes directory listing, Git status,
 successful test output and an error so colors and spacing can be judged with more
 content on screen. The command returns to the shell as soon as the sample is

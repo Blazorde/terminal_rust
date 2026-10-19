@@ -54,6 +54,14 @@ The appearance selector exposes Graphite, Bone, Nord, Amber, Moss and Dusk.
 Older persisted `paper` and `midnight` values migrate to Bone and Nord when
 loaded, so existing users keep a close visual equivalent.
 
+The **Démarrage** settings can run Fastfetch before the prompt in each PTY
+session. Fastfetch is an optional, separately installed executable: install the
+package for Windows, macOS or Linux and make sure `fastfetch` is available in
+the application's `PATH`. Save the setting and restart the active session, or
+open a new tab, to apply it. It is disabled by default. If the executable is
+missing or exits with an error, the terminal reports the issue and continues to
+the prompt.
+
 Terminal glyph metrics use integer letter spacing and a stable line height.
 The desktop waits for local fonts to settle, clears xterm's glyph cache, and
 refits after font, density, tab, viewport or window changes. This keeps the

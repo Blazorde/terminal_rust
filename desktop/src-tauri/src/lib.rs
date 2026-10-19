@@ -80,9 +80,11 @@ fn save_desktop_settings(
 fn start_session(
     app: AppHandle,
     state: State<'_, PtyState>,
+    settings_state: State<'_, SettingsState>,
     cols: u16,
     rows: u16,
 ) -> Result<u64, String> {
+    let settings = settings::load(&settings_state).settings;
     let git_runtime = bundled_git_runtime(&app)?;
     let pair = native_pty_system()
         .openpty(pty_size(cols, rows))
@@ -94,6 +96,14 @@ fn start_session(
     command.arg("--pty-shell");
     command.env("TERMINAL_RUST_GUI", "1");
     command.env("TERM", "xterm-256color");
+    command.env(
+        "TERMINAL_RUST_FASTFETCH",
+        if settings.show_fastfetch_on_startup {
+            "1"
+        } else {
+            "0"
+        },
+    );
     if let Some(runtime) = git_runtime.as_ref() {
         configure_git_environment(&mut command, runtime)?;
     }

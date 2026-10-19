@@ -61,3 +61,53 @@ Invalid configuration does not block the shell: custom commands are disabled,
 the diagnostic is shown, and native commands remain available. External tools
 are inherently platform-dependent; document prerequisites and avoid hard-coded
 path separators.
+
+## Interactive aliases
+
+For shortcuts that do not need a configuration edit, use:
+
+```text
+alias ll ls -la
+alias --save gs git status --short --branch
+alias
+unalias ll
+unalias --save gs
+```
+
+An alias without `--save` lasts for the current shell session. `--save` writes
+the alias to `shell-state.toml` beside the active user configuration and makes
+it available in later CLI and desktop sessions. `unalias` hides a saved alias
+for the current session; `unalias --save` removes it from persistent storage.
+Native commands cannot be shadowed. Aliases target a built-in command or start
+an external executable directly, with arguments passed as separate values.
+
+## `.trs` command scripts
+
+Scripts contain one Terminal Rust command per line; they do not run through an
+operating-system shell:
+
+```text
+script create setup-project
+script run scripts/setup-project.trs
+script list
+script startup scripts/setup-project.trs
+script startup off
+```
+
+Edit the created `.trs` file with any text editor. Scripts stop at the first
+failed command, support a trailing PowerShell-style backtick for line
+continuation, and can run another script up to a bounded nesting depth. Startup
+scripts run before the first prompt. Script paths are resolved from the current
+working directory when invoked; selecting a startup script stores its absolute
+path.
+
+Use `Shift+Enter` in the desktop terminal to add a continuation line. In the
+interactive CLI, end a line with a backtick and press Enter.
+
+## Fastfetch
+
+`fastfetch` and its short form `ff` invoke the separately installed Fastfetch
+executable. Fastfetch is optional and is never installed automatically. Ensure
+it is available on `PATH`; otherwise the command reports an actionable
+installation diagnostic. The desktop **Réglages → Démarrage** option can run
+it before each session prompt.

@@ -63,6 +63,40 @@ pub fn parse_input(input: &str) -> Result<Vec<String>, String> {
     Ok(args)
 }
 
+pub fn continuation_prefix(line: &str) -> Option<&str> {
+    let line = line.trim_end_matches(['\r', '\n']).trim_end();
+    let trailing_ticks = line
+        .chars()
+        .rev()
+        .take_while(|character| *character == '`')
+        .count();
+    (trailing_ticks % 2 == 1).then(|| {
+        line.strip_suffix('`')
+            .expect("a trailing tick was counted")
+            .trim_end()
+    })
+}
+
+pub fn normalize_multiline_input(input: &str) -> String {
+    let mut lines = input.split('\n').peekable();
+    let mut normalized = String::new();
+    let mut first_line = true;
+    while let Some(line) = lines.next() {
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        let line = if lines.peek().is_some() {
+            continuation_prefix(line).unwrap_or(line)
+        } else {
+            line
+        };
+        if !first_line {
+            normalized.push(' ');
+        }
+        normalized.push_str(line);
+        first_line = false;
+    }
+    normalized
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,6 +170,32 @@ mod tests {
         assert_eq!(
             parse_input("cat 'my folder"),
             Err("missing closing quote".to_string())
+        );
+    }
+
+    #[test]
+    fn continuation_prefix_requires_an_odd_trailing_backtick_count() {
+        assert_eq!(
+            continuation_prefix("echo hello `  \r\n"),
+            Some("echo hello")
+        );
+        assert_eq!(continuation_prefix("echo hello ``"), None);
+        assert_eq!(continuation_prefix("echo hello"), None);
+    }
+
+    #[test]
+    fn normalize_multiline_input_joins_lines_and_removes_continuation_markers() {
+        assert_eq!(
+            normalize_multiline_input("echo hello `\nworld"),
+            "echo hello world"
+        );
+        assert_eq!(
+            normalize_multiline_input("echo hello\nworld"),
+            "echo hello world"
+        );
+        assert_eq!(
+            normalize_multiline_input("echo unfinished `"),
+            "echo unfinished `"
         );
     }
 

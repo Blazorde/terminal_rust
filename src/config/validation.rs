@@ -108,7 +108,7 @@ pub fn validate(config: &AppConfig) -> Result<(), String> {
     Ok(())
 }
 
-fn is_valid_user_command_name(name: &str) -> bool {
+pub(crate) fn is_valid_user_command_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 64
         && name

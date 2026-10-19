@@ -21,6 +21,7 @@ ShellEngine (results, commands, parser, prompt, Git, configuration)
 - CLI and desktop consume the same engine behavior.
 - User input travels as data through bounded APIs, never concatenated shell text.
 - Rust owns PTYs, process handles, current directories and disk access.
+- Optional startup tools are launched by the Rust PTY process, not by the WebView.
 - The WebView receives no secrets or generic shell/filesystem capability.
 - Rust sends typed prompt layouts over private OSC `777`; the GUI does not probe Git or disk.
 - Each tab owns exactly one PTY and every event is checked against its native session ID.
