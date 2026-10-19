@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repository='https://github.com/Blazorde/terminal_rust.git'
-branch='feat/bundled-editors'
+branch='main'
 config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 target="$config_home/nvim"
 temporary_root="$(mktemp -d)"

@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $repository = 'https://github.com/Blazorde/terminal_rust.git'
-$branch = 'feat/bundled-editors'
+$branch = 'main'
 $localAppData = [Environment]::GetFolderPath('LocalApplicationData')
 if ([string]::IsNullOrWhiteSpace($localAppData)) {
   throw 'Windows did not provide a LocalApplicationData directory.'

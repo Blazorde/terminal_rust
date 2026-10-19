@@ -1,6 +1,6 @@
 # Neovim configuration
 
-Download Blazorde's public [CodeOpsHQ Neovim configuration](https://github.com/Blazorde/terminal_rust/tree/feat/bundled-editors/config/nvim).
+Download Blazorde's public [CodeOpsHQ Neovim configuration](https://github.com/Blazorde/terminal_rust/tree/main/config/nvim).
 The install scripts fetch only this folder from the public repository and back
 up an existing configuration before replacing it.
 
@@ -10,7 +10,7 @@ Open PowerShell and run:
 
 ```powershell
 $installer = Join-Path $env:TEMP 'install-terminal-rust-nvim.ps1'
-Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/Blazorde/terminal_rust/feat/bundled-editors/scripts/install-nvim-config.ps1' -OutFile $installer
+Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/Blazorde/terminal_rust/main/scripts/install-nvim-config.ps1' -OutFile $installer
 & $installer
 ```
 
@@ -24,7 +24,7 @@ installed separately. The existing config is moved to a timestamped
 Run this command in a terminal with Git installed:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Blazorde/terminal_rust/feat/bundled-editors/scripts/install-nvim-config.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Blazorde/terminal_rust/main/scripts/install-nvim-config.sh | sh
 ```
 
 The config is installed under `${XDG_CONFIG_HOME:-~/.config}/nvim`. Any
@@ -40,14 +40,22 @@ nvim
 
 The first launch bootstraps `lazy.nvim` and downloads the plugins pinned in
 `lazy-lock.json`, so it needs an internet connection. In the interactive
-profile menu, choose **CodeOpsHQ Full**, **Essential**, **Coding**, **AI**,
-**Custom**, or **Craftzdog / LazyVim**. Essential is the lightest profile;
-Full is the complete configuration.
+profile menu, choose **CodeOpsHQ Full** to load the same complete profile as
+the author's Windows setup. The other profiles (**Essential**, **Coding**,
+**AI**, **Custom**, or **Craftzdog / LazyVim**) intentionally load different
+plugin sets.
+
+The configuration files and pinned plugin revisions are shared across
+platforms. Platform-specific dependencies are not: language servers and
+formatters are installed separately through Mason, AI providers need your own
+environment keys, and the author's local image-converter executable is not
+included. The dashboard therefore uses its text header unless you install that
+optional executable yourself.
 
 The AI profile is optional. Avante reads provider keys from environment
 variables; for example, set `DEEPSEEK_API_KEY` or `OPEN_ROUTER_API_KEY` before
 starting Terminal Rust. Do not put API keys in the config files. Language
 servers and formatters may install on first use through Mason.
 
-See the [configuration source](https://github.com/Blazorde/terminal_rust/tree/feat/bundled-editors/config/nvim)
-and the [Terminal Rust editor guide](https://github.com/Blazorde/terminal_rust/blob/feat/bundled-editors/docs/editors.md).
+See the [configuration source](https://github.com/Blazorde/terminal_rust/tree/main/config/nvim)
+and the [Terminal Rust editor guide](https://github.com/Blazorde/terminal_rust/blob/main/docs/editors.md).

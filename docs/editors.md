@@ -42,3 +42,10 @@ The [CodeOpsHQ Neovim configuration](../config/nvim/README.md) is available
 for download. The [wiki installation guide](../wiki/Neovim.md) provides
 Windows, macOS and Linux install commands. Existing Neovim configurations are
 backed up before the public setup is installed.
+
+Choose **CodeOpsHQ Full** on first launch to load the complete profile used by
+the author's Windows setup. The configuration files and plugin revisions
+pinned in `lazy-lock.json` are shared across platforms. Platform-specific
+language servers and formatters are installed separately through Mason; AI
+provider keys must be configured in the environment. The optional image
+converter used by the author's dashboard is not included.
