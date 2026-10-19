@@ -15,3 +15,6 @@ pub mod touch;
 pub mod user;
 pub mod hostname;
 pub mod whoami;
+pub mod arch;
+pub mod nproc;
+pub mod uptime;

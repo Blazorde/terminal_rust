@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    cat, cd, clear, dashboard, date, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch,
-    user, whoami, hostname,
+    cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
+    whoami, hostname, arch, nproc, uptime,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -182,6 +182,25 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_whoami,
     },
     CommandSpec {
+        name: "arch",
+        usage: "arch",
+        summary: "display the system architecture",
+        max_args: Some(0),
+        handler: run_arch,
+    },
+    CommandSpec {
+        name: "nproc",
+        usage: "nproc",
+        summary: "display the number of available processors",
+        max_args: Some(0),
+        handler: run_nproc,
+    },
+    CommandSpec {
+        name: "uptime",
+        usage: "uptime",
+        summary: "display the system uptime",
+        max_args: Some(0),
+        handler: run_uptime,
         name: "date",
         usage: "date [format]",
         summary: "display the current date",
@@ -304,8 +323,21 @@ fn optional_arg(args: &[String]) -> Option<&str> {
     args.first().map(String::as_str)
 }
 
+fn run_arch(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("arch", arch::arch())
+}
+
+fn run_uptime(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("uptime", uptime::uptime())
+}
+
+fn run_nproc(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("nproc", nproc::nproc())
+}
+
 fn run_date(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("date", date::date(args))
+}
 
 fn run_hostname(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("hostname", hostname::hostname())
