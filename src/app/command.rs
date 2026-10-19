@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
-    whoami, hostname, arch, nproc, uptime,
+    arch, cat, cd, clear, dashboard, date, echo, editor, git_command, hostname, ls, mkdir, nproc,
+    plugins, pwd, rm, theme, touch, uptime, user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -201,6 +201,8 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "display the system uptime",
         max_args: Some(0),
         handler: run_uptime,
+    },
+    CommandSpec {
         name: "date",
         usage: "date [format]",
         summary: "display the current date",
@@ -208,12 +210,32 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_date,
     },
     CommandSpec {
+        name: "nano",
+        usage: "nano [file...]",
+        summary: "edit files with Nano",
+        max_args: None,
+        handler: run_nano,
+    },
+    CommandSpec {
+        name: "nvim",
+        usage: "nvim [file...]",
+        summary: "edit files with Neovim",
+        max_args: None,
+        handler: run_nvim,
+    },
+    CommandSpec {
+        name: "neovim",
+        usage: "neovim [file...]",
+        summary: "alias for nvim",
+        max_args: None,
+        handler: run_neovim,
+    },
+    CommandSpec {
         name: "hostname",
         usage: "hostname",
         summary: "display the system hostname",
         max_args: Some(0),
         handler: run_hostname,
-    },
     },
     CommandSpec {
         name: "quit",
@@ -337,6 +359,18 @@ fn run_nproc(_args: &[String], _state: &mut ShellState) -> CommandResult {
 
 fn run_date(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("date", date::date(args))
+}
+
+fn run_nano(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(editor::run("nano", "nano", args))
+}
+
+fn run_nvim(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(editor::run("nvim", "nvim", args))
+}
+
+fn run_neovim(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(editor::run("neovim", "nvim", args))
 }
 
 fn run_hostname(_args: &[String], _state: &mut ShellState) -> CommandResult {
