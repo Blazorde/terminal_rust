@@ -11,6 +11,7 @@
   "type": "module",
   "scripts": {
     "audit:ui": "node scripts/check-ui-contract.mjs",
+    "prepare:dev-nano": "node scripts/prepare-dev-nano.mjs",
     "notices": "node scripts/generate-third-party-notices.mjs",
     "notices:check": "node scripts/generate-third-party-notices.mjs --check",
     "dev": "vite --config vite.config.ts --host 127.0.0.1 --port 1420",
