@@ -34,8 +34,9 @@ inactive unless its identifier appears in `enabled`. See
 `[commands]` defines structured aliases for built-ins or external processes.
 See [custom commands](custom-commands.md) for syntax and security boundaries.
 Interactive aliases and `.trs` scripts are also documented in that guide.
-Their persistent state is kept in `shell-state.toml` beside `config.toml` so
-the versioned TOML configuration remains backward-compatible.
+Their persistent state and the native terminal's appearance preferences are
+kept in `shell-state.toml` beside `config.toml` so the versioned TOML
+configuration remains backward-compatible.
 
 The desktop app's **Réglages → Démarrage** option can launch the separately
 installed `fastfetch` command before each PTY session's first prompt. It is

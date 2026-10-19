@@ -1,3 +1,4 @@
+pub mod appearance;
 pub mod arch;
 pub mod cat;
 pub mod cd;

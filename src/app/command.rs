@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    arch, cat, cd, clear, dashboard, date, echo, editor, fastfetch, git_command, hostname, ls,
-    mkdir, nproc, plugins, pwd, rm, theme, touch, uptime, user, whoami,
+    appearance, arch, cat, cd, clear, dashboard, date, echo, editor, fastfetch, git_command,
+    hostname, ls, mkdir, nproc, plugins, pwd, rm, theme, touch, uptime, user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -171,6 +171,13 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "run a native Git command",
         max_args: None,
         handler: run_git,
+    },
+    CommandSpec {
+        name: "appearance",
+        usage: "appearance [show|theme|foreground|background|color|reset] [arguments...]",
+        summary: "customize the terminal theme and ANSI colors",
+        max_args: None,
+        handler: run_appearance,
     },
     CommandSpec {
         name: "theme",
@@ -485,6 +492,10 @@ fn run_git(args: &[String], _state: &mut ShellState) -> CommandResult {
 
 fn run_theme(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_display_error(theme::theme(args))
+}
+
+fn run_appearance(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(appearance::appearance(args))
 }
 
 fn run_plugins(args: &[String], _state: &mut ShellState) -> CommandResult {

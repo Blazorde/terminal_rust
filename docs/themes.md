@@ -44,3 +44,25 @@ code.
 The `render::icons` registry owns glyphs for `folder`, `git_branch`, `error`,
 `user` and `time`; themes reference symbolic names rather than copying Unicode.
 Unknown or unavailable glyphs always use the declared ASCII fallback.
+
+## Native terminal colors
+
+Prompt presets control the Rust prompt segments; they do not define the
+terminal emulator's ANSI palette. The native prototype follows the system
+light/dark preference and uses a vivid, contrast-adjusted ANSI palette for
+each mode. Its `appearance` command persists terminal colors separately from
+the prompt's `theme` setting:
+
+```text
+appearance show
+appearance theme system
+appearance color 1 "#FF4050"
+appearance foreground "#F8F8F2"
+appearance background "#20212A"
+appearance reset
+```
+
+The 16 ANSI colors can be set by index (`0` through `15`). The native
+application also accepts one-off `--theme`, `--foreground`, `--background`, and
+repeatable `--color INDEX=#RRGGBB` launch options; persistent settings take
+effect again when the application is launched without overrides.

@@ -95,11 +95,29 @@ zig version
 cargo run -p terminal-rust-native-prototype
 ```
 
+The prototype follows the operating system's light/dark preference by default.
+Launch-time overrides are available for one-off appearance checks:
+
+```powershell
+cargo run -p terminal-rust-native-prototype -- --theme dark
+cargo run -p terminal-rust-native-prototype -- --theme light --color "1=#FF4050"
+```
+
+Inside the terminal, `appearance show` inspects the active settings.
+`appearance theme system`, `appearance theme dark` or `appearance theme light`
+select the color mode. `appearance foreground "#RRGGBB"`,
+`appearance background "#RRGGBB"` and `appearance color <index> "#RRGGBB"`
+(index 0-15) customize individual colors. These settings persist across
+launches and update the current session. `appearance reset` restores the system
+theme and vivid default ANSI palette. Settings live in `shell-state.toml`; the
+native window watches that file for changes.
+
 The prototype has one real shell session, selection-to-copy and right-click
 paste. Its right-click paste strips terminal control characters and wraps text
 in bracketed-paste markers. It does not yet have the production app's tabs,
-settings, accessibility review, packaging, OS default-terminal registration or
-cross-platform validation. Keep using the Tauri app for normal desktop use.
+full settings UI, accessibility review, packaging, OS default-terminal
+registration or cross-platform validation. Keep using the Tauri app for normal
+desktop use.
 
 Do not declare the native app the default terminal or remove Tauri until the
 Windows, Fedora/Linux and macOS migration gates in

@@ -11,7 +11,7 @@ use rustyline::{Cmd, ColorMode, CompletionType, Config, Editor, KeyEvent};
 use crate::app::completion::ShellHelper;
 use crate::app::parser::{continuation_prefix, normalize_multiline_input};
 use crate::app::prompt::{GUI_PROMPT_ENV, Prompt};
-use crate::config::{self, AppConfig};
+use crate::config::{self, AppConfig, AppearanceSettings, appearance_ansi_sequences};
 use crate::core::{ExecutionResult, ExecutionStatus, ShellEngine};
 use crate::render;
 
@@ -178,9 +178,36 @@ fn run_interactive_plain() -> ExitCode {
 fn load_interactive_shell() -> (ShellEngine, Prompt) {
     let config = load_config();
     let mut engine = load_engine(&config);
+    apply_native_terminal_appearance();
     run_fastfetch_if_enabled(&mut engine);
     run_startup_script(&mut engine);
     (engine, load_prompt(&config))
+}
+
+fn apply_native_terminal_appearance() {
+    if env::var_os("TERMINAL_RUST_NATIVE_UI").is_none() {
+        return;
+    }
+
+    let mut settings = match config::load_appearance_settings() {
+        Ok(settings) => settings,
+        Err(error) => {
+            let _ = render::stderr_line(format_args!("appearance: {error}; using defaults"));
+            AppearanceSettings::default()
+        }
+    };
+    let saved_settings = settings.clone();
+    if let Err(error) = config::apply_appearance_environment(&mut settings) {
+        let _ = render::stderr_line(format_args!(
+            "appearance: {error}; ignoring invalid overrides"
+        ));
+        settings = saved_settings;
+    }
+    if let Err(error) = render::stdout(appearance_ansi_sequences(&settings)) {
+        let _ = render::stderr_line(format_args!(
+            "appearance: cannot apply terminal colors: {error}"
+        ));
+    }
 }
 
 fn read_plain_command(reader: &mut impl BufRead, input: &mut String) -> io::Result<bool> {
