@@ -1,3 +1,4 @@
+pub mod appearance;
 pub mod arch;
 pub mod cat;
 pub mod cd;
@@ -6,6 +7,7 @@ pub mod dashboard;
 pub mod date;
 pub mod echo;
 pub mod editor;
+pub mod fastfetch;
 pub mod git_command;
 pub mod hostname;
 pub mod ls;

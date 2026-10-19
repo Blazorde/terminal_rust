@@ -1,8 +1,12 @@
 # ADR-0005 — Tauri desktop layer around the Rust engine
 
-- Status: Accepted
+- Status: Superseded by [ADR-0006](0006-native-desktop-ui-prototype.md)
 - Date: 2026-10-10
 - Decision makers: Terminal Rust team
+
+This ADR records the original desktop decision. Tauri remains the shipped
+desktop implementation until its native replacement has passed the migration
+gates in ADR-0006.
 
 ## Context
 

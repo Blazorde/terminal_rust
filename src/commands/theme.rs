@@ -2,10 +2,6 @@ use std::error::Error;
 use std::fmt;
 use std::io::{self, IsTerminal};
 
-use crossterm::cursor::MoveTo;
-use crossterm::execute;
-use crossterm::terminal::{Clear, ClearType};
-
 use crate::render;
 use crate::theme::{self, ThemeError};
 
@@ -64,8 +60,7 @@ fn preview(args: &[String]) -> Result<(), ThemeCommandError> {
     let is_terminal = io::stdout().is_terminal();
     let rendered = theme::preview(name, is_terminal).map_err(ThemeCommandError::Theme)?;
     if is_terminal {
-        execute!(io::stdout(), MoveTo(0, 0), Clear(ClearType::All))
-            .map_err(ThemeCommandError::Output)?;
+        super::clear::clear().map_err(ThemeCommandError::Output)?;
     }
     render::stdout(format!(
         "Theme: {name}\n\nExample session (simulated; commands are not run):\n{rendered}"

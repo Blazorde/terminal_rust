@@ -37,8 +37,9 @@ flowchart LR
 | `errors/` | Presentable domain errors | Side effects |
 | `git/` | Git context and read-only shortcuts | An unrestricted Git passthrough |
 | `render/` | Standard and error output | Business logic |
-| `desktop/src-tauri/` | Tauri adapter, PTY sessions and native settings | A second shell engine |
-| `desktop/src/` | xterm presentation, tabs and accessible controls | Generic system access |
+| `desktop/src-tauri/` | Current Tauri adapter, PTY sessions and native settings | A second shell engine |
+| `desktop/src/` | Current xterm presentation, tabs and accessible controls | Generic system access |
+| `desktop/native-prototype/` | Reversible native UI/PTY experiment | Production desktop support before migration gates pass |
 
 ## Command flow
 

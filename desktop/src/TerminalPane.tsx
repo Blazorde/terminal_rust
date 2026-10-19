@@ -146,9 +146,20 @@ function TerminalPane({
     let terminalDisposables: Array<{ dispose: () => void }> = []
     let trafficTimer: number | null = null
     let fitFrame: number | null = null
-    let inputQueue: Promise<void> = Promise.resolve()
+    const inputQueue = { current: Promise.resolve() }
     let disposed = false
     const filterPromptMetadata = createPromptMetadataFilter((promptLayout) => onPatch(tabId, { promptLayout }))
+    const sendInput = (data: string) => {
+      if (sessionId === null) return
+      const targetSessionId = sessionId
+      const bytes = Array.from(encoder.encode(data))
+      inputQueue.current = inputQueue.current
+        .then(() => invoke('write_session', { sessionId: targetSessionId, data: bytes }))
+        .then(() => undefined)
+        .catch((reason) => {
+          onPatch(tabId, { connection: 'error', error: `Impossible d'envoyer l'entrée au terminal : ${String(reason)}` })
+        })
+    }
 
     const fitToHost = () => {
       if (disposed || element.clientWidth === 0 || element.clientHeight === 0) return
@@ -189,16 +200,14 @@ function TerminalPane({
       }
 
       onPatch(tabId, { connection: 'connecting', error: null })
+      term.attachCustomKeyEventHandler((event) => {
+        if (event.type !== 'keydown' || event.key !== 'Enter' || !event.shiftKey) return true
+        event.preventDefault()
+        sendInput('`\r')
+        return false
+      })
       terminalDisposables = [
-        term.onData((data) => {
-          if (sessionId === null) return
-          const targetSessionId = sessionId
-          const bytes = Array.from(encoder.encode(data))
-          inputQueue = inputQueue
-            .then(() => invoke('write_session', { sessionId: targetSessionId, data: bytes }))
-            .then(() => undefined)
-            .catch(() => undefined)
-        }),
+        term.onData(sendInput),
         term.onResize(({ cols, rows }) => {
           onPatch(tabId, { dimensions: `${cols} × ${rows}` })
           if (sessionId !== null) {
