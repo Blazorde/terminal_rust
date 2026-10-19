@@ -18,6 +18,7 @@ Markdown remains authoritative.
 | Use the live system dashboard | [Dashboard](dashboard.md) |
 | Use native Git commands | [Git commands](git.md) |
 | Use Nano or Neovim in the terminal | [Bundled editors](editors.md) |
+| Download the public Neovim configuration | [Neovim setup](../wiki/Neovim.md) |
 | Use completion and inline suggestions | [Completion](completion.md) |
 | Customize the prompt | [Prompt customization](customization.md) |
 | Create user commands | [Custom commands](custom-commands.md) |

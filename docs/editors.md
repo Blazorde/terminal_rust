@@ -35,3 +35,10 @@ The Windows Nano binary is downloaded from the official Nano distribution and
 checked against a pinned SHA-256 value during release packaging. Its matching
 Nano source archive and the runtime package license files ship in the desktop
 resources. The package inventory is listed in `GIT-RUNTIME-NOTICES.md`.
+
+## Public Neovim configuration
+
+The [CodeOpsHQ Neovim configuration](../config/nvim/README.md) is available
+for download. The [wiki installation guide](../wiki/Neovim.md) provides
+Windows, macOS and Linux install commands. Existing Neovim configurations are
+backed up before the public setup is installed.
