@@ -14,7 +14,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn clear_also_purges_scrollback() {
-        assert_eq!(CLEAR_SCREEN, "\u{1b}[3J\u{1b}[2J\u{1b}[1;1H");
+    fn clear_emits_screen_and_scrollback_sequences() {
+        let (result, output) = render::capture_output(clear);
+
+        assert!(result.is_ok());
+        assert_eq!(output.stdout, "\u{1b}[3J\u{1b}[2J\u{1b}[1;1H");
     }
 }

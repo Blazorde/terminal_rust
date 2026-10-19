@@ -194,6 +194,10 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
         output.contains("]777;") && output.contains("\"left\"") && output.contains("\"right\""),
         "typed prompt metadata was missing from PTY output: {output}"
     );
+    assert!(
+        output.contains("\u{1b}[36m") || output.contains("\u{1b}[35m"),
+        "colored prompt styling was missing from PTY output: {output}"
+    );
     for kind in [
         "user", "host", "path", "status", "runtime", "duration", "time",
     ] {

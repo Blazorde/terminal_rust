@@ -54,7 +54,8 @@ impl ShellEngine {
     }
 
     pub(crate) fn from_config(config: &AppConfig) -> Result<Self, String> {
-        let entries = registry::discover_default(&config.plugins.enabled).unwrap_or_default();
+        let entries = registry::discover_default(&config.plugins.enabled)
+            .map_err(|error| format!("cannot discover plugins: {error}"))?;
         Self::from_config_and_entries(config, &entries)
     }
 

@@ -1,16 +1,17 @@
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::app::help;
-use crate::app::parser::{continuation_prefix, parse_input};
 use crate::commands::{
     arch, cat, cd, clear, dashboard, date, echo, editor, fastfetch, git_command, hostname, ls,
     mkdir, nproc, plugins, pwd, rm, theme, touch, uptime, user, whoami,
 };
-use crate::config::{self, UserCommandConfig, UserCommandKind};
+use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
 use crate::plugin::DeclarativeCommandRegistry;
 use crate::render;
+
+mod aliases;
+mod scripts;
 
 pub struct ShellState {
     previous_dir: Option<PathBuf>,
@@ -71,21 +72,21 @@ const COMMANDS: &[CommandSpec] = &[
         usage: "alias [--save] [name command [arguments...]]",
         summary: "list, define or permanently save command aliases",
         max_args: None,
-        handler: run_alias,
+        handler: aliases::run,
     },
     CommandSpec {
         name: "unalias",
         usage: "unalias [--save] <name>",
         summary: "remove a session or permanently saved alias",
         max_args: Some(2),
-        handler: run_unalias,
+        handler: aliases::remove,
     },
     CommandSpec {
         name: "script",
         usage: "script <create|run|startup|list> [arguments...]",
         summary: "create and run safe Terminal Rust command scripts",
         max_args: None,
-        handler: run_script,
+        handler: scripts::run,
     },
     CommandSpec {
         name: "fastfetch",
@@ -320,350 +321,8 @@ pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
     execute_plugin_command(command_name, &args[1..], state)
 }
 
-fn run_alias(args: &[String], state: &mut ShellState) -> CommandResult {
-    let persistent = args.first().is_some_and(|arg| arg == "--save");
-    let args = if persistent { &args[1..] } else { args };
-    if args.is_empty() || args == ["--list"] {
-        return map_prefixed_error(
-            "alias",
-            render::stdout(state.user_commands.render_aliases()),
-        );
-    }
-    if args.len() < 2 {
-        return CommandResult::Error(
-            "alias: expected [--save] <name> <command> [arguments...]".into(),
-        );
-    }
-
-    let name = &args[0];
-    let target = &args[1];
-    let command = UserCommandConfig {
-        kind: if find_command(target).is_some() {
-            UserCommandKind::Builtin
-        } else {
-            UserCommandKind::Process
-        },
-        target: target.clone(),
-        args: args[2..].to_vec(),
-        append_args: true,
-        description: String::new(),
-    };
-    let native_names = alias_reserved_names(state);
-    if persistent {
-        let mut aliases = state.user_commands.persistent_aliases().clone();
-        aliases.insert(name.clone(), command);
-        if let Err(error) = validate_aliases(&aliases, &native_names, &state.user_commands) {
-            return CommandResult::Error(format!("alias: {error}"));
-        }
-        if let Err(error) = config::save_aliases(aliases.clone()) {
-            return CommandResult::Error(format!("alias: {error}"));
-        }
-        if let Err(error) = state
-            .user_commands
-            .set_persistent_aliases(aliases, &native_names)
-        {
-            return CommandResult::Error(format!("alias: {error}"));
-        }
-    } else if let Err(error) =
-        state
-            .user_commands
-            .set_session_alias(name.clone(), command, &native_names)
-    {
-        return CommandResult::Error(format!("alias: {error}"));
-    }
-    map_prefixed_error(
-        "alias",
-        render::stdout(format!(
-            "Alias '{name}' saved{}.\n",
-            if persistent {
-                " permanently"
-            } else {
-                " for this session"
-            }
-        )),
-    )
-}
-
-fn run_unalias(args: &[String], state: &mut ShellState) -> CommandResult {
-    let persistent = args.first().is_some_and(|arg| arg == "--save");
-    let name = if persistent {
-        args.get(1)
-    } else {
-        args.first()
-    };
-    let Some(name) = name else {
-        return CommandResult::Error("unalias: expected [--save] <name>".into());
-    };
-    if args.len() != if persistent { 2 } else { 1 } {
-        return CommandResult::Error("unalias: expected [--save] <name>".into());
-    }
-
-    if persistent {
-        let mut aliases = state.user_commands.persistent_aliases().clone();
-        if !aliases.contains_key(name) {
-            return CommandResult::Error(format!("unalias: saved alias '{name}' does not exist"));
-        }
-        aliases.remove(name);
-        if let Err(error) = config::save_aliases(aliases.clone()) {
-            return CommandResult::Error(format!("unalias: {error}"));
-        }
-        let native_names = alias_reserved_names(state);
-        if let Err(error) = state
-            .user_commands
-            .set_persistent_aliases(aliases, &native_names)
-        {
-            return CommandResult::Error(format!("unalias: {error}"));
-        }
-        state.user_commands.remove_session_alias(name);
-    } else if let Err(error) = state.user_commands.remove_alias(name, false) {
-        return CommandResult::Error(format!("unalias: {error}"));
-    }
-    map_prefixed_error(
-        "unalias",
-        render::stdout(format!("Alias '{name}' removed.\n")),
-    )
-}
-
-fn validate_aliases(
-    aliases: &std::collections::BTreeMap<String, UserCommandConfig>,
-    native_names: &HashSet<String>,
-    commands: &user::UserCommandRegistry,
-) -> Result<(), String> {
-    for (name, command) in aliases {
-        if commands.configured_command_exists(name) {
-            return Err(format!(
-                "alias '{name}' conflicts with a configured command"
-            ));
-        }
-        if native_names.contains(name) {
-            return Err(format!("alias '{name}' conflicts with an existing command"));
-        }
-        if !crate::config::is_valid_user_command_name(name) {
-            return Err(format!("invalid alias name '{name}'"));
-        }
-        if command.target.trim().is_empty() || command.target.contains('\0') {
-            return Err(format!("alias '{name}' has an invalid target"));
-        }
-        if command.kind == UserCommandKind::Builtin && !native_names.contains(&command.target) {
-            return Err(format!(
-                "alias '{name}' targets unknown built-in command '{}'",
-                command.target
-            ));
-        }
-        if command.args.iter().any(|argument| argument.contains('\0')) {
-            return Err(format!("alias '{name}' contains a NUL argument"));
-        }
-    }
-    Ok(())
-}
-
-fn alias_reserved_names(state: &ShellState) -> HashSet<String> {
-    command_names()
-        .map(str::to_string)
-        .chain(state.plugin_command_names().map(str::to_string))
-        .collect()
-}
-
-fn run_script(args: &[String], state: &mut ShellState) -> CommandResult {
-    let Some(action) = args.first().map(String::as_str) else {
-        return CommandResult::Error("script: expected create, run, startup or list".into());
-    };
-    match action {
-        "create" if args.len() == 2 => create_script(&args[1]),
-        "run" if args.len() == 2 => execute_script(&args[1], state),
-        "startup" if args.len() == 2 => set_startup_script(&args[1], state),
-        "list" if args.len() == 1 => list_scripts(),
-        "create" | "run" | "startup" | "list" => {
-            CommandResult::Error("script: invalid arguments; run 'help' for usage".into())
-        }
-        _ => CommandResult::Error(format!("script: unknown action '{action}'")),
-    }
-}
-
-fn create_script(name: &str) -> CommandResult {
-    if !crate::config::is_valid_user_command_name(name) {
-        return CommandResult::Error(
-            "script: name must contain lowercase letters, digits, '-' or '_'".into(),
-        );
-    }
-    let path = PathBuf::from("scripts").join(format!("{name}.trs"));
-    if let Err(error) = std::fs::create_dir_all("scripts") {
-        return CommandResult::Error(format!("script: cannot create scripts directory: {error}"));
-    }
-    let content = format!(
-        "# Terminal Rust script: {name}\n# One command per line. Lines ending in ` continue on the next line.\n\n"
-    );
-    match std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-    {
-        Ok(mut file) => match std::io::Write::write_all(&mut file, content.as_bytes()) {
-            Ok(()) => map_prefixed_error(
-                "script",
-                render::stdout(format!("Created {}.\n", path.display())),
-            ),
-            Err(error) => {
-                CommandResult::Error(format!("script: cannot write {}: {error}", path.display()))
-            }
-        },
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            CommandResult::Error(format!("script: {} already exists", path.display()))
-        }
-        Err(error) => {
-            CommandResult::Error(format!("script: cannot create {}: {error}", path.display()))
-        }
-    }
-}
-
-fn list_scripts() -> CommandResult {
-    let entries = match std::fs::read_dir("scripts") {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return map_prefixed_error("script", render::stdout("No scripts found.\n"));
-        }
-        Err(error) => return CommandResult::Error(format!("script: cannot list scripts: {error}")),
-    };
-    let mut scripts = Vec::new();
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) => {
-                return CommandResult::Error(format!(
-                    "script: cannot read scripts directory entry: {error}"
-                ));
-            }
-        };
-        let path = entry.path();
-        if is_script_file(&path) {
-            scripts.push(path);
-        }
-    }
-    scripts.sort();
-    let output = if scripts.is_empty() {
-        "No scripts found.\n".to_string()
-    } else {
-        scripts
-            .iter()
-            .map(|path| format!("{}\n", path.display()))
-            .collect()
-    };
-    map_prefixed_error("script", render::stdout(output))
-}
-
-fn execute_script(path: &str, state: &mut ShellState) -> CommandResult {
-    const MAX_SCRIPT_DEPTH: usize = 16;
-    const MAX_SCRIPT_BYTES: u64 = 1_048_576;
-    if state.script_depth >= MAX_SCRIPT_DEPTH {
-        return CommandResult::Error("script: maximum nesting depth exceeded".into());
-    }
-    let script_path = PathBuf::from(path);
-    let metadata = match std::fs::metadata(&script_path) {
-        Ok(metadata) => metadata,
-        Err(error) => {
-            return CommandResult::Error(format!("script: {}: {error}", script_path.display()));
-        }
-    };
-    if !metadata.is_file() || metadata.len() > MAX_SCRIPT_BYTES {
-        return CommandResult::Error(format!(
-            "script: {} must be a file no larger than 1 MiB",
-            script_path.display()
-        ));
-    }
-    if !is_script_file(&script_path) {
-        return CommandResult::Error("script: expected a .trs file".into());
-    }
-    let content = match std::fs::read_to_string(&script_path) {
-        Ok(content) => content,
-        Err(error) => {
-            return CommandResult::Error(format!(
-                "script: cannot read {}: {error}",
-                script_path.display()
-            ));
-        }
-    };
-
-    state.script_depth += 1;
-    let mut pending = String::new();
-    for (index, raw_line) in content.lines().enumerate() {
-        let line_number = index + 1;
-        let line = raw_line.trim();
-        if line.starts_with('#') || line.is_empty() {
-            continue;
-        }
-        if let Some(prefix) = continuation_prefix(line) {
-            pending.push_str(prefix);
-            pending.push(' ');
-            continue;
-        }
-        pending.push_str(line);
-        let result = match parse_input(&pending) {
-            Ok(args) if args.is_empty() => CommandResult::Continue,
-            Ok(args) => execute(&args, state),
-            Err(error) => CommandResult::Error(error),
-        };
-        pending.clear();
-        match result {
-            CommandResult::Continue => {}
-            CommandResult::Exit => {
-                state.script_depth -= 1;
-                return CommandResult::Exit;
-            }
-            CommandResult::Error(error) => {
-                state.script_depth -= 1;
-                return CommandResult::Error(format!(
-                    "script: {}:{line_number}: {error}",
-                    script_path.display()
-                ));
-            }
-        }
-    }
-    state.script_depth -= 1;
-    if !pending.is_empty() {
-        return CommandResult::Error(format!(
-            "script: {} ends after a continuation marker",
-            script_path.display()
-        ));
-    }
-    CommandResult::Continue
-}
-
-fn set_startup_script(path: &str, state: &mut ShellState) -> CommandResult {
-    let startup_script = if path == "off" {
-        None
-    } else {
-        let script_path = match std::fs::canonicalize(path) {
-            Ok(path) => path,
-            Err(error) => {
-                return CommandResult::Error(format!("script: cannot use {path}: {error}"));
-            }
-        };
-        if !script_path.is_file() || !is_script_file(&script_path) {
-            return CommandResult::Error(
-                "script: startup target must be an existing .trs file".into(),
-            );
-        }
-        Some(script_path.to_string_lossy().into_owned())
-    };
-    if let Err(error) = config::save_startup_script(startup_script.clone()) {
-        return CommandResult::Error(format!("script: {error}"));
-    }
-    state.startup_script = startup_script;
-    let message = match state.startup_script.as_deref() {
-        Some(path) => format!("Startup script set to {path}.\n"),
-        None => "Startup script disabled.\n".into(),
-    };
-    map_prefixed_error("script", render::stdout(message))
-}
-
 fn run_fastfetch(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_display_error(fastfetch::run(args))
-}
-
-fn is_script_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("trs"))
 }
 
 fn execute_user_command(
