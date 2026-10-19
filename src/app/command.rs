@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
-    whoami, hostname, arch, nproc, uptime,
+    arch, cat, cd, clear, dashboard, date, echo, git_command, hostname, ls, mkdir, nproc, plugins,
+    pwd, rm, theme, touch, uptime, user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -201,6 +201,8 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "display the system uptime",
         max_args: Some(0),
         handler: run_uptime,
+    },
+    CommandSpec {
         name: "date",
         usage: "date [format]",
         summary: "display the current date",
@@ -213,7 +215,6 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "display the system hostname",
         max_args: Some(0),
         handler: run_hostname,
-    },
     },
     CommandSpec {
         name: "quit",

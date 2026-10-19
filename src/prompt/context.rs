@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use jiff::Zoned;
 
+use crate::commands::hostname;
 use crate::core::ExecutionStatus;
 use crate::git::PromptGitInfo;
 
@@ -28,7 +29,7 @@ impl PromptContext {
     ) -> Self {
         Self {
             user: first_non_empty_env(&["USER", "USERNAME"]),
-            host: sysinfo::System::host_name().filter(|value| !value.trim().is_empty()),
+            host: hostname::current_hostname(),
             runtime: detect_runtime(&path),
             path,
             git,
