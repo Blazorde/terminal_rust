@@ -13,6 +13,7 @@ use crossterm::terminal::{
     enable_raw_mode,
 };
 use sysinfo::{Disks, MINIMUM_CPU_UPDATE_INTERVAL, Networks, System};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::git;
 use crate::render;
@@ -258,7 +259,10 @@ fn run_live_dashboard_with(
 ) -> io::Result<()> {
     loop {
         let snapshot = runtime.snapshot()?;
-        let mut frame = render_dashboard(&snapshot, style);
+        let mut frame_style = style;
+        frame_style.content_width =
+            terminal_content_width(terminal::size().ok(), style.content_width);
+        let mut frame = render_dashboard(&snapshot, frame_style);
         frame.push_str(" Live refresh: 1s  |  q / Esc / Ctrl+C: close\n");
         runtime.draw(&frame)?;
 
@@ -302,6 +306,7 @@ fn current_disk(disks: &Disks, current_dir: &Path) -> Option<DiskSnapshot> {
 struct DashboardStyle {
     color: bool,
     unicode: bool,
+    content_width: usize,
 }
 
 impl DashboardStyle {
@@ -312,15 +317,26 @@ impl DashboardStyle {
         Self {
             color: terminal && env::var_os("NO_COLOR").is_none() && !dumb_terminal,
             unicode: terminal && !dumb_terminal,
+            content_width: if terminal {
+                terminal_content_width(terminal::size().ok(), CONTENT_WIDTH)
+            } else {
+                CONTENT_WIDTH
+            },
         }
     }
 }
 
+fn terminal_content_width(size: Option<(u16, u16)>, fallback: usize) -> usize {
+    size.map(|(width, _)| usize::from(width).saturating_sub(2).min(CONTENT_WIDTH))
+        .unwrap_or(fallback)
+        .max(3)
+}
+
 fn render_dashboard(snapshot: &SystemSnapshot, style: DashboardStyle) -> String {
     let border = if style.unicode {
-        Border::unicode()
+        Border::unicode(style.content_width)
     } else {
-        Border::ascii()
+        Border::ascii(style.content_width)
     };
     let mut output = String::new();
 
@@ -432,6 +448,7 @@ fn render_dashboard(snapshot: &SystemSnapshot, style: DashboardStyle) -> String 
 }
 
 struct Border {
+    content_width: usize,
     top_left: char,
     top_right: char,
     bottom_left: char,
@@ -443,8 +460,9 @@ struct Border {
 }
 
 impl Border {
-    const fn unicode() -> Self {
+    const fn unicode(content_width: usize) -> Self {
         Self {
+            content_width,
             top_left: '╭',
             top_right: '╮',
             bottom_left: '╰',
@@ -456,8 +474,9 @@ impl Border {
         }
     }
 
-    const fn ascii() -> Self {
+    const fn ascii(content_width: usize) -> Self {
         Self {
+            content_width,
             top_left: '+',
             top_right: '+',
             bottom_left: '+',
@@ -470,8 +489,11 @@ impl Border {
     }
 
     fn top(&self, title: &str) -> String {
+        let title = truncate(title, self.content_width.saturating_sub(2));
         let title = format!(" {title} ");
-        let remaining = CONTENT_WIDTH.saturating_sub(title.chars().count());
+        let remaining = self
+            .content_width
+            .saturating_sub(UnicodeWidthStr::width(title.as_str()));
         format!(
             "{}{}{}{}\n",
             self.top_left,
@@ -485,15 +507,18 @@ impl Border {
         format!(
             "{}{}{}\n",
             self.bottom_left,
-            self.horizontal.to_string().repeat(CONTENT_WIDTH),
+            self.horizontal.to_string().repeat(self.content_width),
             self.bottom_right
         )
     }
 }
 
 fn section(title: &str, border: &Border, color: bool) -> String {
+    let title = truncate(title, border.content_width.saturating_sub(2));
     let content = format!(" {} ", title);
-    let remaining = CONTENT_WIDTH.saturating_sub(content.chars().count());
+    let remaining = border
+        .content_width
+        .saturating_sub(UnicodeWidthStr::width(content.as_str()));
     let line = format!(
         "{}{}{}{}",
         border.left_join,
@@ -510,16 +535,16 @@ fn section(title: &str, border: &Border, color: bool) -> String {
 }
 
 fn row(label: &str, value: &str, border: &Border) -> String {
-    let label_width = 13;
-    let value_width = CONTENT_WIDTH.saturating_sub(label_width + 3);
+    let label_width = 13.min(border.content_width.saturating_sub(9));
+    let value_width = border.content_width.saturating_sub(label_width + 3);
+    let label = truncate(&border_label(label), label_width);
     let value = truncate(value, value_width);
+    let value_padding =
+        " ".repeat(value_width.saturating_sub(UnicodeWidthStr::width(value.as_str())));
 
     format!(
-        "{} {:<label_width$} {:<value_width$} {}\n",
-        border.vertical,
-        border_label(label),
-        value,
-        border.vertical
+        "{} {:<label_width$} {}{} {}\n",
+        border.vertical, label, value, value_padding, border.vertical
     )
 }
 
@@ -531,23 +556,31 @@ fn meter_row(
     unicode: bool,
 ) -> String {
     let percent = percent.clamp(0.0, 100.0);
-    let bar = progress_bar(percent, unicode);
+    let label_width = 13.min(border.content_width.saturating_sub(9));
+    let value_width = border.content_width.saturating_sub(label_width + 3);
+    let bar_width = value_width.saturating_sub(7).min(BAR_WIDTH);
+    let bar = progress_bar(percent, unicode, bar_width);
     let detail = detail.map_or_else(String::new, |detail| format!("  {detail}"));
-    row(label, &format!("{bar} {percent:>5.1}%{detail}"), border)
+    let value = if bar_width == 0 {
+        format!("{percent:>5.1}%{detail}")
+    } else {
+        format!("{bar} {percent:>5.1}%{detail}")
+    };
+    row(label, &value, border)
 }
 
 fn border_label(label: &str) -> String {
     format!("{label}:")
 }
 
-fn progress_bar(percent: f64, unicode: bool) -> String {
-    let filled = ((percent.clamp(0.0, 100.0) / 100.0) * BAR_WIDTH as f64).round() as usize;
+fn progress_bar(percent: f64, unicode: bool, width: usize) -> String {
+    let filled = ((percent.clamp(0.0, 100.0) / 100.0) * width as f64).round() as usize;
     let (full, empty) = if unicode { ('█', '░') } else { ('#', '.') };
 
     format!(
         "{}{}",
-        full.to_string().repeat(filled.min(BAR_WIDTH)),
-        empty.to_string().repeat(BAR_WIDTH.saturating_sub(filled))
+        full.to_string().repeat(filled.min(width)),
+        empty.to_string().repeat(width.saturating_sub(filled))
     )
 }
 
@@ -590,16 +623,25 @@ pub fn format_duration(seconds: u64) -> String {
     }
 }
 
-fn truncate(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
+fn truncate(value: &str, max_width: usize) -> String {
+    if UnicodeWidthStr::width(value) <= max_width {
         return value.to_string();
     }
 
-    if max_chars <= 3 {
-        return ".".repeat(max_chars);
+    if max_width <= 3 {
+        return ".".repeat(max_width);
     }
 
-    let mut result: String = value.chars().take(max_chars - 3).collect();
+    let mut result = String::new();
+    let mut width = 0;
+    for character in value.chars() {
+        let character_width = UnicodeWidthChar::width(character).unwrap_or(0);
+        if width + character_width > max_width - 3 {
+            break;
+        }
+        result.push(character);
+        width += character_width;
+    }
     result.push_str("...");
     result
 }
@@ -643,6 +685,7 @@ mod tests {
             DashboardStyle {
                 color: false,
                 unicode: false,
+                content_width: CONTENT_WIDTH,
             },
         );
 
@@ -664,8 +707,8 @@ mod tests {
 
     #[test]
     fn clamps_progress_bar_percentage() {
-        assert_eq!(progress_bar(-1.0, false), ".".repeat(BAR_WIDTH));
-        assert_eq!(progress_bar(101.0, false), "#".repeat(BAR_WIDTH));
+        assert_eq!(progress_bar(-1.0, false, BAR_WIDTH), ".".repeat(BAR_WIDTH));
+        assert_eq!(progress_bar(101.0, false, BAR_WIDTH), "#".repeat(BAR_WIDTH));
     }
 
     #[test]
@@ -675,6 +718,7 @@ mod tests {
 
         assert_eq!(truncated, "aaaaaaa...");
         assert_eq!(truncated.chars().count(), 10);
+        assert_eq!(truncate("東京東京東京", 7), "東京...");
     }
 
     #[test]
@@ -730,6 +774,16 @@ mod tests {
             false,
             Some((60, 20))
         ));
+    }
+
+    #[test]
+    fn dashboard_content_width_tracks_available_terminal_columns() {
+        assert_eq!(terminal_content_width(Some((69, 24)), CONTENT_WIDTH), 67);
+        assert_eq!(
+            terminal_content_width(Some((120, 40)), CONTENT_WIDTH),
+            CONTENT_WIDTH
+        );
+        assert_eq!(terminal_content_width(None, CONTENT_WIDTH), CONTENT_WIDTH);
     }
 
     #[test]
@@ -798,6 +852,7 @@ mod tests {
             DashboardStyle {
                 color: false,
                 unicode: false,
+                content_width: CONTENT_WIDTH,
             },
         )
         .expect("fake live dashboard should exit cleanly");
@@ -821,17 +876,45 @@ mod tests {
             DashboardStyle {
                 color: false,
                 unicode: false,
+                content_width: CONTENT_WIDTH,
             },
         );
 
-        let expected_width = output.lines().next().unwrap().chars().count();
+        let expected_width = UnicodeWidthStr::width(output.lines().next().unwrap());
 
         for line in output.lines() {
             assert_eq!(
-                line.chars().count(),
+                UnicodeWidthStr::width(line),
                 expected_width,
                 "misaligned line: {line}"
             );
+        }
+    }
+
+    #[test]
+    fn dashboard_fits_narrow_terminals_and_unicode_paths() {
+        let mut data = snapshot();
+        data.current_dir = PathBuf::from("/projets/東京");
+        for content_width in [38, 18] {
+            let output = render_dashboard(
+                &data,
+                DashboardStyle {
+                    color: false,
+                    unicode: true,
+                    content_width,
+                },
+            );
+
+            for line in output.lines() {
+                assert_eq!(
+                    UnicodeWidthStr::width(line),
+                    content_width + 2,
+                    "line exceeds narrow terminal width: {line}"
+                );
+            }
+            if content_width == 18 {
+                assert!(output.contains("42.0%"));
+            }
         }
     }
 
