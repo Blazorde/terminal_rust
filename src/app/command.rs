@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::app::help;
 use crate::commands::{
     cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
-    whoami, arch, nproc, uptime,
+    whoami, hostname, arch, nproc, uptime,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -201,6 +201,19 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "display the system uptime",
         max_args: Some(0),
         handler: run_uptime,
+        name: "date",
+        usage: "date [format]",
+        summary: "display the current date",
+        max_args: Some(1),
+        handler: run_date,
+    },
+    CommandSpec {
+        name: "hostname",
+        usage: "hostname",
+        summary: "display the system hostname",
+        max_args: Some(0),
+        handler: run_hostname,
+    },
     },
     CommandSpec {
         name: "quit",
@@ -320,6 +333,14 @@ fn run_uptime(_args: &[String], _state: &mut ShellState) -> CommandResult {
 
 fn run_nproc(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("nproc", nproc::nproc())
+}
+
+fn run_date(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("date", date::date(args))
+}
+
+fn run_hostname(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("hostname", hostname::hostname())
 }
 
 fn run_whoami(_args: &[String], _state: &mut ShellState) -> CommandResult {

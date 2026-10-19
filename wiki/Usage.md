@@ -19,6 +19,8 @@ Run `help` inside Terminal Rust for the authoritative command list.
 | `arch` | Prints the system architecture. |
 | `nproc` | Prints the number of processing units available. |
 | `uptime` | Prints how long the system has been running. |
+| `date [format]` | Prints the current date and time. |
+| `hostname` | Prints the name of the current host.  |
 | `exit`, `quit` | Close the session |
 
 ## Paths containing spaces
