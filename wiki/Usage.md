@@ -16,8 +16,17 @@ Run `help` inside Terminal Rust for the authoritative command list.
 | `commands help` | Explain custom commands and where to configure them |
 | `echo [-n] [text...]` | Print text, without a trailing newline with `-n` |
 | `whoami` | Prints the username of the current user. |
+| `arch` | Prints the system architecture. |
+| `nproc` | Prints the number of processing units available. |
+| `uptime` | Prints how long the system has been running. |
+| `date [format]` | Prints the current date and time. |
+| `hostname` | Prints the name of the current host.  |
+| `nano`, `nvim`, `neovim` | Open a terminal editor; `neovim` aliases `nvim`. |
 | `printenv [var]` | Prints the environment variables.  |
 | `exit`, `quit` | Close the session |
+
+Install [Blazorde's Neovim configuration](Neovim) to use the editor with the
+published CodeOpsHQ setup.
 
 ## Paths containing spaces
 

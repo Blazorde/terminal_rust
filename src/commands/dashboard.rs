@@ -13,15 +13,17 @@ use crossterm::terminal::{
     enable_raw_mode,
 };
 use sysinfo::{Disks, MINIMUM_CPU_UPDATE_INTERVAL, Networks, System};
+#[cfg(test)]
+use unicode_width::UnicodeWidthStr;
 
 use crate::git;
 use crate::render;
 
+mod view;
+
+use view::{DashboardStyle, render_dashboard, terminal_content_width};
+
 const CONTENT_WIDTH: usize = 68;
-const BAR_WIDTH: usize = 18;
-const CYAN: &str = "\u{1b}[36m";
-const BOLD: &str = "\u{1b}[1m";
-const RESET: &str = "\u{1b}[0m";
 const LIVE_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 const MIN_LIVE_WIDTH: u16 = (CONTENT_WIDTH + 2) as u16;
 const MIN_LIVE_HEIGHT: u16 = 24;
@@ -258,7 +260,10 @@ fn run_live_dashboard_with(
 ) -> io::Result<()> {
     loop {
         let snapshot = runtime.snapshot()?;
-        let mut frame = render_dashboard(&snapshot, style);
+        let mut frame_style = style;
+        frame_style.content_width =
+            terminal_content_width(terminal::size().ok(), style.content_width);
+        let mut frame = render_dashboard(&snapshot, frame_style);
         frame.push_str(" Live refresh: 1s  |  q / Esc / Ctrl+C: close\n");
         runtime.draw(&frame)?;
 
@@ -298,316 +303,13 @@ fn current_disk(disks: &Disks, current_dir: &Path) -> Option<DiskSnapshot> {
     })
 }
 
-#[derive(Clone, Copy)]
-struct DashboardStyle {
-    color: bool,
-    unicode: bool,
-}
-
-impl DashboardStyle {
-    fn detect() -> Self {
-        let terminal = io::stdout().is_terminal() || env::var_os("TERMINAL_RUST_GUI").is_some();
-        let dumb_terminal = env::var("TERM").is_ok_and(|term| term == "dumb");
-
-        Self {
-            color: terminal && env::var_os("NO_COLOR").is_none() && !dumb_terminal,
-            unicode: terminal && !dumb_terminal,
-        }
-    }
-}
-
-fn render_dashboard(snapshot: &SystemSnapshot, style: DashboardStyle) -> String {
-    let border = if style.unicode {
-        Border::unicode()
-    } else {
-        Border::ascii()
-    };
-    let mut output = String::new();
-
-    output.push_str(&border.top("TERMINAL RUST / SYSTEM DASHBOARD"));
-    output.push_str(&section("SYSTEM", &border, style.color));
-    output.push_str(&row("Host", &snapshot.host, &border));
-    output.push_str(&row("OS", &snapshot.os, &border));
-    output.push_str(&row("Kernel", &snapshot.kernel, &border));
-    output.push_str(&row(
-        "Uptime",
-        &format_duration(snapshot.uptime_seconds),
-        &border,
-    ));
-
-    output.push_str(&section("PERFORMANCE", &border, style.color));
-    output.push_str(&row("CPU", &snapshot.cpu_name, &border));
-    let core_count = match snapshot.physical_cores {
-        Some(physical) => format!("{physical} physical / {} logical", snapshot.logical_cores),
-        None => format!("{} logical", snapshot.logical_cores),
-    };
-    output.push_str(&row("Cores", &core_count, &border));
-    output.push_str(&meter_row(
-        "CPU usage",
-        f64::from(snapshot.cpu_usage),
-        None,
-        &border,
-        style.unicode,
-    ));
-    output.push_str(&meter_row(
-        "Memory",
-        percentage(snapshot.memory_used, snapshot.memory_total),
-        Some(format!(
-            "{} / {}",
-            format_bytes(snapshot.memory_used),
-            format_bytes(snapshot.memory_total)
-        )),
-        &border,
-        style.unicode,
-    ));
-    if snapshot.swap_total > 0 {
-        output.push_str(&meter_row(
-            "Swap",
-            percentage(snapshot.swap_used, snapshot.swap_total),
-            Some(format!(
-                "{} / {}",
-                format_bytes(snapshot.swap_used),
-                format_bytes(snapshot.swap_total)
-            )),
-            &border,
-            style.unicode,
-        ));
-    }
-    output.push_str(&row(
-        "Processes",
-        &snapshot.process_count.to_string(),
-        &border,
-    ));
-
-    output.push_str(&section("STORAGE & NETWORK", &border, style.color));
-    if let Some(disk) = &snapshot.disk {
-        output.push_str(&row(
-            "Disk",
-            &disk.mount_point.display().to_string(),
-            &border,
-        ));
-        output.push_str(&meter_row(
-            "Disk usage",
-            percentage(disk.used, disk.total),
-            Some(format!(
-                "{} / {}",
-                format_bytes(disk.used),
-                format_bytes(disk.total)
-            )),
-            &border,
-            style.unicode,
-        ));
-    } else {
-        output.push_str(&row("Disk", "unavailable", &border));
-    }
-    output.push_str(&row(
-        "Network in",
-        &format!("{} total", format_bytes(snapshot.network_received)),
-        &border,
-    ));
-    output.push_str(&row(
-        "Network out",
-        &format!("{} total", format_bytes(snapshot.network_transmitted)),
-        &border,
-    ));
-
-    output.push_str(&section("CONTEXT", &border, style.color));
-    output.push_str(&row(
-        "Directory",
-        &snapshot.current_dir.display().to_string(),
-        &border,
-    ));
-    output.push_str(&row(
-        "Git",
-        if snapshot.inside_git_repository {
-            "repository detected"
-        } else {
-            "outside repository or Git unavailable"
-        },
-        &border,
-    ));
-    output.push_str(&border.bottom());
-
-    output
-}
-
-struct Border {
-    top_left: char,
-    top_right: char,
-    bottom_left: char,
-    bottom_right: char,
-    horizontal: char,
-    vertical: char,
-    left_join: char,
-    right_join: char,
-}
-
-impl Border {
-    const fn unicode() -> Self {
-        Self {
-            top_left: '╭',
-            top_right: '╮',
-            bottom_left: '╰',
-            bottom_right: '╯',
-            horizontal: '─',
-            vertical: '│',
-            left_join: '├',
-            right_join: '┤',
-        }
-    }
-
-    const fn ascii() -> Self {
-        Self {
-            top_left: '+',
-            top_right: '+',
-            bottom_left: '+',
-            bottom_right: '+',
-            horizontal: '-',
-            vertical: '|',
-            left_join: '+',
-            right_join: '+',
-        }
-    }
-
-    fn top(&self, title: &str) -> String {
-        let title = format!(" {title} ");
-        let remaining = CONTENT_WIDTH.saturating_sub(title.chars().count());
-        format!(
-            "{}{}{}{}\n",
-            self.top_left,
-            title,
-            self.horizontal.to_string().repeat(remaining),
-            self.top_right
-        )
-    }
-
-    fn bottom(&self) -> String {
-        format!(
-            "{}{}{}\n",
-            self.bottom_left,
-            self.horizontal.to_string().repeat(CONTENT_WIDTH),
-            self.bottom_right
-        )
-    }
-}
-
-fn section(title: &str, border: &Border, color: bool) -> String {
-    let content = format!(" {} ", title);
-    let remaining = CONTENT_WIDTH.saturating_sub(content.chars().count());
-    let line = format!(
-        "{}{}{}{}",
-        border.left_join,
-        content,
-        border.horizontal.to_string().repeat(remaining),
-        border.right_join
-    );
-
-    if color {
-        format!("{BOLD}{CYAN}{line}{RESET}\n")
-    } else {
-        format!("{line}\n")
-    }
-}
-
-fn row(label: &str, value: &str, border: &Border) -> String {
-    let label_width = 13;
-    let value_width = CONTENT_WIDTH.saturating_sub(label_width + 3);
-    let value = truncate(value, value_width);
-
-    format!(
-        "{} {:<label_width$} {:<value_width$} {}\n",
-        border.vertical,
-        border_label(label),
-        value,
-        border.vertical
-    )
-}
-
-fn meter_row(
-    label: &str,
-    percent: f64,
-    detail: Option<String>,
-    border: &Border,
-    unicode: bool,
-) -> String {
-    let percent = percent.clamp(0.0, 100.0);
-    let bar = progress_bar(percent, unicode);
-    let detail = detail.map_or_else(String::new, |detail| format!("  {detail}"));
-    row(label, &format!("{bar} {percent:>5.1}%{detail}"), border)
-}
-
-fn border_label(label: &str) -> String {
-    format!("{label}:")
-}
-
-fn progress_bar(percent: f64, unicode: bool) -> String {
-    let filled = ((percent.clamp(0.0, 100.0) / 100.0) * BAR_WIDTH as f64).round() as usize;
-    let (full, empty) = if unicode { ('█', '░') } else { ('#', '.') };
-
-    format!(
-        "{}{}",
-        full.to_string().repeat(filled.min(BAR_WIDTH)),
-        empty.to_string().repeat(BAR_WIDTH.saturating_sub(filled))
-    )
-}
-
-fn percentage(used: u64, total: u64) -> f64 {
-    if total == 0 {
-        0.0
-    } else {
-        used as f64 * 100.0 / total as f64
-    }
-}
-
-fn format_bytes(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
-    let mut value = bytes as f64;
-    let mut unit = 0;
-
-    while value >= 1024.0 && unit < UNITS.len() - 1 {
-        value /= 1024.0;
-        unit += 1;
-    }
-
-    if unit == 0 {
-        format!("{bytes} {}", UNITS[unit])
-    } else {
-        format!("{value:.1} {}", UNITS[unit])
-    }
-}
-
-fn format_duration(seconds: u64) -> String {
-    let days = seconds / 86_400;
-    let hours = seconds % 86_400 / 3_600;
-    let minutes = seconds % 3_600 / 60;
-
-    if days > 0 {
-        format!("{days}d {hours}h {minutes}m")
-    } else if hours > 0 {
-        format!("{hours}h {minutes}m")
-    } else {
-        format!("{minutes}m")
-    }
-}
-
-fn truncate(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        return value.to_string();
-    }
-
-    if max_chars <= 3 {
-        return ".".repeat(max_chars);
-    }
-
-    let mut result: String = value.chars().take(max_chars - 3).collect();
-    result.push_str("...");
-    result
-}
+pub use view::format_duration;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::VecDeque;
+    use view::{BAR_WIDTH, format_bytes, progress_bar, truncate};
 
     fn snapshot() -> SystemSnapshot {
         SystemSnapshot {
@@ -643,6 +345,7 @@ mod tests {
             DashboardStyle {
                 color: false,
                 unicode: false,
+                content_width: CONTENT_WIDTH,
             },
         );
 
@@ -664,8 +367,8 @@ mod tests {
 
     #[test]
     fn clamps_progress_bar_percentage() {
-        assert_eq!(progress_bar(-1.0, false), ".".repeat(BAR_WIDTH));
-        assert_eq!(progress_bar(101.0, false), "#".repeat(BAR_WIDTH));
+        assert_eq!(progress_bar(-1.0, false, BAR_WIDTH), ".".repeat(BAR_WIDTH));
+        assert_eq!(progress_bar(101.0, false, BAR_WIDTH), "#".repeat(BAR_WIDTH));
     }
 
     #[test]
@@ -675,6 +378,7 @@ mod tests {
 
         assert_eq!(truncated, "aaaaaaa...");
         assert_eq!(truncated.chars().count(), 10);
+        assert_eq!(truncate("東京東京東京", 7), "東京...");
     }
 
     #[test]
@@ -730,6 +434,16 @@ mod tests {
             false,
             Some((60, 20))
         ));
+    }
+
+    #[test]
+    fn dashboard_content_width_tracks_available_terminal_columns() {
+        assert_eq!(terminal_content_width(Some((69, 24)), CONTENT_WIDTH), 67);
+        assert_eq!(
+            terminal_content_width(Some((120, 40)), CONTENT_WIDTH),
+            CONTENT_WIDTH
+        );
+        assert_eq!(terminal_content_width(None, CONTENT_WIDTH), CONTENT_WIDTH);
     }
 
     #[test]
@@ -798,6 +512,7 @@ mod tests {
             DashboardStyle {
                 color: false,
                 unicode: false,
+                content_width: CONTENT_WIDTH,
             },
         )
         .expect("fake live dashboard should exit cleanly");
@@ -821,17 +536,45 @@ mod tests {
             DashboardStyle {
                 color: false,
                 unicode: false,
+                content_width: CONTENT_WIDTH,
             },
         );
 
-        let expected_width = output.lines().next().unwrap().chars().count();
+        let expected_width = UnicodeWidthStr::width(output.lines().next().unwrap());
 
         for line in output.lines() {
             assert_eq!(
-                line.chars().count(),
+                UnicodeWidthStr::width(line),
                 expected_width,
                 "misaligned line: {line}"
             );
+        }
+    }
+
+    #[test]
+    fn dashboard_fits_narrow_terminals_and_unicode_paths() {
+        let mut data = snapshot();
+        data.current_dir = PathBuf::from("/projets/東京");
+        for content_width in [38, 18] {
+            let output = render_dashboard(
+                &data,
+                DashboardStyle {
+                    color: false,
+                    unicode: true,
+                    content_width,
+                },
+            );
+
+            for line in output.lines() {
+                assert_eq!(
+                    UnicodeWidthStr::width(line),
+                    content_width + 2,
+                    "line exceeds narrow terminal width: {line}"
+                );
+            }
+            if content_width == 18 {
+                assert!(output.contains("42.0%"));
+            }
         }
     }
 

@@ -64,6 +64,11 @@ user PATH if desired. To install the GUI, open the platform bundle under
 code-signed or notarized; verify their origin before granting a one-time
 allowance. Never disable Windows protection or macOS Gatekeeper globally.
 
+The desktop installer includes Git, Nano and Neovim with their runtime files.
+They are installed into the per-user application data directory the first time
+a desktop terminal session starts. The standalone CLI archive uses programs
+already available in `PATH`.
+
 ## Build from source
 
 ```bash

@@ -625,6 +625,7 @@ fn echo_prints_the_given_text() {
     assert_eq!(reported_text, "Hello, World!");
 }
 
+#[test]
 fn native_git_commands_work_from_a_path_with_spaces_and_unicode() {
     let directory = TestDirectory::new("git repo with spaces été");
     let git_available = Command::new("git")

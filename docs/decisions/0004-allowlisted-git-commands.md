@@ -1,6 +1,6 @@
 # ADR-0004 — Allowlist built-in Git operations
 
-- Status: Accepted
+- Status: Superseded by [ADR-0007](0007-full-native-git-and-editors.md)
 - Date: 2026-10-09
 
 ## Context

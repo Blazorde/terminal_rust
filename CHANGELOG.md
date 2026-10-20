@@ -7,8 +7,17 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Bundled Git, Nano and Neovim into desktop releases so full Git workflows and
+  editor commands work without separate installations.
+- Added `nano`, `nvim` and `neovim` commands and made the bundled editors
+  available to Git's configured interactive editor.
 - Added an `echo` command that prints its arguments separated by spaces.
 - Added a whoami command that prints the current user’s username.
+- Added an arch command that prints the system architecture.
+- Added an nproc command that prints the number of available processing units.
+- Added an uptime command that prints how long the system has been running.
+- Added a date command that prints the current date and time.
+- Added a hostname command that prints the current host’s name.
 - Added a printenv command that prints the environment variables.
 
 ## [1.0.0-alpha.1] - 2026-10-13

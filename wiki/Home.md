@@ -9,6 +9,7 @@ PTY sessions; the browser preview is not a command runner.
 - [[Installation]] — install the alpha, build from source or launch the native window.
 - [[Usage]] — commands, completion, dashboard and desktop shortcuts.
 - [[Configuration]] — prompt segments, themes, icons and custom commands.
+- [[Neovim]] — download and install Blazorde's Neovim configuration.
 - [[Architecture]] — boundaries between the engine, renderer and desktop UI.
 - [[Plugins]] — current declarative plugin model and its limits.
 - [[Development]] — open-source contribution workflow and quality gates.
