@@ -236,34 +236,6 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_whoami,
     },
     CommandSpec {
-        name: "hostname",
-        usage: "hostname",
-        summary: "display the system hostname",
-        max_args: Some(0),
-        handler: run_hostname,
-    },
-    CommandSpec {
-        name: "date",
-        usage: "date [format]",
-        summary: "display the current date and time",
-        max_args: Some(1),
-        handler: run_date,
-    },
-    CommandSpec {
-        name: "uptime",
-        usage: "uptime",
-        summary: "display system uptime",
-        max_args: Some(0),
-        handler: run_uptime,
-    },
-    CommandSpec {
-        name: "nproc",
-        usage: "nproc",
-        summary: "display the number of available CPU cores",
-        max_args: Some(0),
-        handler: run_nproc,
-    },
-    CommandSpec {
         name: "arch",
         usage: "arch",
         summary: "display the system architecture",
@@ -271,25 +243,53 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_arch,
     },
     CommandSpec {
-        name: "nano",
-        usage: "nano [file]",
-        summary: "open the Nano text editor",
+        name: "nproc",
+        usage: "nproc",
+        summary: "display the number of available processors",
+        max_args: Some(0),
+        handler: run_nproc,
+    },
+    CommandSpec {
+        name: "uptime",
+        usage: "uptime",
+        summary: "display the system uptime",
+        max_args: Some(0),
+        handler: run_uptime,
+    },
+    CommandSpec {
+        name: "date",
+        usage: "date [format]",
+        summary: "display the current date",
         max_args: Some(1),
+        handler: run_date,
+    },
+    CommandSpec {
+        name: "nano",
+        usage: "nano [file...]",
+        summary: "edit files with Nano",
+        max_args: None,
         handler: run_nano,
     },
     CommandSpec {
         name: "nvim",
-        usage: "nvim [file]",
-        summary: "open the Neovim text editor",
-        max_args: Some(1),
+        usage: "nvim [file...]",
+        summary: "edit files with Neovim",
+        max_args: None,
         handler: run_nvim,
     },
     CommandSpec {
         name: "neovim",
-        usage: "neovim [file]",
+        usage: "neovim [file...]",
         summary: "alias for nvim",
-        max_args: Some(1),
+        max_args: None,
         handler: run_neovim,
+    },
+    CommandSpec {
+        name: "hostname",
+        usage: "hostname",
+        summary: "display the system hostname",
+        max_args: Some(0),
+        handler: run_hostname,
     },
     CommandSpec {
         name: "printenv",
@@ -424,6 +424,10 @@ fn run_date(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("date", date::date(args))
 }
 
+fn run_printenv(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("printenv", printenv::printenv(args))
+}
+
 fn run_nano(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_display_error(editor::run("nano", "nano", args))
 }
@@ -460,10 +464,6 @@ fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
 
 fn run_echo(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("echo", echo::echo(args))
-}
-
-fn run_printenv(args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_prefixed_error("printenv", printenv::printenv(args))
 }
 
 fn run_ls(args: &[String], _state: &mut ShellState) -> CommandResult {
