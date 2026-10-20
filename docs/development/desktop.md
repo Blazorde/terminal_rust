@@ -109,7 +109,10 @@ or native settings need to be tested.
 
 The product target is a compiled Rust desktop UI without a WebView. The
 experimental application lives in `desktop/native-prototype/` and does not
-replace the Tauri app yet. It uses `eframe`/`egui`, the `egui_tty` terminal
+replace the supported Tauri app. Use it to evaluate a Rust-only desktop UI,
+not as the normal way to run Terminal Rust: it has one shell session and lacks
+the production app's tabs, full settings UI, accessibility review, packaging
+and cross-platform validation. It uses `eframe`/`egui`, the `egui_tty` terminal
 widget, Ghostty's VT engine and the existing Rust interactive runner over a
 real `portable-pty` session.
 
@@ -144,10 +147,8 @@ native window watches that file for changes.
 
 The prototype has one real shell session, selection-to-copy and right-click
 paste. Its right-click paste strips terminal control characters and wraps text
-in bracketed-paste markers. It does not yet have the production app's tabs,
-full settings UI, accessibility review, packaging, OS default-terminal
-registration or cross-platform validation. Keep using the Tauri app for normal
-desktop use.
+in bracketed-paste markers. It also lacks OS default-terminal registration.
+Keep using the Tauri app for normal desktop use.
 
 The prototype's Rust entry point delegates argument handling to `launch.rs`,
 window and rendering behavior to `app.rs`, and PTY lifecycle and input to
