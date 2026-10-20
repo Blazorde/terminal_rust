@@ -36,15 +36,31 @@ same behavior.
 
 ## Quick start
 
+From the repository root, choose how you want to use Terminal Rust:
+
+| Mode | Command | Use it when |
+| --- | --- | --- |
+| **Interactive shell (CLI)** | `cargo run` | You want the shell in the current PowerShell/terminal window. Type `help` to see commands; use `exit` to leave. |
+| **One command (CLI)** | `cargo run -- dashboard` | You want to run a command once and return to your existing terminal. Replace `dashboard` with another Terminal Rust command. |
+| **Desktop app (Tauri)** | `npm run tauri --prefix desktop -- dev` | You want the supported native window, with real terminal sessions, tabs and settings. Install the [desktop prerequisites](docs/development/desktop.md#prerequisites) first; run `npm ci --prefix desktop` once to install its frontend dependencies. |
+| **Native UI prototype** | `cargo run -p terminal-rust-native-prototype` | You want to try the experimental Rust-only desktop UI. It requires Zig 0.15.x and is not a replacement for the Tauri app; see the [prototype notes](docs/development/desktop.md#native-ui-migration-prototype). |
+| **Browser UI preview** | `npm run dev --prefix desktop` | You are working on the frontend layout only. It does not start a real shell or execute commands. |
+
+The Rust commands require stable Rust and Cargo. For the desktop app, follow
+the Tauri prerequisites linked above.
+
+### CLI examples
+
 ```bash
 git clone https://github.com/Blazorde/terminal_rust.git
 cd terminal_rust
 cargo run
 ```
 
-Run `help` inside the shell for the authoritative command list. Useful starting
-points include `dashboard`, `theme list`, `plugins list` and `exit`. A command
-can also run without an interactive session:
+The last command starts the interactive shell in the current terminal. Run
+`help` inside it for the authoritative command list. Useful starting points
+include `dashboard`, `theme list`, `plugins list` and `exit`. To run a command
+without starting an interactive session:
 
 ```bash
 cargo run -- pwd
@@ -52,10 +68,10 @@ cargo run -- ls -la
 cargo run -- dashboard
 ```
 
-### Launch the desktop window
+### Launch the supported desktop window
 
 Install the [Tauri prerequisites](docs/development/desktop.md#prerequisites),
-then run:
+then install the frontend dependencies once and launch:
 
 ```bash
 npm ci --prefix desktop
@@ -63,7 +79,9 @@ npm run tauri --prefix desktop -- dev
 ```
 
 This opens the native application and real PTY sessions. The browser-only
-`npm run dev --prefix desktop` preview cannot execute commands.
+`npm run dev --prefix desktop` preview is for frontend layout work and cannot
+execute commands. The separate native UI prototype is experimental; see its
+[development notes](docs/development/desktop.md#native-ui-migration-prototype).
 
 ## Download the alpha
 
