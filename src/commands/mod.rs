@@ -14,6 +14,7 @@ pub mod ls;
 pub mod mkdir;
 pub mod nproc;
 pub mod plugins;
+pub mod printenv;
 pub mod pwd;
 pub mod rm;
 pub mod theme;

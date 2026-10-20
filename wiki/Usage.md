@@ -22,6 +22,7 @@ Run `help` inside Terminal Rust for the authoritative command list.
 | `date [format]` | Prints the current date and time. |
 | `hostname` | Prints the name of the current host.  |
 | `nano`, `nvim`, `neovim` | Open a terminal editor; `neovim` aliases `nvim`. |
+| `printenv [var]` | Prints the environment variables.  |
 | `exit`, `quit` | Close the session |
 
 Install [Blazorde's Neovim configuration](Neovim) to use the editor with the

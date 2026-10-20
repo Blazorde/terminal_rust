@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::app::help;
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, fastfetch, git_command,
-    hostname, ls, mkdir, nproc, plugins, pwd, rm, theme, touch, uptime, user, whoami,
+    hostname, ls, mkdir, nproc, plugins, pwd, rm, theme, touch, uptime, user, whoami, printenv,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -292,6 +292,13 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_hostname,
     },
     CommandSpec {
+        name: "printenv",
+        usage: "printenv [variable]",
+        summary: "display environment variables",
+        max_args: Some(1),
+        handler: run_printenv,
+    },
+    CommandSpec {
         name: "quit",
         usage: "quit",
         summary: "close the terminal",
@@ -415,6 +422,10 @@ fn run_nproc(_args: &[String], _state: &mut ShellState) -> CommandResult {
 
 fn run_date(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("date", date::date(args))
+}
+
+fn run_printenv(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("printenv", printenv::printenv(args))
 }
 
 fn run_nano(args: &[String], _state: &mut ShellState) -> CommandResult {
