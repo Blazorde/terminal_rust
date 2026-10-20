@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
-    whoami,
+    cat, cd, clear, dashboard, echo, git_command, ls, mkdir, plugins, printenv, pwd, rm, theme,
+    touch, user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -182,6 +182,13 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_whoami,
     },
     CommandSpec {
+        name: "printenv",
+        usage: "printenv [variable...]",
+        summary: "print environment variables",
+        max_args: None,
+        handler: run_printenv,
+    },
+    CommandSpec {
         name: "quit",
         usage: "quit",
         summary: "close the terminal",
@@ -309,6 +316,10 @@ fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
 
 fn run_echo(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("echo", echo::echo(args))
+}
+
+fn run_printenv(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("printenv", printenv::printenv(args))
 }
 
 fn run_ls(args: &[String], _state: &mut ShellState) -> CommandResult {
