@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 arboard = "3.6"
-eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
 egui_tty = "0.2"
 portable-pty = "0.9"
 terminal_rust = { path = "../.." }
