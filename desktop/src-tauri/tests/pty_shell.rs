@@ -164,9 +164,22 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
         &mut cursor_answered,
     );
     writer
-        .write_all(b"echo multiline `\rline\r")
+        .write_all(b"echo multiline `\r")
         .and_then(|()| writer.flush())
         .expect("multiline command should reach the PTY");
+    // Type the next line only once the continuation prompt is shown: the line
+    // editor discards input typed ahead while it re-arms the terminal.
+    wait_for_output(
+        &receiver,
+        &mut output,
+        ">> ",
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+    writer
+        .write_all(b"line\r")
+        .and_then(|()| writer.flush())
+        .expect("continuation line should reach the PTY");
     wait_for_output(
         &receiver,
         &mut output,
