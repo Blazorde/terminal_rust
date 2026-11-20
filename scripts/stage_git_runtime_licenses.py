@@ -58,7 +58,7 @@ def main() -> int:
                 relative = license_file.relative_to(source)
                 target = destination / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(license_file, target)
+                shutil.copyfile(license_file, target)
                 copied_files.append(target.relative_to(output).as_posix())
 
         if name in {"git", "nvim", "nano"} and not copied_files:
