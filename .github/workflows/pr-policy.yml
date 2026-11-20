@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout trusted policy files
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.base_ref }}
 
@@ -44,7 +44,7 @@ jobs:
             exit 0
           fi
 
-          allowed_work_branch_regex='^(feat|fix|chore|refractor|hotfix)/[a-z0-9][a-z0-9._-]*$'
+          allowed_work_branch_regex='^(feat|fix|chore|refactor|hotfix)/[a-z0-9][a-z0-9._-]*$'
 
           if [[ "${BASE_BRANCH}" == "main" ]]; then
             if [[ "${HEAD_BRANCH}" != "develop" ]]; then
@@ -56,7 +56,7 @@ jobs:
 
           if [[ "${BASE_BRANCH}" == "develop" ]]; then
             if [[ ! "${HEAD_BRANCH}" =~ ${allowed_work_branch_regex} ]]; then
-              echo "::error::develop only accepts PRs from feat/*, fix/*, chore/*, refractor/*, or hotfix/* branches."
+              echo "::error::develop only accepts PRs from feat/*, fix/*, chore/*, refactor/*, or hotfix/* branches."
               exit 1
             fi
             exit 0

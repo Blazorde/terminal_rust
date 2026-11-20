@@ -14,6 +14,7 @@ export interface DesktopSettings {
   cursorBlink: boolean
   windowDensity: WindowDensity
   showStatusBar: boolean
+  showFastfetchOnStartup: boolean
 }
 
 export interface SettingsLoad {
@@ -31,6 +32,7 @@ export const defaultSettings: DesktopSettings = {
   cursorBlink: true,
   windowDensity: 'comfortable',
   showStatusBar: true,
+  showFastfetchOnStartup: false,
 }
 
 export const fontStacks: Record<FontFamily, string> = {

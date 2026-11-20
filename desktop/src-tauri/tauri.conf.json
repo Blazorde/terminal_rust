@@ -1,10 +1,10 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Terminal Rust",
-  "version": "1.0.0-alpha.1",
+  "version": "1.1.0",
   "identifier": "dev.terminal-rust.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npm run prepare:dev-nano && npm run dev",
     "devUrl": "http://127.0.0.1:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
@@ -46,7 +46,15 @@
     "resources": {
       "../../LICENSE": "LICENSE",
       "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "resources/": "resources/",
       "../../config/": "config/"
+    },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "linux/terminal-rust.desktop",
+        "postInstallScript": "linux/postinst.sh",
+        "preRemoveScript": "linux/prerm.sh"
+      }
     }
   }
 }

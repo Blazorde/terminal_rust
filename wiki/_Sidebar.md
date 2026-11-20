@@ -2,8 +2,10 @@
 
 - [[Home]]
 - [[Installation]]
+- [[Linux]]
 - [[Usage]]
 - [[Configuration]]
+- [[Neovim]]
 - [[Architecture]]
 - [[Plugins]]
 - [[Development]]

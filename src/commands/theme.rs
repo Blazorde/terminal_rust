@@ -57,9 +57,15 @@ fn preview(args: &[String]) -> Result<(), ThemeCommandError> {
         return Err(ThemeCommandError::TooManyArguments);
     }
 
-    let rendered =
-        theme::preview(name, io::stdout().is_terminal()).map_err(ThemeCommandError::Theme)?;
-    render::stdout(format!("Theme: {name}\n{rendered}\n")).map_err(ThemeCommandError::Output)
+    let is_terminal = io::stdout().is_terminal();
+    let rendered = theme::preview(name, is_terminal).map_err(ThemeCommandError::Theme)?;
+    if is_terminal {
+        super::clear::clear().map_err(ThemeCommandError::Output)?;
+    }
+    render::stdout(format!(
+        "Theme: {name}\n\nExample session (simulated; commands are not run):\n{rendered}"
+    ))
+    .map_err(ThemeCommandError::Output)
 }
 
 #[cfg(test)]
@@ -84,5 +90,16 @@ mod tests {
             theme(&["preview".into()]).unwrap_err().to_string(),
             "theme: missing theme name after 'preview'"
         );
+    }
+
+    #[test]
+    fn preview_keeps_a_full_demo_when_output_is_not_a_terminal() {
+        let rendered = theme::preview("minimal", false).expect("minimal preview should render");
+
+        assert!(rendered.contains("ls"));
+        assert!(rendered.contains("git status --short"));
+        assert!(rendered.contains("cargo test --lib"));
+        assert!(rendered.contains("cat: missing.txt"));
+        assert!(!rendered.contains("\u{1b}["));
     }
 }

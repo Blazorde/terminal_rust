@@ -48,12 +48,14 @@ impl ShellEngine {
             state: ShellState::new(
                 UserCommandRegistry::default(),
                 DeclarativeCommandRegistry::default(),
+                None,
             ),
         }
     }
 
     pub(crate) fn from_config(config: &AppConfig) -> Result<Self, String> {
-        let entries = registry::discover_default(&config.plugins.enabled).unwrap_or_default();
+        let entries = registry::discover_default(&config.plugins.enabled)
+            .map_err(|error| format!("cannot discover plugins: {error}"))?;
         Self::from_config_and_entries(config, &entries)
     }
 
@@ -61,26 +63,35 @@ impl ShellEngine {
         config: &AppConfig,
         entries: &[registry::RegistryEntry],
     ) -> Result<Self, String> {
-        let user_commands = UserCommandRegistry::new(&config.commands, command::command_names())?;
+        let user_commands =
+            UserCommandRegistry::new(&config.commands, &config.aliases, command::command_names())?;
         let reserved_names = command::command_names()
             .map(str::to_string)
-            .chain(user_commands.names().map(str::to_string));
+            .chain(user_commands.names());
         let plugin_commands = DeclarativeCommandRegistry::from_entries(
             entries,
             &config.plugins.grants,
             reserved_names,
         );
         Ok(Self {
-            state: ShellState::new(user_commands, plugin_commands),
+            state: ShellState::new(
+                user_commands,
+                plugin_commands,
+                config.startup_script.clone(),
+            ),
         })
     }
 
     pub(crate) fn command_names(&self) -> Vec<String> {
         command::command_names()
             .map(str::to_string)
-            .chain(self.state.user_command_names().map(str::to_string))
+            .chain(self.state.user_command_names())
             .chain(self.state.plugin_command_names().map(str::to_string))
             .collect()
+    }
+
+    pub(crate) fn startup_script(&self) -> Option<&str> {
+        self.state.startup_script()
     }
 
     pub fn execute_line(&mut self, input: &str) -> ExecutionResult {
@@ -195,6 +206,39 @@ response = "Hello from the official Terminal Rust plugin!\n"
     }
 
     #[test]
+    fn cat_and_rm_accept_quoted_paths_with_spaces() {
+        let root = temp_path("engine", "quoted paths");
+        fs::create_dir(&root).expect("quoted-path fixture directory should be created");
+        let double_quoted_file = root.join("file with spaces.txt");
+        let single_quoted_file = root.join("another file.txt");
+        fs::write(&double_quoted_file, "double quoted content")
+            .expect("double-quoted fixture should be written");
+        fs::write(&single_quoted_file, "single quoted content")
+            .expect("single-quoted fixture should be written");
+
+        let mut engine = ShellEngine::new();
+        let cat_double = engine.execute_line(&format!("cat \"{}\"", double_quoted_file.display()));
+        assert_eq!(cat_double.status, ExecutionStatus::Continue);
+        assert_eq!(cat_double.stdout, "double quoted content");
+
+        let cat_single = engine.execute_line(&format!("cat '{}'", single_quoted_file.display()));
+        assert_eq!(cat_single.status, ExecutionStatus::Continue);
+        assert_eq!(cat_single.stdout, "single quoted content");
+
+        let rm_single = engine.execute_line(&format!("rm '{}'", single_quoted_file.display()));
+        assert_eq!(rm_single.status, ExecutionStatus::Continue);
+        assert!(!single_quoted_file.exists());
+
+        let empty_directory = root.join("empty directory");
+        fs::create_dir(&empty_directory).expect("empty directory fixture should be created");
+        let rm_double = engine.execute_line(&format!("rm -d \"{}\"", empty_directory.display()));
+        assert_eq!(rm_double.status, ExecutionStatus::Continue);
+        assert!(!empty_directory.exists());
+
+        fs::remove_dir_all(root).expect("quoted-path fixtures should be removed");
+    }
+
+    #[test]
     fn reports_parse_errors_as_typed_failures() {
         let mut engine = ShellEngine::new();
 
@@ -221,10 +265,22 @@ response = "Hello from the official Terminal Rust plugin!\n"
             result.directory_change,
             Some(DirectoryChange {
                 previous: original_dir.clone(),
-                current: target_dir.clone(),
+                current: result
+                    .current_dir
+                    .clone()
+                    .expect("current directory should be available"),
             })
         );
-        assert_eq!(result.current_dir.as_deref(), Some(target_dir.as_path()));
+        assert_eq!(
+            fs::canonicalize(
+                result
+                    .current_dir
+                    .as_deref()
+                    .expect("current directory should be available")
+            )
+            .expect("current directory should resolve"),
+            fs::canonicalize(&target_dir).expect("target directory should resolve")
+        );
 
         env::set_current_dir(&original_dir).expect("test should restore current directory");
         fs::remove_dir(target_dir).expect("test directory should be removed");

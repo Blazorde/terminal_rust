@@ -5,7 +5,43 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
-No changes yet.
+## [1.1.0] - 2026-11-20
+
+### Added
+
+- Bundled Git, Nano and Neovim into desktop releases so full Git workflows and
+  editor commands work without separate installations.
+- Added `nano`, `nvim` and `neovim` commands and made the bundled editors
+  available to Git's configured interactive editor.
+- Added an `echo` command that prints its arguments separated by spaces.
+- Added a `man` command: built-in commands show their name and synopsis, and any
+  other topic is handed to the system `man` when it is installed.
+- Added a whoami command that prints the current user’s username.
+- Added an arch command that prints the system architecture.
+- Added an nproc command that prints the number of available processing units.
+- Added an uptime command that prints how long the system has been running.
+- Added a date command that prints the current date and time.
+- Added a hostname command that prints the current host’s name.
+- Added a printenv command that prints the environment variables.
+- Added Linux terminal integration to the desktop app: `--working-directory` /
+  `-w`, `-e` and `--` launch options for the first session, a `TerminalEmulator`
+  desktop entry, and an `x-terminal-emulator` alternative registered with a low
+  priority by the DEB. See the Linux wiki page.
+
+### Changed
+
+- Replaced the README cover with a lighter hand-drawn illustration.
+- Renamed the `refractor/` branch prefix to `refactor/` in the branch and pull
+  request policies.
+
+### Fixed
+
+- Fixed the desktop crate failing to compile on Linux and macOS.
+- Restored the CI: bundled runtime preparation (Nano version parsing, Git
+  license file name, Windows download retries), resource permissions and the
+  desktop PTY tests on Linux and macOS.
+- Replaced the yanked `clipboard-win` 5.4.1 with 5.4.3 and refreshed the
+  third-party notices.
 
 ## [1.0.0-alpha.1] - 2026-10-13
 

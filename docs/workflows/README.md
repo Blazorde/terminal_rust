@@ -3,7 +3,7 @@
 ## Branch flow
 
 - `main` accepts pull requests only from `develop`.
-- `develop` accepts `feat/*`, `fix/*`, `chore/*`, `refractor/*` and `hotfix/*`.
+- `develop` accepts `feat/*`, `fix/*`, `chore/*`, `refactor/*` and `hotfix/*`.
 
 ## Workflows
 

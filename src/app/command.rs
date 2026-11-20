@@ -2,33 +2,47 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    cat, cd, clear, dashboard, git_command, ls, mkdir, plugins, pwd, rm, theme, touch, user,
+    appearance, arch, cat, cd, clear, dashboard, date, echo, editor, fastfetch, git_command,
+    hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime, user,
+    whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
 use crate::plugin::DeclarativeCommandRegistry;
 use crate::render;
 
+mod aliases;
+mod scripts;
+
 pub struct ShellState {
     previous_dir: Option<PathBuf>,
     plugin_commands: DeclarativeCommandRegistry,
     user_commands: user::UserCommandRegistry,
+    startup_script: Option<String>,
+    script_depth: usize,
 }
 
 impl ShellState {
     pub(crate) fn new(
         user_commands: user::UserCommandRegistry,
         plugin_commands: DeclarativeCommandRegistry,
+        startup_script: Option<String>,
     ) -> Self {
         Self {
             previous_dir: None,
             plugin_commands,
             user_commands,
+            startup_script,
+            script_depth: 0,
         }
     }
 
-    pub(crate) fn user_command_names(&self) -> impl Iterator<Item = &str> {
+    pub(crate) fn user_command_names(&self) -> Vec<String> {
         self.user_commands.names()
+    }
+
+    pub(crate) fn startup_script(&self) -> Option<&str> {
+        self.startup_script.as_deref()
     }
 
     pub(crate) fn plugin_command_names(&self) -> impl Iterator<Item = &str> {
@@ -54,6 +68,41 @@ struct CommandSpec {
 }
 
 const COMMANDS: &[CommandSpec] = &[
+    CommandSpec {
+        name: "alias",
+        usage: "alias [--save] [name command [arguments...]]",
+        summary: "list, define or permanently save command aliases",
+        max_args: None,
+        handler: aliases::run,
+    },
+    CommandSpec {
+        name: "unalias",
+        usage: "unalias [--save] <name>",
+        summary: "remove a session or permanently saved alias",
+        max_args: Some(2),
+        handler: aliases::remove,
+    },
+    CommandSpec {
+        name: "script",
+        usage: "script <create|run|startup|list> [arguments...]",
+        summary: "create and run safe Terminal Rust command scripts",
+        max_args: None,
+        handler: scripts::run,
+    },
+    CommandSpec {
+        name: "fastfetch",
+        usage: "fastfetch [arguments...]",
+        summary: "display system information with Fastfetch",
+        max_args: None,
+        handler: run_fastfetch,
+    },
+    CommandSpec {
+        name: "ff",
+        usage: "ff [arguments...]",
+        summary: "alias for fastfetch",
+        max_args: None,
+        handler: run_fastfetch,
+    },
     CommandSpec {
         name: "pwd",
         usage: "pwd",
@@ -119,10 +168,17 @@ const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "git",
-        usage: "git <status|branch|log> [options]",
-        summary: "run a safe read-only Git command",
+        usage: "git <command> [arguments...]",
+        summary: "run a native Git command",
         max_args: None,
         handler: run_git,
+    },
+    CommandSpec {
+        name: "appearance",
+        usage: "appearance [show|theme|foreground|background|color|reset] [arguments...]",
+        summary: "customize the terminal theme and ANSI colors",
+        max_args: None,
+        handler: run_appearance,
     },
     CommandSpec {
         name: "theme",
@@ -133,15 +189,22 @@ const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "plugins",
-        usage: "plugins list",
-        summary: "list locally installed plugins",
+        usage: "plugins <list|help>",
+        summary: "list plugins or explain plugin support",
+        max_args: None,
+        handler: run_plugins,
+    },
+    CommandSpec {
+        name: "plugin",
+        usage: "plugin <list|help>",
+        summary: "alias for plugins",
         max_args: None,
         handler: run_plugins,
     },
     CommandSpec {
         name: "commands",
-        usage: "commands list",
-        summary: "list configured custom commands",
+        usage: "commands <list|help>",
+        summary: "list custom commands or explain them",
         max_args: None,
         handler: run_commands,
     },
@@ -158,6 +221,90 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "close the terminal",
         max_args: Some(0),
         handler: run_exit,
+    },
+    CommandSpec {
+        name: "echo",
+        usage: "echo [-n] [text...]",
+        summary: "print text to the terminal",
+        max_args: None,
+        handler: run_echo,
+    },
+    CommandSpec {
+        name: "whoami",
+        usage: "whoami",
+        summary: "display the current user",
+        max_args: Some(0),
+        handler: run_whoami,
+    },
+    CommandSpec {
+        name: "arch",
+        usage: "arch",
+        summary: "display the system architecture",
+        max_args: Some(0),
+        handler: run_arch,
+    },
+    CommandSpec {
+        name: "nproc",
+        usage: "nproc",
+        summary: "display the number of available processors",
+        max_args: Some(0),
+        handler: run_nproc,
+    },
+    CommandSpec {
+        name: "uptime",
+        usage: "uptime",
+        summary: "display the system uptime",
+        max_args: Some(0),
+        handler: run_uptime,
+    },
+    CommandSpec {
+        name: "date",
+        usage: "date [format]",
+        summary: "display the current date",
+        max_args: Some(1),
+        handler: run_date,
+    },
+    CommandSpec {
+        name: "nano",
+        usage: "nano [file...]",
+        summary: "edit files with Nano",
+        max_args: None,
+        handler: run_nano,
+    },
+    CommandSpec {
+        name: "nvim",
+        usage: "nvim [file...]",
+        summary: "edit files with Neovim",
+        max_args: None,
+        handler: run_nvim,
+    },
+    CommandSpec {
+        name: "neovim",
+        usage: "neovim [file...]",
+        summary: "alias for nvim",
+        max_args: None,
+        handler: run_neovim,
+    },
+    CommandSpec {
+        name: "man",
+        usage: "man <command>",
+        summary: "display the manual of a command",
+        max_args: None,
+        handler: run_man,
+    },
+    CommandSpec {
+        name: "hostname",
+        usage: "hostname",
+        summary: "display the system hostname",
+        max_args: Some(0),
+        handler: run_hostname,
+    },
+    CommandSpec {
+        name: "printenv",
+        usage: "printenv [variable]",
+        summary: "display environment variables",
+        max_args: Some(1),
+        handler: run_printenv,
     },
     CommandSpec {
         name: "quit",
@@ -183,19 +330,21 @@ pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
         return run_help(&[], state);
     };
 
-    let Some(command) = find_command(command_name) else {
-        if state.user_commands.get(command_name).is_some() {
-            return execute_user_command(command_name, &args[1..], state);
+    if let Some(command) = find_command(command_name) {
+        let command_args = &args[1..];
+        if let Err(error) = validate_arg_count(command, command_args.len()) {
+            return CommandResult::Error(error.to_string());
         }
-        return execute_plugin_command(command_name, &args[1..], state);
-    };
-
-    let command_args = &args[1..];
-    if let Err(error) = validate_arg_count(command, command_args.len()) {
-        return CommandResult::Error(error.to_string());
+        return (command.handler)(command_args, state);
     }
+    if state.user_commands.get(command_name).is_some() {
+        return execute_user_command(command_name, &args[1..], state);
+    }
+    execute_plugin_command(command_name, &args[1..], state)
+}
 
-    (command.handler)(command_args, state)
+fn run_fastfetch(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(fastfetch::run(args))
 }
 
 fn execute_user_command(
@@ -267,6 +416,46 @@ fn optional_arg(args: &[String]) -> Option<&str> {
     args.first().map(String::as_str)
 }
 
+fn run_arch(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("arch", arch::arch())
+}
+
+fn run_uptime(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("uptime", uptime::uptime())
+}
+
+fn run_nproc(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("nproc", nproc::nproc())
+}
+
+fn run_date(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("date", date::date(args))
+}
+
+fn run_printenv(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("printenv", printenv::printenv(args))
+}
+
+fn run_nano(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(editor::run("nano", "nano", args))
+}
+
+fn run_nvim(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(editor::run("nvim", "nvim", args))
+}
+
+fn run_neovim(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(editor::run("neovim", "nvim", args))
+}
+
+fn run_hostname(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("hostname", hostname::hostname())
+}
+
+fn run_whoami(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("whoami", whoami::whoami())
+}
+
 fn run_pwd(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("pwd", pwd::pwd())
 }
@@ -279,6 +468,10 @@ fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
         }
         Err(error) => CommandResult::Error(error.to_string()),
     }
+}
+
+fn run_echo(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("echo", echo::echo(args))
 }
 
 fn run_ls(args: &[String], _state: &mut ShellState) -> CommandResult {
@@ -320,18 +513,47 @@ fn run_theme(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_display_error(theme::theme(args))
 }
 
+fn run_appearance(args: &[String], _state: &mut ShellState) -> CommandResult {
+    map_display_error(appearance::appearance(args))
+}
+
 fn run_plugins(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_display_error(plugins::plugins(args))
 }
 
 fn run_commands(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args == ["help"] {
+        return map_prefixed_error("commands", render::stdout(COMMANDS_HELP));
+    }
     if args != ["list"] {
-        return CommandResult::Error("commands: expected 'list'".into());
+        return CommandResult::Error("commands: expected 'list' or 'help'".into());
     }
     map_prefixed_error(
         "commands",
         render::stdout(state.user_commands.render_list()),
     )
+}
+
+const COMMANDS_HELP: &str = "Custom commands are shortcuts configured in the user TOML file.\n\
+Use 'commands list' to inspect configured shortcuts. Built-in shortcuts call a\n\
+Terminal Rust command; process shortcuts start a configured program directly.\n\
+See docs/custom-commands.md for configuration and security details.\n";
+
+fn run_man(args: &[String], _state: &mut ShellState) -> CommandResult {
+    let Some(topic) = args.first() else {
+        return CommandResult::Error(
+            "man: what manual page do you want? Usage: man <command>".into(),
+        );
+    };
+    if let (1, Some(command)) = (args.len(), find_command(topic)) {
+        let entry = man::Entry {
+            name: command.name,
+            usage: command.usage,
+            summary: command.summary,
+        };
+        return map_prefixed_error("man", man::show(&entry));
+    }
+    map_display_error(man::show_system(args))
 }
 
 fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
@@ -372,6 +594,19 @@ where
 mod tests {
     use super::*;
     use std::collections::HashSet;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_state() -> ShellState {
+        ShellState::new(
+            user::UserCommandRegistry::default(),
+            DeclarativeCommandRegistry::default(),
+            None,
+        )
+    }
+
+    fn string_args(args: &[&str]) -> Vec<String> {
+        args.iter().map(|argument| (*argument).into()).collect()
+    }
 
     #[test]
     fn command_metadata_is_complete_and_unique() {
@@ -381,5 +616,81 @@ mod tests {
             assert!(command.usage.starts_with(command.name));
             assert!(!command.summary.trim().is_empty());
         }
+        assert!(find_command("fastfetch").is_some());
+        assert!(find_command("ff").is_some());
+    }
+
+    #[test]
+    fn session_aliases_are_created_and_executed() {
+        let mut state = test_state();
+        let (result, _) = render::capture_output(|| {
+            execute(&string_args(&["alias", "where", "pwd"]), &mut state)
+        });
+        assert!(matches!(result, CommandResult::Continue));
+
+        let (result, output) =
+            render::capture_output(|| execute(&string_args(&["where"]), &mut state));
+        assert!(matches!(result, CommandResult::Continue));
+        assert!(
+            output.stdout.contains(
+                &std::env::current_dir()
+                    .expect("current directory should be available")
+                    .display()
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn scripts_stop_on_the_first_failed_command() {
+        let path = std::env::temp_dir().join(format!(
+            "terminal-rust-script-{}-{}.trs",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock should follow the epoch")
+                .as_nanos()
+        ));
+        std::fs::write(
+            &path,
+            "echo before failure\nmissing-terminal-rust-test-command\necho after failure\n",
+        )
+        .expect("script fixture should be written");
+        let mut state = test_state();
+        let (result, output) = render::capture_output(|| {
+            execute(
+                &string_args(&["script", "run", &path.to_string_lossy()]),
+                &mut state,
+            )
+        });
+        assert!(
+            matches!(result, CommandResult::Error(error) if error.contains(":2:") && error.contains("unknown command"))
+        );
+        assert!(output.stdout.contains("before failure"));
+        assert!(!output.stdout.contains("after failure"));
+        assert_eq!(state.script_depth, 0);
+        std::fs::remove_file(path).expect("script fixture should be removed");
+    }
+
+    #[test]
+    fn man_shows_the_manual_of_a_built_in_command() {
+        let mut state = test_state();
+        let (result, output) =
+            render::capture_output(|| execute(&string_args(&["man", "printenv"]), &mut state));
+
+        assert!(matches!(result, CommandResult::Continue));
+        assert!(output.stdout.contains("NAME\n    printenv - "));
+        assert!(output.stdout.contains("SYNOPSIS\n    printenv [variable]"));
+    }
+
+    #[test]
+    fn man_without_a_topic_explains_how_to_use_it() {
+        let mut state = test_state();
+        let result = execute(&string_args(&["man"]), &mut state);
+
+        assert!(matches!(
+            result,
+            CommandResult::Error(message) if message.contains("Usage: man <command>")
+        ));
     }
 }

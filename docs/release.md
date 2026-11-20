@@ -29,7 +29,10 @@ DMG. A package from one platform is never presented as compatible with another.
 
 The native desktop bundle also embeds `LICENSE`, `THIRD_PARTY_NOTICES.md` and
 the default configuration so installed copies retain their legal notices and
-offline defaults.
+offline defaults. It also embeds the Git, Nano and Neovim command runtime,
+their package notices, and Nano's matching source archive. The first desktop
+terminal session installs the runtime into the per-user application data
+directory.
 
 Use [GitHub Releases](https://github.com/Blazorde/terminal_rust/releases/latest)
 for stable downloads and verify `SHA256SUMS.txt`. A local build validates only

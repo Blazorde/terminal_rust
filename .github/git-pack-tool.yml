@@ -1,0 +1,7 @@
+name: git-pack-tool
+channels:
+  - conda-forge
+dependencies:
+  - conda-pack=0.8.1
+  - python=3.13
+  - setuptools=80.9.0

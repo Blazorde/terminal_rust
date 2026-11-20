@@ -32,6 +32,7 @@ pub struct DesktopSettings {
     pub cursor_blink: bool,
     pub window_density: WindowDensity,
     pub show_status_bar: bool,
+    pub show_fastfetch_on_startup: bool,
 }
 
 impl Default for DesktopSettings {
@@ -45,6 +46,7 @@ impl Default for DesktopSettings {
             cursor_blink: true,
             window_density: WindowDensity::Comfortable,
             show_status_bar: true,
+            show_fastfetch_on_startup: false,
         }
     }
 }
@@ -291,6 +293,16 @@ mod tests {
         assert!(loaded.diagnostic.is_none());
         assert!(!path.with_extension("json.tmp").exists());
         assert!(!path.with_extension("json.bak").exists());
+    }
+
+    #[test]
+    fn older_settings_default_fastfetch_to_disabled() {
+        let settings: DesktopSettings =
+            serde_json::from_str(r#"{"version":1,"showStatusBar":false}"#)
+                .expect("older settings should remain readable");
+
+        assert!(!settings.show_fastfetch_on_startup);
+        assert!(!settings.show_status_bar);
     }
 
     #[test]

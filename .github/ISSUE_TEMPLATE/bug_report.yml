@@ -1,0 +1,72 @@
+name: Bug report
+description: Report an unexpected behavior or a regression
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Describe one problem per issue. Please remove any private information
+        from logs or screenshots before sharing them.
+  - type: input
+    id: version
+    attributes:
+      label: Terminal Rust version
+      description: Include the release version or commit if known.
+      placeholder: e.g. 1.0.0-alpha.1
+    validations:
+      required: false
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did the issue occur?
+      options:
+        - Interactive terminal
+        - Desktop app
+        - Command-line startup
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and its impact.
+      placeholder: A clear description of the unexpected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the command or actions needed to reproduce it.
+      placeholder: |
+        1. Run ...
+        2. Enter ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: What happened instead?
+    validations:
+      required: true

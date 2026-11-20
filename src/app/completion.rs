@@ -133,11 +133,14 @@ mod tests {
     }
 
     #[test]
-    fn plugins_is_available_in_completion() {
+    fn plugin_names_are_available_in_completion() {
         let completions = completions("plug");
 
-        assert_eq!(completions.len(), 1);
-        assert_eq!(completions[0].replacement, "plugins ");
+        let replacements = completions
+            .iter()
+            .map(|completion| completion.replacement.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(replacements, ["plugins ", "plugin "]);
     }
 
     #[test]

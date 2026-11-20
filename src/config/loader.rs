@@ -78,7 +78,7 @@ fn load_from_path(path: &Path) -> Result<AppConfig, ConfigError> {
     Ok(config)
 }
 
-fn default_config_path() -> Option<PathBuf> {
+pub(super) fn default_config_path() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     {
         env::var_os("APPDATA")

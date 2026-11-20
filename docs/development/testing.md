@@ -24,8 +24,10 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
 ```
 
-CLI tests use unique temporary directories, including paths with spaces, and do
-not depend on the user's home directory.
+CLI and engine tests use unique temporary directories, including paths with
+spaces. Quoted single- and double-quoted paths, escaped spaces, and native
+Windows path separators are covered without depending on the user's home
+directory.
 
 ## Cases to cover
 

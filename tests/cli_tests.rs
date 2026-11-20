@@ -277,6 +277,7 @@ fn help_lists_every_public_command() {
         "git",
         "theme",
         "plugins",
+        "plugin",
         "commands",
         "help",
         "exit",
@@ -289,6 +290,50 @@ fn help_lists_every_public_command() {
             "help should list {command}:\n{rendered}"
         );
     }
+}
+
+#[test]
+fn git_help_is_forwarded_to_native_git() {
+    let directory = TestDirectory::new("git help");
+    let output = run_cli(directory.path(), &["git", "help", "-a"]);
+    let rendered = stdout(&output);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(
+        rendered.contains("status"),
+        "native Git help output: {rendered}"
+    );
+    assert!(
+        rendered.contains("commit"),
+        "native Git help output: {rendered}"
+    );
+}
+
+#[test]
+fn plugin_alias_and_help_explain_the_available_plugin_actions() {
+    let directory = TestDirectory::new("plugin help");
+
+    let plural = run_cli(directory.path(), &["plugins", "help"]);
+    let singular = run_cli(directory.path(), &["plugin", "help"]);
+
+    assert!(plural.status.success(), "stderr: {}", stderr(&plural));
+    assert!(singular.status.success(), "stderr: {}", stderr(&singular));
+    assert_eq!(stdout(&plural), stdout(&singular));
+    assert!(stdout(&plural).contains("plugins list"));
+    assert!(stdout(&plural).contains("requested permissions"));
+    assert!(stdout(&plural).contains("declarative"));
+}
+
+#[test]
+fn commands_help_explains_custom_commands_and_listing() {
+    let directory = TestDirectory::new("commands help");
+    let output = run_cli(directory.path(), &["commands", "help"]);
+    let rendered = stdout(&output);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(rendered.contains("shortcuts configured"));
+    assert!(rendered.contains("commands list"));
+    assert!(rendered.contains("docs/custom-commands.md"));
 }
 
 #[test]
@@ -411,10 +456,13 @@ fn theme_list_and_preview_are_available_without_starting_the_shell() {
 
     let preview = run_cli(directory.path(), &["theme", "preview", "minimal"]);
     assert!(preview.status.success(), "stderr: {}", stderr(&preview));
-    assert_eq!(
-        stdout(&preview),
-        "Theme: minimal\nterminal-rust  git:main*  > \n"
-    );
+    let preview = stdout(&preview);
+    assert!(preview.starts_with("Theme: minimal\n\n"));
+    assert!(preview.contains("terminal-rust  git:main*  > ls\n"));
+    assert!(preview.contains("git status --short"));
+    assert!(preview.contains("cargo test --lib"));
+    assert!(preview.contains("cat: missing.txt: No such file or directory"));
+    assert!(!preview.contains("\u{1b}["));
 }
 
 #[test]
@@ -463,6 +511,25 @@ fn file_commands_complete_a_cross_platform_workflow() {
         stderr(&remove_directory)
     );
     assert!(!Path::new(&directory_arg).exists());
+}
+
+#[test]
+fn interactive_rm_force_returns_to_the_prompt_without_consuming_the_next_command() {
+    let directory = TestDirectory::new("rm force prompt");
+    let target = directory.path().join("tree to remove");
+    fs::create_dir(&target).expect("target directory should be created");
+    fs::write(target.join("file.txt"), "content").expect("target file should be created");
+
+    let input = format!("rm -rf \"{}\"\npwd\nexit\n", target.display());
+    let output = run_interactive(directory.path(), &input);
+    let rendered = stdout(&output);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(rendered.contains(&directory.path().display().to_string()));
+    assert!(
+        !target.exists(),
+        "rm -rf should remove the target without prompting"
+    );
 }
 
 #[test]
@@ -542,5 +609,106 @@ fn interactive_prompt_shows_a_dirty_git_branch() {
     assert!(
         rendered.contains(&directory.path().display().to_string()),
         "prompt should contain the current path: {rendered}"
+    );
+}
+
+#[test]
+fn echo_prints_the_given_text() {
+    let directory = TestDirectory::new("echo");
+    let output = run_cli(directory.path(), &["echo", "Hello, World!"]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(output.stderr.is_empty());
+
+    let binding = stdout(&output);
+    let reported_text = binding.trim();
+    assert_eq!(reported_text, "Hello, World!");
+}
+
+#[test]
+fn native_git_commands_work_from_a_path_with_spaces_and_unicode() {
+    let directory = TestDirectory::new("git repo with spaces été");
+    let git_available = Command::new("git")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success());
+
+    if !git_available {
+        return;
+    }
+
+    let initialized = Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git should start");
+    assert!(initialized.success());
+
+    let named_branch = Command::new("git")
+        .args(["symbolic-ref", "HEAD", "refs/heads/main"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git should name the initial branch");
+    assert!(named_branch.success());
+
+    for (key, value) in [
+        ("user.name", "Terminal Rust test"),
+        ("user.email", "terminal-rust-test@example.invalid"),
+    ] {
+        let configured = Command::new("git")
+            .args(["config", key, value])
+            .current_dir(directory.path())
+            .status()
+            .expect("git config should start");
+        assert!(configured.success());
+    }
+
+    fs::write(directory.path().join("tracked file.txt"), "fixture")
+        .expect("the tracked fixture should be written");
+    let added = Command::new("git")
+        .args(["add", "--", "tracked file.txt"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git add should start");
+    assert!(added.success());
+    let committed = Command::new("git")
+        .args(["commit", "--quiet", "-m", "cross-platform fixture"])
+        .current_dir(directory.path())
+        .status()
+        .expect("git commit should start");
+    assert!(committed.success());
+
+    let status = run_cli(directory.path(), &["git", "status", "--short"]);
+    assert!(status.status.success(), "stderr: {}", stderr(&status));
+    assert!(stdout(&status).is_empty(), "working tree should be clean");
+
+    let branch = run_cli(directory.path(), &["git", "branch", "--show-current"]);
+    assert!(branch.status.success(), "stderr: {}", stderr(&branch));
+    assert_eq!(stdout(&branch).trim(), "main");
+
+    let log = run_cli(directory.path(), &["git", "log", "-1", "--oneline"]);
+    assert!(log.status.success(), "stderr: {}", stderr(&log));
+    assert!(stdout(&log).contains("cross-platform fixture"));
+
+    let create_branch = run_cli(
+        directory.path(),
+        &["git", "branch", "native-pass-through-test"],
+    );
+    assert!(
+        create_branch.status.success(),
+        "stderr: {}",
+        stderr(&create_branch)
+    );
+
+    let delete_branch = run_cli(
+        directory.path(),
+        &["git", "branch", "--delete", "native-pass-through-test"],
+    );
+    assert!(
+        delete_branch.status.success(),
+        "stderr: {}",
+        stderr(&delete_branch)
     );
 }

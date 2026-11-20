@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
@@ -11,6 +11,10 @@ pub struct AppConfig {
     pub segments: SegmentsConfig,
     pub plugins: PluginsConfig,
     pub commands: BTreeMap<String, UserCommandConfig>,
+    #[serde(skip)]
+    pub aliases: BTreeMap<String, UserCommandConfig>,
+    #[serde(skip)]
+    pub startup_script: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -22,11 +26,13 @@ impl Default for AppConfig {
             segments: SegmentsConfig::default(),
             plugins: PluginsConfig::default(),
             commands: BTreeMap::new(),
+            aliases: BTreeMap::new(),
+            startup_script: None,
         }
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct UserCommandConfig {
     pub kind: UserCommandKind,
@@ -48,7 +54,7 @@ impl Default for UserCommandConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum UserCommandKind {
     #[default]

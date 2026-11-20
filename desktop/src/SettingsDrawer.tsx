@@ -131,6 +131,21 @@ export default function SettingsDrawer({
       </fieldset>
 
       <fieldset className="settings-group">
+        <legend>Démarrage</legend>
+        <label className="toggle-row">
+          <span>
+            <strong>Afficher Fastfetch au démarrage</strong>
+            <small>Chaque nouvelle session le lance avant l’invite. Installez Fastfetch et ajoutez-le au PATH ; redémarrez la session active pour appliquer le réglage.</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={settings.showFastfetchOnStartup}
+            onChange={(event) => update('showFastfetchOnStartup', event.target.checked)}
+          />
+        </label>
+      </fieldset>
+
+      <fieldset className="settings-group">
         <legend>Fenêtre</legend>
         <label className="field-row">
           <span><strong>Densité</strong><small>Marge autour de la surface terminal</small></span>
