@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::app::help;
+use crate::app::parser::{Connector, parse_with, split_chain};
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, external, fastfetch,
     git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime,
@@ -359,6 +360,47 @@ pub(crate) fn command_help() -> impl Iterator<Item = (&'static str, &'static str
     COMMANDS
         .iter()
         .map(|command| (command.usage, command.summary))
+}
+
+/// Run a command line: one or more commands joined by `;`, `&&` and `||`.
+///
+/// Each segment is expanded right before it runs, so `$?` and variables set by
+/// an earlier segment are visible to the next one. The error of a segment that
+/// is followed by another one is printed here; the error of the last segment
+/// that ran is returned.
+pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
+    let segments = match split_chain(input) {
+        Ok(segments) => segments,
+        Err(error) => return CommandResult::Error(error),
+    };
+
+    let mut last = CommandResult::Continue;
+    for segment in segments {
+        let failed = matches!(last, CommandResult::Error(_));
+        let run = match segment.connector {
+            Connector::Then => true,
+            Connector::And => !failed,
+            Connector::Or => failed,
+        };
+        if !run {
+            continue;
+        }
+        if let CommandResult::Error(error) = &last {
+            let _ = render::stderr_line(error);
+        }
+
+        let parsed = parse_with(&segment.text, &|name| state.variable(name));
+        last = match parsed {
+            Ok(args) if args.is_empty() => CommandResult::Continue,
+            Ok(args) => execute(&args, state),
+            Err(error) => CommandResult::Error(error),
+        };
+        state.record_status(matches!(last, CommandResult::Error(_)));
+        if last == CommandResult::Exit {
+            break;
+        }
+    }
+    last
 }
 
 pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {

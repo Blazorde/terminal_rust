@@ -7,6 +7,17 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Command chaining: `;` runs the next command, `&&` only after a success and
+  `||` only after a failure. Each command is expanded right before it runs, so
+  `$?` and variables set earlier on the line are visible, and output stays in the
+  order of the commands even when programs are involved. See ADR-0010.
+
+### Changed
+
+- An unquoted `|`, `<`, `>` or `&` is now rejected with a clear message instead
+  of being passed to a program as an argument, until pipes, redirections and
+  background jobs are designed.
+
 - Variables in command lines: `$NAME`, `${NAME}`, `$?` and a leading `~` are
   expanded outside and inside double quotes (not inside single quotes), `\$`
   writes a dollar sign, and `NAME=value` sets a variable. `export NAME[=value]`

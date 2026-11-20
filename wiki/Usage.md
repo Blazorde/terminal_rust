@@ -66,6 +66,22 @@ removes it. A variable that is not set expands to nothing, and an expansion is
 never split into several arguments. Setting a variable for a single command
 (`NAME=value command`) and `*` patterns are not available yet.
 
+## Chaining commands
+
+Put several commands on one line with `;`, `&&` and `||`:
+
+```text
+cargo build && cargo test
+cd project ; ls
+make || echo "build failed"
+```
+
+`;` always runs the next command, `&&` runs it only if the previous one
+succeeded, and `||` only if it failed. They are evaluated from left to right and
+`exit` stops the line. Quote an operator to use it as text. Pipes (`|`),
+redirections (`<`, `>`) and background jobs (`&`) are not available yet: the
+shell says so instead of passing them to a program.
+
 ## Paths containing spaces
 
 Quote a path containing spaces with single or double quotes so the command
