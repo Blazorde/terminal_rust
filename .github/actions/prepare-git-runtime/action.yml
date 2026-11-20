@@ -18,7 +18,6 @@ runs:
       if: runner.os != 'Windows'
       shell: bash
       run: |
-        set -x
         mkdir -p desktop/src-tauri/resources
         conda install --name git-runtime --yes --channel conda-forge \
           openssh=10.5p1 git-lfs=3.7.1 nano=9.2
@@ -33,8 +32,13 @@ runs:
           --output desktop/src-tauri/resources/git-runtime.tar.gz
         git_version="$(conda run --no-capture-output --name git-runtime git --version | sed 's/^git version //')"
         nvim_version="$(conda run --no-capture-output --name git-runtime nvim --version | sed -n '1s/^NVIM v//p')"
-        nano_version="$(conda run --no-capture-output --name git-runtime nano --version | sed -n '1s/^GNU nano, version //p' | cut -d ' ' -f 1)"
-        test -n "$git_version" && test -n "$nvim_version" && test -n "$nano_version"
+        # `nano --version` prints " GNU nano, version X" with a leading space.
+        nano_version="$(conda run --no-capture-output --name git-runtime nano --version \
+          | sed -nE '1s/^[[:space:]]*GNU nano, version ([^[:space:]]+).*/\1/p')"
+        if [ -z "$git_version" ] || [ -z "$nvim_version" ] || [ -z "$nano_version" ]; then
+          echo "::error::Cannot read bundled runtime versions: git='$git_version' nvim='$nvim_version' nano='$nano_version'" >&2
+          exit 1
+        fi
         printf 'git=%s\nnvim=%s\nnano=%s\n' "$git_version" "$nvim_version" "$nano_version" \
           > desktop/src-tauri/resources/git-runtime-version.txt
         curl --fail --silent --show-error --location \
