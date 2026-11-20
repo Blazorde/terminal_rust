@@ -28,7 +28,7 @@ runs:
         test "$nano_source_hash" = '05ecb99247b782e8a5b3a25ed4101dd034b0236902f7449bc9795b717642f7e9'
         conda env create --yes --file .github/git-pack-tool.yml
         git_runtime_prefix="$(conda run --name git-runtime python -c 'import sys; print(sys.prefix)')"
-        conda run --name git-pack-tool conda-pack --prefix "$git_runtime_prefix" \
+        conda run --no-capture-output --name git-pack-tool conda-pack --prefix "$git_runtime_prefix" \
           --output desktop/src-tauri/resources/git-runtime.tar.gz
         git_version="$(conda run --name git-runtime git --version | sed 's/^git version //')"
         nvim_version="$(conda run --name git-runtime nvim --version | sed -n '1s/^NVIM v//p')"
@@ -73,7 +73,7 @@ runs:
         }
         conda env create --yes --file .github\git-pack-tool.yml
         $gitRuntimePrefix = (conda run --name git-runtime python -c "import sys; print(sys.prefix)").Trim()
-        conda run --name git-pack-tool conda-pack --prefix $gitRuntimePrefix `
+        conda run --no-capture-output --name git-pack-tool conda-pack --prefix $gitRuntimePrefix `
           --output desktop\src-tauri\resources\git-runtime.tar.gz
         $gitVersion = (conda run --name git-runtime git --version).Replace('git version ', '').Trim()
         $nvimVersion = (conda run --name git-runtime nvim --version | Select-Object -First 1).Replace('NVIM v', '').Trim()
