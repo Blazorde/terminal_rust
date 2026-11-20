@@ -1,7 +1,11 @@
 use std::process::Command;
 
+use crate::utils::shell_env;
+
 pub fn run(args: &[String]) -> Result<(), String> {
-    let status = Command::new("fastfetch")
+    let mut command = Command::new("fastfetch");
+    shell_env::apply_to(&mut command);
+    let status = command
         .args(args)
         .status()
         .map_err(|error| {

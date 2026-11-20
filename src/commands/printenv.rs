@@ -1,14 +1,14 @@
-use std::env;
 use std::io;
 
 use crate::render;
+use crate::utils::shell_env;
 
 pub fn printenv(args: &[String]) -> io::Result<()> {
     if args.is_empty() {
-        return render::stdout(format_all(env::vars()));
+        return render::stdout(format_all(shell_env::vars().into_iter()));
     }
 
-    let (output, missing) = format_selected(args, |name| env::var(name).ok());
+    let (output, missing) = format_selected(args, shell_env::value);
     render::stdout(output)?;
 
     if missing.is_empty() {

@@ -3,6 +3,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
+use crate::utils::shell_env;
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum RunError {
     /// No program of that name could be found.
@@ -14,7 +16,9 @@ pub enum RunError {
 /// Run `name` with `args`, sharing the terminal streams, the environment and the
 /// current directory of the shell.
 pub fn run(name: &str, args: &[String]) -> Result<(), RunError> {
-    let status = Command::new(resolve(name))
+    let mut command = Command::new(resolve(name));
+    shell_env::apply_to(&mut command);
+    let status = command
         .args(args)
         .status()
         .map_err(|error| match error.kind() {
@@ -45,8 +49,12 @@ fn describe_exit(name: &str, status: ExitStatus) -> String {
 
 #[cfg(windows)]
 fn resolve(name: &str) -> OsString {
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    let pathext = std::env::var_os("PATHEXT").unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
+    let path = shell_env::value("PATH")
+        .map(OsString::from)
+        .unwrap_or_default();
+    let pathext = shell_env::value("PATHEXT")
+        .map(OsString::from)
+        .unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
     find_in_path(name, &path, &pathext, |candidate| candidate.is_file())
         .map(PathBuf::into_os_string)
         .unwrap_or_else(|| name.into())

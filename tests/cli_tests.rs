@@ -753,3 +753,31 @@ fn a_missing_program_still_reports_an_unknown_command() {
         stderr(&output)
     );
 }
+
+#[test]
+fn an_exported_variable_reaches_the_programs_the_shell_starts() {
+    let directory = TestDirectory::new("exported variable");
+    let shell = env!("CARGO_BIN_EXE_terminal_rust");
+    let input = format!(
+        "export TRS_IT_EXPORTED=visible\nTRS_IT_LOCAL=hidden\n\"{shell}\" printenv TRS_IT_EXPORTED\n\"{shell}\" printenv TRS_IT_LOCAL\nexit\n"
+    );
+
+    let output = run_interactive(directory.path(), &input);
+
+    let printed = stdout(&output);
+    assert!(printed.contains("visible"), "{printed}");
+    assert!(!printed.contains("hidden"), "{printed}");
+}
+
+#[test]
+fn variables_and_tilde_are_expanded_in_an_interactive_session() {
+    let directory = TestDirectory::new("expansion");
+    let input =
+        "TRS_IT_WORD=expanded\necho $TRS_IT_WORD ${TRS_IT_WORD}s\necho '$TRS_IT_WORD'\nexit\n";
+
+    let output = run_interactive(directory.path(), input);
+
+    let printed = stdout(&output);
+    assert!(printed.contains("expanded expandeds"), "{printed}");
+    assert!(printed.contains("$TRS_IT_WORD"), "{printed}");
+}

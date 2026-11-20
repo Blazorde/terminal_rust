@@ -44,6 +44,28 @@ The program shares the terminal, the environment and the current directory.
 takes precedence over a program of the same name. Pipes, redirections and
 variables are not available yet.
 
+## Variables
+
+`$NAME`, `${NAME}` and `$?` (`0` after a success, `1` after a failure) are
+expanded in command lines, and a leading `~` stands for your home directory.
+Double quotes expand variables, single quotes do not, and `\$` writes a literal
+dollar sign:
+
+```text
+NAME=world
+echo "hello $NAME"
+cd ~/code
+export EDITOR=nvim
+PATH=$PATH:$HOME/bin
+unset NAME
+```
+
+`NAME=value` creates a variable that only the shell sees. `export NAME` (or
+`export NAME=value`) also passes it to the programs you start, and `unset NAME`
+removes it. A variable that is not set expands to nothing, and an expansion is
+never split into several arguments. Setting a variable for a single command
+(`NAME=value command`) and `*` patterns are not available yet.
+
 ## Paths containing spaces
 
 Quote a path containing spaces with single or double quotes so the command
