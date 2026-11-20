@@ -135,6 +135,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | brotli-decompressor | 6.0.1 | BSD-3-Clause/MIT | https://github.com/dropbox/rust-brotli-decompressor |
 | Rust | brotli | 9.0.0 | BSD-3-Clause AND MIT | https://github.com/dropbox/rust-brotli |
 | Rust | bs58 | 0.5.1 | MIT/Apache-2.0 | https://github.com/Nullus157/bs58-rs |
+| Rust | buffer-redux | 1.1.0 | MIT OR Apache-2.0 | https://github.com/dignifiedquire/buffer-redux |
 | Rust | bumpalo | 3.20.3 | MIT OR Apache-2.0 | https://github.com/fitzgen/bumpalo |
 | Rust | bytemuck_derive | 1.12.1 | Zlib OR Apache-2.0 OR MIT | https://github.com/Lokathor/bytemuck |
 | Rust | bytemuck | 1.25.2 | Zlib OR Apache-2.0 OR MIT | https://github.com/Lokathor/bytemuck |

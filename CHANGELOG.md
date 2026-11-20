@@ -5,6 +5,13 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Fixed
+
+- Lines pasted or typed faster than the shell reads them were lost: only the
+  first command of a paste ran. The line editor read ahead into a buffer that it
+  dropped after each prompt; enabling its `buffer-redux` feature keeps that
+  buffer between prompts (Unix).
+
 ### Added
 
 - `scripts/ci-local.sh` replays the Linux gate of the CI, with the Security checks,
