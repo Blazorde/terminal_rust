@@ -151,8 +151,6 @@ fn history_path() -> Option<PathBuf> {
 }
 
 fn run_interactive_plain() -> ExitCode {
-    let stdin = io::stdin();
-    let mut stdin = stdin.lock();
     let mut input = String::new();
     let (mut engine, mut shell_prompt) = load_interactive_shell();
 
@@ -163,7 +161,9 @@ fn run_interactive_plain() -> ExitCode {
         }
 
         input.clear();
-        match read_plain_command(&mut stdin, &mut input) {
+        // Lock stdin only while reading a line: a command such as `rm` reads its
+        // confirmation from stdin itself, and the lock is not reentrant.
+        match read_plain_command(&mut io::stdin().lock(), &mut input) {
             Ok(true) => {}
             Ok(false) => return ExitCode::SUCCESS,
             Err(error) => {

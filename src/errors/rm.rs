@@ -4,11 +4,21 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum RmError {
-    DeleteFailed { path: PathBuf, source: io::Error },
+    DeleteFailed {
+        path: PathBuf,
+        source: io::Error,
+    },
     InvalidOption(String),
     IsDirectory(PathBuf),
     MissingTarget,
     NotFound(PathBuf),
+    /// The target is `.`, `..` or the root directory.
+    Refused {
+        path: PathBuf,
+        reason: &'static str,
+    },
+    /// Several targets failed; each failure was already printed.
+    Several(usize),
 }
 
 impl fmt::Display for RmError {
@@ -33,6 +43,14 @@ impl fmt::Display for RmError {
                 "rm: cannot remove '{}': no such file or directory",
                 path.display()
             ),
+            Self::Refused { path, reason } => write!(
+                formatter,
+                "rm: refusing to remove '{}': {reason}",
+                path.display()
+            ),
+            Self::Several(count) => {
+                write!(formatter, "rm: {count} targets could not be removed")
+            }
         }
     }
 }
@@ -44,7 +62,9 @@ impl std::error::Error for RmError {
             Self::InvalidOption(_)
             | Self::IsDirectory(_)
             | Self::MissingTarget
-            | Self::NotFound(_) => None,
+            | Self::NotFound(_)
+            | Self::Refused { .. }
+            | Self::Several(_) => None,
         }
     }
 }

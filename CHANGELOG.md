@@ -5,6 +5,17 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Fixed
+
+- The remove command could delete what the user did not mean to: asking it to
+  remove the current directory or its parent emptied them. Those two targets and
+  the root directory are now refused, before anything is removed, as in GNU `rm`.
+- `rm` now keeps going after a failure and reports every failing target instead of
+  stopping at the first one, can remove a broken symlink, and never follows a
+  symlink to a directory.
+- A `rm` confirmation read from a piped standard input blocked the shell for ever,
+  and the question was not shown in a terminal until after the answer.
+
 ## [1.2.1] - 2026-11-20
 
 ### Added
