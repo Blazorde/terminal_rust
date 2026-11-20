@@ -5,6 +5,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-20
+
 ### Added
 
 - Command chaining: `;` runs the next command, `&&` only after a success and
