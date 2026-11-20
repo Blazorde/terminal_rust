@@ -592,6 +592,108 @@ fn lines_pasted_in_one_write_all_run_in_order() {
     assert!(status.success(), "shell should exit cleanly");
 }
 
+// While a program runs the terminal is in cooked mode and turns Enter into a
+// line feed, so input typed ahead reaches the line editor as Ctrl+J. It must
+// still accept the line: a binding that inserted a newline instead left the
+// command unexecuted.
+#[cfg(unix)]
+#[test]
+fn a_command_typed_while_a_program_runs_is_executed_afterwards() {
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows: 24,
+            cols: 100,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .expect("native PTY should open");
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .expect("PTY output should be readable");
+    let mut writer = pair
+        .master
+        .take_writer()
+        .expect("PTY input should be writable");
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut buffer = [0; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(length) => {
+                    if sender.send(buffer[..length].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    command.arg("--pty-shell");
+    command.env("TERMINAL_RUST_GUI", "1");
+    command.env("TERM", "xterm-256color");
+    let mut child = pair
+        .slave
+        .spawn_command(command)
+        .expect("desktop shell mode should start");
+    drop(pair.slave);
+
+    let mut output = Vec::new();
+    let mut cursor_answered = false;
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        1,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+
+    writer
+        .write_all(b"sleep 1\r")
+        .and_then(|()| writer.flush())
+        .expect("the program command should reach the PTY");
+    // Type the next command while `sleep` is still running.
+    thread::sleep(Duration::from_millis(400));
+    writer
+        .write_all(b"echo typed-ahead\r")
+        .and_then(|()| writer.flush())
+        .expect("the typed-ahead command should reach the PTY");
+
+    // The command's output starts a line, unlike its typed echo.
+    let result = "\r\ntyped-ahead\r\n";
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let text = loop {
+        if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
+            output.extend(chunk);
+        }
+        let text = String::from_utf8_lossy(&output).into_owned();
+        if text.contains(result) {
+            break text;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the command typed while a program ran was not executed: {text}"
+        );
+    };
+
+    let exit_deadline = Instant::now() + Duration::from_secs(10);
+    let mut next_exit = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("shell status should be readable") {
+            break status;
+        }
+        assert!(Instant::now() < exit_deadline, "shell did not exit: {text}");
+        if Instant::now() >= next_exit {
+            let _ = writer.write_all(b"exit\r").and_then(|()| writer.flush());
+            next_exit = Instant::now() + Duration::from_millis(500);
+        }
+        thread::sleep(Duration::from_millis(20));
+    };
+    assert!(status.success(), "shell should exit cleanly");
+}
+
 #[test]
 fn live_dashboard_exits_and_restores_the_desktop_pty() {
     let pair = native_pty_system()

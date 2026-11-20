@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
-use rustyline::{Cmd, ColorMode, CompletionType, Config, Editor, KeyEvent};
+use rustyline::{ColorMode, CompletionType, Config, Editor};
 
 use crate::app::completion::ShellHelper;
 use crate::app::parser::{continuation_prefix, normalize_multiline_input};
@@ -81,7 +81,6 @@ fn run_interactive_editor() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    editor.bind_sequence(KeyEvent::ctrl('J'), Cmd::Newline);
     editor.set_helper(Some(ShellHelper::with_command_names(
         engine.command_names(),
     )));
