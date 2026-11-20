@@ -29,6 +29,59 @@ Run `help` inside Terminal Rust for the authoritative command list.
 Install [Blazorde's Neovim configuration](Neovim) to use the editor with the
 published CodeOpsHQ setup.
 
+## Running other programs
+
+A command that is not built in runs the program of that name found in your
+`PATH`, so tools such as `cargo`, `python` or `htop` work directly:
+
+```text
+cargo build --release
+python3 script.py
+```
+
+The program shares the terminal, the environment and the current directory.
+`Ctrl+C` stops the program and returns to the prompt. A built-in command always
+takes precedence over a program of the same name. Pipes, redirections and
+variables are not available yet.
+
+## Variables
+
+`$NAME`, `${NAME}` and `$?` (`0` after a success, `1` after a failure) are
+expanded in command lines, and a leading `~` stands for your home directory.
+Double quotes expand variables, single quotes do not, and `\$` writes a literal
+dollar sign:
+
+```text
+NAME=world
+echo "hello $NAME"
+cd ~/code
+export EDITOR=nvim
+PATH=$PATH:$HOME/bin
+unset NAME
+```
+
+`NAME=value` creates a variable that only the shell sees. `export NAME` (or
+`export NAME=value`) also passes it to the programs you start, and `unset NAME`
+removes it. A variable that is not set expands to nothing, and an expansion is
+never split into several arguments. Setting a variable for a single command
+(`NAME=value command`) and `*` patterns are not available yet.
+
+## Chaining commands
+
+Put several commands on one line with `;`, `&&` and `||`:
+
+```text
+cargo build && cargo test
+cd project ; ls
+make || echo "build failed"
+```
+
+`;` always runs the next command, `&&` runs it only if the previous one
+succeeded, and `||` only if it failed. They are evaluated from left to right and
+`exit` stops the line. Quote an operator to use it as text. Pipes (`|`),
+redirections (`<`, `>`) and background jobs (`&`) are not available yet: the
+shell says so instead of passing them to a program.
+
 ## Paths containing spaces
 
 Quote a path containing spaces with single or double quotes so the command

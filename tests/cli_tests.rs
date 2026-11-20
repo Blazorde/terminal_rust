@@ -712,3 +712,112 @@ fn native_git_commands_work_from_a_path_with_spaces_and_unicode() {
         stderr(&delete_branch)
     );
 }
+
+#[test]
+fn a_name_that_is_not_built_in_runs_the_external_program() {
+    let directory = TestDirectory::new("external program");
+
+    let output = run_cli(directory.path(), &["rustc", "--version"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stdout(&output).starts_with("rustc "), "{}", stdout(&output));
+}
+
+#[test]
+fn a_failing_external_program_fails_the_shell_with_its_status() {
+    let directory = TestDirectory::new("external failure");
+
+    let output = run_cli(
+        directory.path(),
+        &["rustc", "--terminal-rust-no-such-option"],
+    );
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("rustc: exited with status"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn a_missing_program_still_reports_an_unknown_command() {
+    let directory = TestDirectory::new("external missing");
+
+    let output = run_cli(directory.path(), &["terminal-rust-no-such-program"]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("unknown command: terminal-rust-no-such-program"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn an_exported_variable_reaches_the_programs_the_shell_starts() {
+    let directory = TestDirectory::new("exported variable");
+    let shell = env!("CARGO_BIN_EXE_terminal_rust");
+    let input = format!(
+        "export TRS_IT_EXPORTED=visible\nTRS_IT_LOCAL=hidden\n\"{shell}\" printenv TRS_IT_EXPORTED\n\"{shell}\" printenv TRS_IT_LOCAL\nexit\n"
+    );
+
+    let output = run_interactive(directory.path(), &input);
+
+    let printed = stdout(&output);
+    assert!(printed.contains("visible"), "{printed}");
+    assert!(!printed.contains("hidden"), "{printed}");
+}
+
+#[test]
+fn variables_and_tilde_are_expanded_in_an_interactive_session() {
+    let directory = TestDirectory::new("expansion");
+    let input =
+        "TRS_IT_WORD=expanded\necho $TRS_IT_WORD ${TRS_IT_WORD}s\necho '$TRS_IT_WORD'\nexit\n";
+
+    let output = run_interactive(directory.path(), input);
+
+    let printed = stdout(&output);
+    assert!(printed.contains("expanded expandeds"), "{printed}");
+    assert!(printed.contains("$TRS_IT_WORD"), "{printed}");
+}
+
+#[test]
+fn output_stays_in_order_when_built_ins_and_a_program_are_chained() {
+    let directory = TestDirectory::new("chain order");
+    let input = "echo before-program ; rustc --version ; echo after-program\nexit\n";
+
+    let output = run_interactive(directory.path(), input);
+
+    let printed = stdout(&output);
+    let before = printed.find("before-program").expect("first output");
+    let program = printed.find("rustc 1.").expect("program output");
+    let after = printed.find("after-program").expect("last output");
+    assert!(before < program && program < after, "{printed}");
+}
+
+#[test]
+fn a_failure_stops_an_and_chain_and_runs_an_or_chain() {
+    let directory = TestDirectory::new("chain status");
+    let input = "terminal-rust-no-such-program && echo should-not-print\nterminal-rust-no-such-program || echo recovered\nexit\n";
+
+    let output = run_interactive(directory.path(), input);
+
+    let printed = stdout(&output);
+    assert!(!printed.contains("should-not-print"), "{printed}");
+    assert!(printed.contains("recovered"), "{printed}");
+}
+
+#[test]
+fn a_pipe_is_refused_with_a_clear_message() {
+    let directory = TestDirectory::new("pipe refused");
+
+    let output = run_interactive(directory.path(), "echo hello | cat\nexit\n");
+
+    assert!(
+        stderr(&output).contains("pipes (|) are not supported yet"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!stdout(&output).contains("hello"), "{}", stdout(&output));
+}

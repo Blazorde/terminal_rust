@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::io::{self, Write};
 
@@ -20,6 +20,14 @@ pub(crate) struct CapturedOutput {
 
 thread_local! {
     static OUTPUT_CAPTURE: RefCell<Option<CapturedOutput>> = const { RefCell::new(None) };
+    static STREAM_BEFORE_CHILDREN: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Ask for captured output to be written to the terminal before a child process
+/// starts. Only the terminal front ends need this ordering: the engine API keeps
+/// returning everything it captured.
+pub(crate) fn stream_before_children(enabled: bool) {
+    STREAM_BEFORE_CHILDREN.with(|flag| flag.set(enabled));
 }
 
 pub(crate) fn capture_output<T>(operation: impl FnOnce() -> T) -> (T, CapturedOutput) {
@@ -40,6 +48,32 @@ pub(crate) fn capture_output<T>(operation: impl FnOnce() -> T) -> (T, CapturedOu
     });
 
     (result, output)
+}
+
+/// Write the output captured so far to the terminal and keep capturing.
+///
+/// A child process writes straight to the terminal, so flushing first keeps the
+/// output of the built-in commands that ran before it in order.
+pub(crate) fn flush_captured() {
+    if !STREAM_BEFORE_CHILDREN.with(Cell::get) {
+        return;
+    }
+    let pending = OUTPUT_CAPTURE.with(|capture| capture.borrow_mut().as_mut().map(std::mem::take));
+    let Some(pending) = pending else {
+        return;
+    };
+    if !pending.stdout.is_empty() {
+        let _ = with_stdout(|writer| {
+            write_text(writer, &pending.stdout)?;
+            writer.flush()
+        });
+    }
+    if !pending.stderr.is_empty() {
+        let _ = with_stderr(|writer| {
+            write_text(writer, &pending.stderr)?;
+            writer.flush()
+        });
+    }
 }
 
 pub fn prompt_segments(

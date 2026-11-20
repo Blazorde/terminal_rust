@@ -1,6 +1,6 @@
 [package]
 name = "terminal_rust"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2024"
 description = "Mini shell Rust for developers on macOS, Linux, and Windows. A simple command-line interface for executing commands and managing files."
 readme = "README.md"
@@ -24,6 +24,7 @@ resolver = "2"
 
 [dependencies]
 crossterm = "0.29"
+ctrlc = "3"
 jiff = "0.2.38"
 rustyline = "19.0.0"
 serde = { version = "1.0", features = ["derive"] }

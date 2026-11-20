@@ -1,15 +1,18 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::app::help;
+use crate::app::parser::{Connector, parse_with, split_chain};
 use crate::commands::{
-    appearance, arch, cat, cd, clear, dashboard, date, echo, editor, fastfetch, git_command,
-    hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime, user,
-    whoami,
+    appearance, arch, cat, cd, clear, dashboard, date, echo, editor, external, fastfetch,
+    git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime,
+    user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
 use crate::plugin::DeclarativeCommandRegistry;
 use crate::render;
+use crate::utils::shell_env;
 
 mod aliases;
 mod scripts;
@@ -20,6 +23,8 @@ pub struct ShellState {
     user_commands: user::UserCommandRegistry,
     startup_script: Option<String>,
     script_depth: usize,
+    variables: HashMap<String, String>,
+    last_failed: bool,
 }
 
 impl ShellState {
@@ -34,7 +39,25 @@ impl ShellState {
             user_commands,
             startup_script,
             script_depth: 0,
+            variables: HashMap::new(),
+            last_failed: false,
         }
+    }
+
+    /// Value of a variable for expansion: `?`, then shell variables, then the
+    /// environment the programs would receive.
+    pub(crate) fn variable(&self, name: &str) -> Option<String> {
+        if name == "?" {
+            return Some(if self.last_failed { "1" } else { "0" }.to_string());
+        }
+        self.variables
+            .get(name)
+            .cloned()
+            .or_else(|| shell_env::value(name))
+    }
+
+    pub(crate) fn record_status(&mut self, failed: bool) {
+        self.last_failed = failed;
     }
 
     pub(crate) fn user_command_names(&self) -> Vec<String> {
@@ -293,6 +316,20 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_man,
     },
     CommandSpec {
+        name: "export",
+        usage: "export [NAME[=value]...]",
+        summary: "make variables available to the programs you start",
+        max_args: None,
+        handler: run_export,
+    },
+    CommandSpec {
+        name: "unset",
+        usage: "unset NAME...",
+        summary: "remove variables, including inherited ones",
+        max_args: None,
+        handler: run_unset,
+    },
+    CommandSpec {
         name: "hostname",
         usage: "hostname",
         summary: "display the system hostname",
@@ -325,10 +362,57 @@ pub(crate) fn command_help() -> impl Iterator<Item = (&'static str, &'static str
         .map(|command| (command.usage, command.summary))
 }
 
+/// Run a command line: one or more commands joined by `;`, `&&` and `||`.
+///
+/// Each segment is expanded right before it runs, so `$?` and variables set by
+/// an earlier segment are visible to the next one. The error of a segment that
+/// is followed by another one is printed here; the error of the last segment
+/// that ran is returned.
+pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
+    let segments = match split_chain(input) {
+        Ok(segments) => segments,
+        Err(error) => return CommandResult::Error(error),
+    };
+
+    let mut last = CommandResult::Continue;
+    for segment in segments {
+        let failed = matches!(last, CommandResult::Error(_));
+        let run = match segment.connector {
+            Connector::Then => true,
+            Connector::And => !failed,
+            Connector::Or => failed,
+        };
+        if !run {
+            continue;
+        }
+        if let CommandResult::Error(error) = &last {
+            let _ = render::stderr_line(error);
+        }
+
+        let parsed = parse_with(&segment.text, &|name| state.variable(name));
+        last = match parsed {
+            Ok(args) if args.is_empty() => CommandResult::Continue,
+            Ok(args) => execute(&args, state),
+            Err(error) => CommandResult::Error(error),
+        };
+        state.record_status(matches!(last, CommandResult::Error(_)));
+        if last == CommandResult::Exit {
+            break;
+        }
+    }
+    last
+}
+
 pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
     let Some(command_name) = args.first().map(String::as_str) else {
         return run_help(&[], state);
     };
+
+    if let [single] = args
+        && let Some((name, value)) = split_assignment(single)
+    {
+        return assign_variable(name, value, state);
+    }
 
     if let Some(command) = find_command(command_name) {
         let command_args = &args[1..];
@@ -384,7 +468,7 @@ fn execute_plugin_command(
         if let Some(reason) = state.plugin_commands.blocked_reason(name) {
             return CommandResult::Error(reason.to_string());
         }
-        return CommandResult::Error(CommandError::UnknownCommand(name.to_string()).to_string());
+        return execute_external(name, invocation_args);
     };
     if !invocation_args.is_empty() {
         return CommandResult::Error(format!(
@@ -393,6 +477,16 @@ fn execute_plugin_command(
         ));
     }
     map_prefixed_error(name, render::stdout(command.response))
+}
+
+fn execute_external(name: &str, args: &[String]) -> CommandResult {
+    match external::run(name, args) {
+        Ok(()) => CommandResult::Continue,
+        Err(external::RunError::NotFound) => {
+            CommandResult::Error(CommandError::UnknownCommand(name.to_string()).to_string())
+        }
+        Err(external::RunError::Failed(message)) => CommandResult::Error(message),
+    }
 }
 
 fn find_command(name: &str) -> Option<&'static CommandSpec> {
@@ -554,6 +648,61 @@ fn run_man(args: &[String], _state: &mut ShellState) -> CommandResult {
         return map_prefixed_error("man", man::show(&entry));
     }
     map_display_error(man::show_system(args))
+}
+
+fn split_assignment(argument: &str) -> Option<(&str, &str)> {
+    let (name, value) = argument.split_once('=')?;
+    shell_env::is_valid_name(name).then_some((name, value))
+}
+
+fn assign_variable(name: &str, value: &str, state: &mut ShellState) -> CommandResult {
+    if shell_env::is_exported(name) {
+        shell_env::export(name, value);
+    } else {
+        state.variables.insert(name.to_string(), value.to_string());
+    }
+    CommandResult::Continue
+}
+
+fn run_export(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args.is_empty() {
+        return map_prefixed_error("export", printenv::printenv(&[]));
+    }
+    for argument in args {
+        let (name, value) = match argument.split_once('=') {
+            Some((name, value)) => (name, Some(value)),
+            None => (argument.as_str(), None),
+        };
+        if !shell_env::is_valid_name(name) {
+            return CommandResult::Error(format!("export: not a valid name: {name}"));
+        }
+        let value = match value {
+            Some(value) => value.to_string(),
+            None => state
+                .variables
+                .get(name)
+                .cloned()
+                .or_else(|| shell_env::value(name))
+                .unwrap_or_default(),
+        };
+        state.variables.remove(name);
+        shell_env::export(name, &value);
+    }
+    CommandResult::Continue
+}
+
+fn run_unset(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args.is_empty() {
+        return CommandResult::Error("unset: expected at least one name".into());
+    }
+    for name in args {
+        if !shell_env::is_valid_name(name) {
+            return CommandResult::Error(format!("unset: not a valid name: {name}"));
+        }
+        state.variables.remove(name.as_str());
+        shell_env::remove(name);
+    }
+    CommandResult::Continue
 }
 
 fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {

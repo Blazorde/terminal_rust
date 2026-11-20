@@ -186,6 +186,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | cssparser-macros | 0.7.1 | MPL-2.0 | https://github.com/servo/rust-cssparser |
 | Rust | cssparser | 0.37.0 | MPL-2.0 | https://github.com/servo/rust-cssparser |
 | Rust | ctor | 1.0.13 | Apache-2.0 OR MIT | https://github.com/mmastrac/linktime |
+| Rust | ctrlc | 3.5.3 | MIT/Apache-2.0 | https://github.com/Detegr/rust-ctrlc.git |
 | Rust | cursor-icon | 1.2.0 | MIT OR Apache-2.0 OR Zlib | https://github.com/rust-windowing/cursor-icon |
 | Rust | darling_core | 0.24.1 | MIT | https://github.com/TedDriggs/darling |
 | Rust | darling_macro | 0.24.1 | MIT | https://github.com/TedDriggs/darling |

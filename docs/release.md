@@ -59,6 +59,25 @@ must agree.
 5. After approval and merge, create lowercase tag `vx.y.z` on the `main` commit.
 6. Verify all build and publish jobs, archives, checksums and release notes.
 
+## Keeping `develop` and `main` linked
+
+`main` holds one snapshot commit per version, so its history is not made of
+`develop` commits. GitHub refuses a pull request between branches that share no
+history, and a squash merge into `main` breaks the link again.
+
+After each release, merge `main` back into `develop` with a merge commit that
+keeps the `develop` tree:
+
+```bash
+git switch -c chore/link-main-history origin/develop
+git merge -s ours --no-commit origin/main
+git commit -m "chore(release): merge main into develop"
+```
+
+Open that branch as a pull request into `develop` and merge it with a **merge
+commit**, never a squash. The next release then goes through a regular
+`develop` to `main` pull request.
+
 Tags with a SemVer prerelease suffix, such as `v1.0.0-alpha.1`, are published as
 GitHub prereleases and do not replace the latest stable release. Tag creation is
 the publication trigger and requires a separate explicit owner approval after

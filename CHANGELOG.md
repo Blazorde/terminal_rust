@@ -5,6 +5,33 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-20
+
+### Added
+
+- Command chaining: `;` runs the next command, `&&` only after a success and
+  `||` only after a failure. Each command is expanded right before it runs, so
+  `$?` and variables set earlier on the line are visible, and output stays in the
+  order of the commands even when programs are involved. See ADR-0010.
+
+### Changed
+
+- An unquoted `|`, `<`, `>` or `&` is now rejected with a clear message instead
+  of being passed to a program as an argument, until pipes, redirections and
+  background jobs are designed.
+
+- Variables in command lines: `$NAME`, `${NAME}`, `$?` and a leading `~` are
+  expanded outside and inside double quotes (not inside single quotes), `\$`
+  writes a dollar sign, and `NAME=value` sets a variable. `export NAME[=value]`
+  passes a variable to the programs the shell starts, `unset NAME` removes it,
+  and `PATH=$PATH:dir` updates the search path. See ADR-0009.
+- Any command that is not built in now runs the program of that name found in
+  `PATH` (`PATHEXT` is honored on Windows), with the terminal streams, the
+  environment and the current directory of the shell. A missing program still
+  reports `unknown command`, and a failing one reports its exit status. See
+  ADR-0008.
+- `Ctrl+C` no longer ends the interactive shell while a program is running.
+
 ## [1.1.0] - 2026-11-20
 
 ### Added

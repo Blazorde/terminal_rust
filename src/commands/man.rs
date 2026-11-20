@@ -2,6 +2,7 @@ use std::io;
 use std::process::Command;
 
 use crate::render;
+use crate::utils::shell_env;
 
 /// Built-in command data a manual page is made from.
 pub struct Entry<'a> {
@@ -25,7 +26,9 @@ pub fn show(entry: &Entry) -> io::Result<()> {
 
 /// Defer to the operating system's `man` for anything that is not a built-in.
 pub fn show_system(args: &[String]) -> io::Result<()> {
-    let status = match Command::new("man").args(args).status() {
+    let mut command = Command::new("man");
+    shell_env::prepare_child(&mut command);
+    let status = match command.args(args).status() {
         Ok(status) => status,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             return Err(io::Error::other(format!(

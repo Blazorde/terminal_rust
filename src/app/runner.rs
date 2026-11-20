@@ -11,6 +11,7 @@ use rustyline::{Cmd, ColorMode, CompletionType, Config, Editor, KeyEvent};
 use crate::app::completion::ShellHelper;
 use crate::app::parser::{continuation_prefix, normalize_multiline_input};
 use crate::app::prompt::{GUI_PROMPT_ENV, Prompt};
+use crate::commands::external;
 use crate::config::{self, AppConfig, AppearanceSettings, appearance_ansi_sequences};
 use crate::core::{ExecutionResult, ExecutionStatus, ShellEngine};
 use crate::render;
@@ -18,6 +19,7 @@ use crate::render;
 const HISTORY_FILE_ENV: &str = "TERMINAL_RUST_HISTORY_FILE";
 
 pub fn run() -> ExitCode {
+    render::stream_before_children(true);
     let args: Vec<String> = env::args().skip(1).collect();
 
     if args.is_empty() {
@@ -56,6 +58,8 @@ fn run_once(args: &[String]) -> ExitCode {
 }
 
 pub fn run_interactive() -> ExitCode {
+    render::stream_before_children(true);
+    external::keep_shell_alive_on_interrupt();
     if io::stdin().is_terminal() {
         run_interactive_editor()
     } else {

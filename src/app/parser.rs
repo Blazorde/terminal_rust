@@ -4,7 +4,10 @@ enum Quote {
     Double,
 }
 
-pub fn parse_input(input: &str) -> Result<Vec<String>, String> {
+/// Look up the value of a variable name (`?` is the last status).
+pub type Lookup<'a> = &'a dyn Fn(&str) -> Option<String>;
+
+pub fn parse_with(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
     let mut args = Vec::new();
     let mut current = String::new();
     let mut quote: Option<Quote> = None;
@@ -15,8 +18,13 @@ pub fn parse_input(input: &str) -> Result<Vec<String>, String> {
         match (quote, character) {
             (Some(Quote::Single), '\'') | (Some(Quote::Double), '"') => quote = None,
             (Some(Quote::Single), character) => current.push(character),
-            (Some(Quote::Double), '\\') if matches!(characters.peek(), Some('"' | '\\')) => {
-                current.push(characters.next().expect("peeked character should exist"));
+            (Some(Quote::Double), '\\') if matches!(characters.peek(), Some('"' | '\\' | '$')) => {
+                if let Some(escaped) = characters.next() {
+                    current.push(escaped);
+                }
+            }
+            (Some(Quote::Double), '$') => {
+                expand_variable(&mut characters, lookup, &mut current)?;
             }
             (Some(Quote::Double), character) => current.push(character),
             (None, '\'') => {
@@ -29,14 +37,33 @@ pub fn parse_input(input: &str) -> Result<Vec<String>, String> {
             }
             (None, '\\')
                 if characters.peek().is_some_and(|next| {
-                    next.is_whitespace() || matches!(next, '\\' | '\'' | '"')
+                    next.is_whitespace() || matches!(next, '\\' | '\'' | '"' | '$')
                 }) =>
             {
-                current.push(characters.next().expect("peeked character should exist"));
+                if let Some(escaped) = characters.next() {
+                    current.push(escaped);
+                }
                 started_argument = true;
             }
             (None, '\\') => {
                 current.push(character);
+                started_argument = true;
+            }
+            (None, '$') => {
+                if expand_variable(&mut characters, lookup, &mut current)? {
+                    started_argument = true;
+                }
+            }
+            (None, '~')
+                if !started_argument
+                    && characters
+                        .peek()
+                        .is_none_or(|next| next.is_whitespace() || matches!(next, '/' | '\\')) =>
+            {
+                match lookup("HOME").or_else(|| lookup("USERPROFILE")) {
+                    Some(home) => current.push_str(&home),
+                    None => current.push('~'),
+                }
                 started_argument = true;
             }
             (None, character) if character.is_whitespace() => {
@@ -61,6 +88,166 @@ pub fn parse_input(input: &str) -> Result<Vec<String>, String> {
     }
 
     Ok(args)
+}
+
+/// Expand the variable after a `$` that was just read. Returns whether text was
+/// added, so an empty unquoted expansion does not create an argument.
+fn expand_variable(
+    characters: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    lookup: Lookup,
+    output: &mut String,
+) -> Result<bool, String> {
+    let name = match characters.peek().copied() {
+        Some('{') => {
+            characters.next();
+            let mut name = String::new();
+            loop {
+                match characters.next() {
+                    Some('}') => break,
+                    Some(character) => name.push(character),
+                    None => return Err("missing closing brace in variable expansion".to_string()),
+                }
+            }
+            if !crate::utils::shell_env::is_valid_name(&name) && name != "?" {
+                return Err(format!("invalid variable name: {name}"));
+            }
+            name
+        }
+        Some('?') => {
+            characters.next();
+            "?".to_string()
+        }
+        Some(first) if first.is_ascii_alphabetic() || first == '_' => {
+            let mut name = String::new();
+            while let Some(&next) = characters.peek() {
+                if !(next.is_ascii_alphanumeric() || next == '_') {
+                    break;
+                }
+                name.push(next);
+                characters.next();
+            }
+            name
+        }
+        _ => {
+            output.push('$');
+            return Ok(true);
+        }
+    };
+
+    let value = lookup(&name).unwrap_or_default();
+    output.push_str(&value);
+    Ok(!value.is_empty())
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Connector {
+    /// Run unconditionally: the first command, or after `;`.
+    Then,
+    /// Run only if the previous command succeeded (`&&`).
+    And,
+    /// Run only if the previous command failed (`||`).
+    Or,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct Segment {
+    pub connector: Connector,
+    pub text: String,
+}
+
+/// Split a line at the `;`, `&&` and `||` that are neither quoted nor escaped.
+///
+/// The text of each segment is returned untouched, so quotes and variables are
+/// handled later, right before that segment runs. Pipes, redirections and
+/// background jobs are rejected instead of being passed to a program as
+/// arguments.
+pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
+    let mut segments = Vec::new();
+    let mut current = String::new();
+    let mut connector = Connector::Then;
+    let mut quote: Option<Quote> = None;
+    let mut characters = input.chars().peekable();
+
+    while let Some(character) = characters.next() {
+        match (quote, character) {
+            (Some(Quote::Single), '\'') | (Some(Quote::Double), '"') => {
+                quote = None;
+                current.push(character);
+            }
+            (Some(Quote::Double), '\\') if matches!(characters.peek(), Some('"' | '\\' | '$')) => {
+                current.push(character);
+                current.extend(characters.next());
+            }
+            (Some(_), character) => current.push(character),
+            (None, '\'') => {
+                quote = Some(Quote::Single);
+                current.push(character);
+            }
+            (None, '"') => {
+                quote = Some(Quote::Double);
+                current.push(character);
+            }
+            (None, '\\') => {
+                current.push(character);
+                current.extend(characters.next());
+            }
+            (None, ';') => {
+                finish_segment(&mut segments, &mut current, connector, ";")?;
+                connector = Connector::Then;
+            }
+            (None, '&') if characters.peek() == Some(&'&') => {
+                characters.next();
+                finish_segment(&mut segments, &mut current, connector, "&&")?;
+                connector = Connector::And;
+            }
+            (None, '|') if characters.peek() == Some(&'|') => {
+                characters.next();
+                finish_segment(&mut segments, &mut current, connector, "||")?;
+                connector = Connector::Or;
+            }
+            (None, '&') => return Err("background jobs (&) are not supported yet".to_string()),
+            (None, '|') => return Err("pipes (|) are not supported yet".to_string()),
+            (None, '<' | '>') => {
+                return Err("redirections (< and >) are not supported yet".to_string());
+            }
+            (None, character) => current.push(character),
+        }
+    }
+
+    if quote.is_some() {
+        return Err("missing closing quote".to_string());
+    }
+    if !current.trim().is_empty() {
+        segments.push(Segment {
+            connector,
+            text: current,
+        });
+    } else if connector != Connector::Then {
+        let operator = if connector == Connector::And {
+            "&&"
+        } else {
+            "||"
+        };
+        return Err(format!("expected a command after {operator}"));
+    }
+
+    Ok(segments)
+}
+
+fn finish_segment(
+    segments: &mut Vec<Segment>,
+    current: &mut String,
+    connector: Connector,
+    operator: &str,
+) -> Result<(), String> {
+    if current.trim().is_empty() {
+        return Err(format!("syntax error near unexpected token '{operator}'"));
+    }
+    segments.push(Segment {
+        connector,
+        text: std::mem::take(current),
+    });
+    Ok(())
 }
 
 pub fn continuation_prefix(line: &str) -> Option<&str> {
@@ -100,6 +287,272 @@ pub fn normalize_multiline_input(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parse_input(input: &str) -> Result<Vec<String>, String> {
+        parse_with(input, &|_| None)
+    }
+
+    fn chain(input: &str) -> Result<Vec<(Connector, String)>, String> {
+        split_chain(input).map(|segments| {
+            segments
+                .into_iter()
+                .map(|segment| (segment.connector, segment.text.trim().to_string()))
+                .collect()
+        })
+    }
+
+    fn step(connector: Connector, text: &str) -> (Connector, String) {
+        (connector, text.to_string())
+    }
+
+    #[test]
+    fn a_line_without_operator_is_one_segment() {
+        assert_eq!(
+            chain("echo hello"),
+            Ok(vec![step(Connector::Then, "echo hello")])
+        );
+    }
+
+    #[test]
+    fn an_empty_line_has_no_segment() {
+        assert_eq!(chain("   "), Ok(Vec::new()));
+        assert_eq!(chain(""), Ok(Vec::new()));
+    }
+
+    #[test]
+    fn the_three_operators_split_the_line() {
+        assert_eq!(
+            chain("a ; b && c || d"),
+            Ok(vec![
+                step(Connector::Then, "a"),
+                step(Connector::Then, "b"),
+                step(Connector::And, "c"),
+                step(Connector::Or, "d"),
+            ])
+        );
+    }
+
+    #[test]
+    fn operators_without_spaces_split_too() {
+        assert_eq!(
+            chain("a;b&&c||d"),
+            Ok(vec![
+                step(Connector::Then, "a"),
+                step(Connector::Then, "b"),
+                step(Connector::And, "c"),
+                step(Connector::Or, "d"),
+            ])
+        );
+    }
+
+    #[test]
+    fn quoted_operators_are_text() {
+        assert_eq!(
+            chain(r#"echo "a && b" ; echo 'c | d > e' "#),
+            Ok(vec![
+                step(Connector::Then, r#"echo "a && b""#),
+                step(Connector::Then, "echo 'c | d > e'"),
+            ])
+        );
+    }
+
+    #[test]
+    fn an_escaped_operator_is_text() {
+        assert_eq!(
+            chain(r"echo a\;b"),
+            Ok(vec![step(Connector::Then, r"echo a\;b")])
+        );
+    }
+
+    #[test]
+    fn an_escaped_quote_does_not_end_a_double_quoted_string() {
+        let line = r#"echo "say \" ; hi""#;
+
+        assert_eq!(chain(line), Ok(vec![step(Connector::Then, line)]));
+    }
+
+    #[test]
+    fn a_trailing_semicolon_is_allowed() {
+        assert_eq!(chain("a ;"), Ok(vec![step(Connector::Then, "a")]));
+    }
+
+    #[test]
+    fn a_missing_command_is_a_syntax_error() {
+        assert_eq!(
+            chain("&& a"),
+            Err("syntax error near unexpected token '&&'".to_string())
+        );
+        assert_eq!(
+            chain("a ;; b"),
+            Err("syntax error near unexpected token ';'".to_string())
+        );
+        assert_eq!(
+            chain("a &&"),
+            Err("expected a command after &&".to_string())
+        );
+        assert_eq!(
+            chain("a ||"),
+            Err("expected a command after ||".to_string())
+        );
+    }
+
+    #[test]
+    fn pipes_redirections_and_background_jobs_are_rejected() {
+        assert_eq!(
+            chain("a | b"),
+            Err("pipes (|) are not supported yet".to_string())
+        );
+        assert_eq!(
+            chain("a > f"),
+            Err("redirections (< and >) are not supported yet".to_string())
+        );
+        assert_eq!(
+            chain("a < f"),
+            Err("redirections (< and >) are not supported yet".to_string())
+        );
+        assert_eq!(
+            chain("a &"),
+            Err("background jobs (&) are not supported yet".to_string())
+        );
+    }
+
+    #[test]
+    fn an_unclosed_quote_is_reported() {
+        assert_eq!(
+            chain("echo 'a ; b"),
+            Err("missing closing quote".to_string())
+        );
+    }
+
+    fn variables(name: &str) -> Option<String> {
+        match name {
+            "NAME" => Some("world".to_string()),
+            "EMPTY" => Some(String::new()),
+            "HOME" => Some("/home/test".to_string()),
+            "?" => Some("1".to_string()),
+            "PATH_LIKE" => Some("a b".to_string()),
+            _ => None,
+        }
+    }
+
+    fn expanded(input: &str) -> Result<Vec<String>, String> {
+        parse_with(input, &variables)
+    }
+
+    fn words(values: &[&str]) -> Result<Vec<String>, String> {
+        Ok(values.iter().map(ToString::to_string).collect())
+    }
+
+    #[test]
+    fn a_variable_is_expanded_outside_quotes() {
+        assert_eq!(expanded("echo $NAME"), words(&["echo", "world"]));
+        assert_eq!(
+            expanded("echo pre$NAME-post"),
+            words(&["echo", "preworld-post"])
+        );
+    }
+
+    #[test]
+    fn braces_end_the_variable_name() {
+        assert_eq!(expanded("echo ${NAME}s"), words(&["echo", "worlds"]));
+    }
+
+    #[test]
+    fn a_variable_is_expanded_inside_double_quotes() {
+        assert_eq!(
+            expanded(r#"echo "hello $NAME""#),
+            words(&["echo", "hello world"])
+        );
+    }
+
+    #[test]
+    fn a_variable_is_not_expanded_inside_single_quotes() {
+        assert_eq!(expanded("echo '$NAME'"), words(&["echo", "$NAME"]));
+    }
+
+    #[test]
+    fn an_escaped_dollar_is_literal() {
+        assert_eq!(expanded(r"echo \$NAME"), words(&["echo", "$NAME"]));
+        assert_eq!(expanded(r#"echo "\$NAME""#), words(&["echo", "$NAME"]));
+    }
+
+    #[test]
+    fn an_unset_variable_expands_to_nothing() {
+        assert_eq!(expanded("echo $MISSING end"), words(&["echo", "end"]));
+        assert_eq!(
+            expanded("echo pre${MISSING}post"),
+            words(&["echo", "prepost"])
+        );
+    }
+
+    #[test]
+    fn an_empty_unquoted_expansion_removes_its_argument() {
+        assert_eq!(expanded("echo $EMPTY end"), words(&["echo", "end"]));
+    }
+
+    #[test]
+    fn an_empty_quoted_expansion_keeps_an_empty_argument() {
+        assert_eq!(
+            expanded(r#"echo "$EMPTY" end"#),
+            words(&["echo", "", "end"])
+        );
+    }
+
+    #[test]
+    fn an_expansion_is_never_split_into_several_arguments() {
+        assert_eq!(expanded("echo $PATH_LIKE"), words(&["echo", "a b"]));
+    }
+
+    #[test]
+    fn the_last_status_is_available() {
+        assert_eq!(expanded("echo $?"), words(&["echo", "1"]));
+        assert_eq!(expanded("echo ${?}"), words(&["echo", "1"]));
+    }
+
+    #[test]
+    fn a_lone_dollar_stays_literal() {
+        assert_eq!(expanded("echo $ cost$"), words(&["echo", "$", "cost$"]));
+        assert_eq!(expanded("echo $5"), words(&["echo", "$5"]));
+    }
+
+    #[test]
+    fn an_unclosed_brace_is_an_error() {
+        assert_eq!(
+            expanded("echo ${NAME"),
+            Err("missing closing brace in variable expansion".to_string())
+        );
+    }
+
+    #[test]
+    fn an_invalid_name_in_braces_is_an_error() {
+        assert_eq!(
+            expanded("echo ${1a}"),
+            Err("invalid variable name: 1a".to_string())
+        );
+        assert_eq!(
+            expanded("echo ${}"),
+            Err("invalid variable name: ".to_string())
+        );
+    }
+
+    #[test]
+    fn a_leading_tilde_becomes_the_home_directory() {
+        assert_eq!(expanded("cd ~"), words(&["cd", "/home/test"]));
+        assert_eq!(expanded("cd ~/code"), words(&["cd", "/home/test/code"]));
+    }
+
+    #[test]
+    fn a_tilde_elsewhere_or_quoted_stays_literal() {
+        assert_eq!(expanded("echo a~b"), words(&["echo", "a~b"]));
+        assert_eq!(expanded("echo ~user"), words(&["echo", "~user"]));
+        assert_eq!(expanded(r#"echo "~""#), words(&["echo", "~"]));
+        assert_eq!(expanded("echo '~'"), words(&["echo", "~"]));
+    }
+
+    #[test]
+    fn a_tilde_without_a_home_directory_stays_literal() {
+        assert_eq!(parse_with("cd ~", &|_| None), words(&["cd", "~"]));
+    }
 
     #[test]
     fn parse_input_splits_words() {

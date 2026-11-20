@@ -2,7 +2,6 @@ use std::env;
 use std::path::PathBuf;
 
 use crate::app::command::{self, CommandResult, ShellState};
-use crate::app::parser::parse_input;
 use crate::commands::user::UserCommandRegistry;
 use crate::config::AppConfig;
 use crate::plugin::DeclarativeCommandRegistry;
@@ -95,17 +94,22 @@ impl ShellEngine {
     }
 
     pub fn execute_line(&mut self, input: &str) -> ExecutionResult {
-        match parse_input(input) {
-            Ok(args) if args.is_empty() => self.empty_result(),
-            Ok(args) => self.execute_args(&args),
-            Err(error) => self.failed_result(error),
+        if input.trim().is_empty() {
+            return self.empty_result();
         }
+        self.run_captured(|state| command::run_line(input, state))
     }
 
     pub fn execute_args(&mut self, args: &[String]) -> ExecutionResult {
+        self.run_captured(|state| command::execute(args, state))
+    }
+
+    fn run_captured(
+        &mut self,
+        run: impl FnOnce(&mut ShellState) -> CommandResult,
+    ) -> ExecutionResult {
         let previous_dir = env::current_dir().ok();
-        let (command_result, output) =
-            render::capture_output(|| command::execute(args, &mut self.state));
+        let (command_result, output) = render::capture_output(|| run(&mut self.state));
         let current_dir = env::current_dir().ok();
         let directory_change = match (&previous_dir, &current_dir) {
             (Some(previous), Some(current)) if previous != current => Some(DirectoryChange {
@@ -120,6 +124,7 @@ impl ShellEngine {
             CommandResult::Exit => (ExecutionStatus::Exit, None),
             CommandResult::Error(error) => (ExecutionStatus::Failed, Some(error)),
         };
+        self.state.record_status(status == ExecutionStatus::Failed);
 
         ExecutionResult {
             status,
@@ -137,17 +142,6 @@ impl ShellEngine {
             stdout: String::new(),
             stderr: String::new(),
             error: None,
-            current_dir: env::current_dir().ok(),
-            directory_change: None,
-        }
-    }
-
-    fn failed_result(&self, error: String) -> ExecutionResult {
-        ExecutionResult {
-            status: ExecutionStatus::Failed,
-            stdout: String::new(),
-            stderr: String::new(),
-            error: Some(error),
             current_dir: env::current_dir().ok(),
             directory_change: None,
         }
@@ -366,5 +360,242 @@ response = "Hello from the official Terminal Rust plugin!\n"
             )
         );
         fs::remove_dir_all(root).expect("plugin fixture should be removed");
+    }
+
+    #[test]
+    fn a_variable_set_on_one_line_is_expanded_on_the_next() {
+        let mut engine = ShellEngine::new();
+
+        engine.execute_line("TRS_ENGINE_SET=five");
+        let result = engine.execute_line("echo $TRS_ENGINE_SET and ${TRS_ENGINE_SET}");
+
+        assert_eq!(result.stdout, "five and five\n");
+    }
+
+    #[test]
+    fn single_quotes_keep_the_dollar_sign() {
+        let mut engine = ShellEngine::new();
+        engine.execute_line("TRS_ENGINE_QUOTE=x");
+
+        let result = engine.execute_line("echo '$TRS_ENGINE_QUOTE' \"$TRS_ENGINE_QUOTE\"");
+
+        assert_eq!(result.stdout, "$TRS_ENGINE_QUOTE x\n");
+    }
+
+    #[test]
+    fn the_last_status_follows_success_and_failure() {
+        let mut engine = ShellEngine::new();
+
+        engine.execute_line("echo fine");
+        assert_eq!(engine.execute_line("echo $?").stdout, "0\n");
+
+        engine.execute_line("terminal-rust-no-such-program");
+        assert_eq!(engine.execute_line("echo $?").stdout, "1\n");
+    }
+
+    #[test]
+    fn export_makes_a_variable_visible_to_printenv() {
+        let mut engine = ShellEngine::new();
+
+        engine.execute_line("export TRS_ENGINE_EXPORT=shared");
+        let result = engine.execute_line("printenv TRS_ENGINE_EXPORT");
+
+        assert_eq!(result.stdout, "shared\n");
+    }
+
+    #[test]
+    fn an_unexported_variable_is_not_part_of_the_environment() {
+        let mut engine = ShellEngine::new();
+
+        engine.execute_line("TRS_ENGINE_LOCAL=private");
+        let result = engine.execute_line("printenv TRS_ENGINE_LOCAL");
+
+        assert_eq!(result.status, ExecutionStatus::Failed);
+        assert_eq!(result.stdout, "");
+    }
+
+    #[test]
+    fn export_without_a_value_exports_the_current_one() {
+        let mut engine = ShellEngine::new();
+        engine.execute_line("TRS_ENGINE_PROMOTE=kept");
+
+        engine.execute_line("export TRS_ENGINE_PROMOTE");
+
+        assert_eq!(
+            engine.execute_line("printenv TRS_ENGINE_PROMOTE").stdout,
+            "kept\n"
+        );
+    }
+
+    #[test]
+    fn assigning_an_exported_variable_updates_what_programs_receive() {
+        let mut engine = ShellEngine::new();
+        engine.execute_line("export TRS_ENGINE_UPDATE=old");
+
+        engine.execute_line("TRS_ENGINE_UPDATE=new");
+
+        assert_eq!(
+            engine.execute_line("printenv TRS_ENGINE_UPDATE").stdout,
+            "new\n"
+        );
+    }
+
+    #[test]
+    fn unset_removes_local_and_exported_variables() {
+        let mut engine = ShellEngine::new();
+        engine.execute_line("export TRS_ENGINE_GONE=1");
+        engine.execute_line("TRS_ENGINE_GONE_LOCAL=2");
+
+        engine.execute_line("unset TRS_ENGINE_GONE TRS_ENGINE_GONE_LOCAL");
+
+        assert_eq!(
+            engine
+                .execute_line("echo [$TRS_ENGINE_GONE][$TRS_ENGINE_GONE_LOCAL]")
+                .stdout,
+            "[][]\n"
+        );
+        assert_eq!(
+            engine.execute_line("printenv TRS_ENGINE_GONE").status,
+            ExecutionStatus::Failed
+        );
+    }
+
+    #[test]
+    fn export_and_unset_reject_invalid_names() {
+        let mut engine = ShellEngine::new();
+
+        let export = engine.execute_line("export 1bad=x");
+        let unset = engine.execute_line("unset bad-name");
+        let missing = engine.execute_line("unset");
+
+        assert_eq!(
+            export.error.as_deref(),
+            Some("export: not a valid name: 1bad")
+        );
+        assert_eq!(
+            unset.error.as_deref(),
+            Some("unset: not a valid name: bad-name")
+        );
+        assert_eq!(missing.status, ExecutionStatus::Failed);
+    }
+
+    #[test]
+    fn a_word_that_is_not_an_assignment_is_still_a_command() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("1bad=x");
+
+        assert_eq!(result.error.as_deref(), Some("unknown command: 1bad=x"));
+    }
+
+    #[test]
+    fn a_semicolon_runs_both_commands_in_order() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("echo one ; echo two");
+
+        assert_eq!(result.stdout, "one\ntwo\n");
+        assert_eq!(result.status, ExecutionStatus::Continue);
+    }
+
+    #[test]
+    fn and_skips_the_next_command_after_a_failure() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("cd /terminal-rust/no/such/directory && echo skipped");
+
+        assert_eq!(result.stdout, "");
+        assert_eq!(result.status, ExecutionStatus::Failed);
+        assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn and_runs_the_next_command_after_a_success() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("echo first && echo second");
+
+        assert_eq!(result.stdout, "first\nsecond\n");
+    }
+
+    #[test]
+    fn or_runs_the_next_command_only_after_a_failure() {
+        let mut engine = ShellEngine::new();
+
+        let recovered =
+            engine.execute_line("cd /terminal-rust/no/such/directory || echo recovered");
+        let skipped = engine.execute_line("echo fine || echo never");
+
+        assert_eq!(recovered.stdout, "recovered\n");
+        assert_eq!(recovered.status, ExecutionStatus::Continue);
+        assert!(
+            recovered.stderr.contains("cd:"),
+            "the skipped failure should still be reported: {}",
+            recovered.stderr
+        );
+        assert_eq!(skipped.stdout, "fine\n");
+    }
+
+    #[test]
+    fn the_status_variable_follows_each_segment_of_the_line() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("cd /terminal-rust/no/such/directory || echo status $?");
+
+        assert_eq!(result.stdout, "status 1\n");
+    }
+
+    #[test]
+    fn a_variable_set_in_one_segment_is_visible_in_the_next() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("TRS_CHAIN_VALUE=carried ; echo $TRS_CHAIN_VALUE");
+
+        assert_eq!(result.stdout, "carried\n");
+    }
+
+    #[test]
+    fn exit_stops_the_rest_of_the_line() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("echo before ; exit ; echo after");
+
+        assert_eq!(result.status, ExecutionStatus::Exit);
+        assert_eq!(result.stdout, "before\n");
+    }
+
+    #[test]
+    fn the_last_segment_decides_the_final_status() {
+        let mut engine = ShellEngine::new();
+
+        let failed_last = engine.execute_line("echo ok ; cd /terminal-rust/no/such/directory");
+        let succeeded_last = engine.execute_line("cd /terminal-rust/no/such/directory ; echo ok");
+
+        assert_eq!(failed_last.status, ExecutionStatus::Failed);
+        assert_eq!(succeeded_last.status, ExecutionStatus::Continue);
+    }
+
+    #[test]
+    fn a_pipe_is_rejected_instead_of_being_passed_as_an_argument() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("echo hello | cat");
+
+        assert_eq!(result.status, ExecutionStatus::Failed);
+        assert_eq!(
+            result.error.as_deref(),
+            Some("pipes (|) are not supported yet")
+        );
+        assert_eq!(result.stdout, "");
+    }
+
+    #[test]
+    fn nothing_runs_when_a_later_segment_has_a_syntax_error() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("echo first ; && echo second");
+
+        assert_eq!(result.stdout, "");
+        assert!(result.error.is_some());
     }
 }
