@@ -18,36 +18,36 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 
 | Ecosystem | Package | Version | Declared license | Source |
 | --- | --- | --- | --- | --- |
-| npm | @oxc-project/types | 0.153.0 | MIT | https://www.npmjs.com/package/@oxc-project/types |
-| npm | @rolldown/binding-android-arm-eabi | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-android-arm-eabi |
-| npm | @rolldown/binding-android-arm64 | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-android-arm64 |
-| npm | @rolldown/binding-darwin-arm64 | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-darwin-arm64 |
-| npm | @rolldown/binding-darwin-x64 | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-darwin-x64 |
-| npm | @rolldown/binding-freebsd-x64 | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-freebsd-x64 |
-| npm | @rolldown/binding-linux-arm-gnueabihf | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm-gnueabihf |
-| npm | @rolldown/binding-linux-arm64-gnu | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm64-gnu |
-| npm | @rolldown/binding-linux-arm64-musl | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm64-musl |
-| npm | @rolldown/binding-linux-ppc64-gnu | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-ppc64-gnu |
-| npm | @rolldown/binding-linux-s390x-gnu | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-s390x-gnu |
-| npm | @rolldown/binding-linux-x64-gnu | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-x64-gnu |
-| npm | @rolldown/binding-linux-x64-musl | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-x64-musl |
-| npm | @rolldown/binding-openharmony-arm64 | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-openharmony-arm64 |
-| npm | @rolldown/binding-win32-arm64-msvc | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-win32-arm64-msvc |
-| npm | @rolldown/binding-win32-x64-msvc | 1.2.13 | MIT | https://www.npmjs.com/package/@rolldown/binding-win32-x64-msvc |
+| npm | @oxc-project/types | 0.156.0 | MIT | https://www.npmjs.com/package/@oxc-project/types |
+| npm | @rolldown/binding-android-arm-eabi | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-android-arm-eabi |
+| npm | @rolldown/binding-android-arm64 | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-android-arm64 |
+| npm | @rolldown/binding-darwin-arm64 | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-darwin-arm64 |
+| npm | @rolldown/binding-darwin-x64 | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-darwin-x64 |
+| npm | @rolldown/binding-freebsd-x64 | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-freebsd-x64 |
+| npm | @rolldown/binding-linux-arm-gnueabihf | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm-gnueabihf |
+| npm | @rolldown/binding-linux-arm64-gnu | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm64-gnu |
+| npm | @rolldown/binding-linux-arm64-musl | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm64-musl |
+| npm | @rolldown/binding-linux-ppc64-gnu | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-ppc64-gnu |
+| npm | @rolldown/binding-linux-s390x-gnu | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-s390x-gnu |
+| npm | @rolldown/binding-linux-x64-gnu | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-x64-gnu |
+| npm | @rolldown/binding-linux-x64-musl | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-x64-musl |
+| npm | @rolldown/binding-openharmony-arm64 | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-openharmony-arm64 |
+| npm | @rolldown/binding-win32-arm64-msvc | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-win32-arm64-msvc |
+| npm | @rolldown/binding-win32-x64-msvc | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-win32-x64-msvc |
 | npm | @rolldown/pluginutils | 1.0.1 | MIT | https://www.npmjs.com/package/@rolldown/pluginutils |
 | npm | @tauri-apps/api | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/api |
-| npm | @tauri-apps/cli-darwin-arm64 | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-darwin-arm64 |
-| npm | @tauri-apps/cli-darwin-x64 | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-darwin-x64 |
-| npm | @tauri-apps/cli-linux-arm-gnueabihf | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm-gnueabihf |
-| npm | @tauri-apps/cli-linux-arm64-gnu | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm64-gnu |
-| npm | @tauri-apps/cli-linux-arm64-musl | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm64-musl |
-| npm | @tauri-apps/cli-linux-riscv64-gnu | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-riscv64-gnu |
-| npm | @tauri-apps/cli-linux-x64-gnu | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-x64-gnu |
-| npm | @tauri-apps/cli-linux-x64-musl | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-x64-musl |
-| npm | @tauri-apps/cli-win32-arm64-msvc | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-arm64-msvc |
-| npm | @tauri-apps/cli-win32-ia32-msvc | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-ia32-msvc |
-| npm | @tauri-apps/cli-win32-x64-msvc | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-x64-msvc |
-| npm | @tauri-apps/cli | 2.12.3 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli |
+| npm | @tauri-apps/cli-darwin-arm64 | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-darwin-arm64 |
+| npm | @tauri-apps/cli-darwin-x64 | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-darwin-x64 |
+| npm | @tauri-apps/cli-linux-arm-gnueabihf | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm-gnueabihf |
+| npm | @tauri-apps/cli-linux-arm64-gnu | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm64-gnu |
+| npm | @tauri-apps/cli-linux-arm64-musl | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm64-musl |
+| npm | @tauri-apps/cli-linux-riscv64-gnu | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-riscv64-gnu |
+| npm | @tauri-apps/cli-linux-x64-gnu | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-x64-gnu |
+| npm | @tauri-apps/cli-linux-x64-musl | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-x64-musl |
+| npm | @tauri-apps/cli-win32-arm64-msvc | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-arm64-msvc |
+| npm | @tauri-apps/cli-win32-ia32-msvc | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-ia32-msvc |
+| npm | @tauri-apps/cli-win32-x64-msvc | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-x64-msvc |
+| npm | @tauri-apps/cli | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli |
 | npm | @types/react-dom | 19.3.0 | MIT | https://www.npmjs.com/package/@types/react-dom |
 | npm | @types/react | 19.3.0 | MIT | https://www.npmjs.com/package/@types/react |
 | npm | @typescript/typescript-aix-ppc64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-aix-ppc64 |
@@ -70,7 +70,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | npm | @typescript/typescript-sunos-x64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-sunos-x64 |
 | npm | @typescript/typescript-win32-arm64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-win32-arm64 |
 | npm | @typescript/typescript-win32-x64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-win32-x64 |
-| npm | @vitejs/plugin-react | 6.1.2 | MIT | https://www.npmjs.com/package/@vitejs/plugin-react |
+| npm | @vitejs/plugin-react | 6.2.1 | MIT | https://www.npmjs.com/package/@vitejs/plugin-react |
 | npm | @xterm/addon-fit | 0.11.0 | MIT | https://www.npmjs.com/package/@xterm/addon-fit |
 | npm | @xterm/xterm | 6.0.0 | MIT | https://www.npmjs.com/package/@xterm/xterm |
 | npm | csstype | 3.2.3 | MIT | https://www.npmjs.com/package/csstype |
@@ -92,16 +92,17 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | npm | nanoid | 3.3.20 | MIT | https://www.npmjs.com/package/nanoid |
 | npm | picocolors | 1.1.1 | ISC | https://www.npmjs.com/package/picocolors |
 | npm | picomatch | 4.0.7 | MIT | https://www.npmjs.com/package/picomatch |
-| npm | postcss | 8.5.29 | MIT | https://www.npmjs.com/package/postcss |
+| npm | postcss | 8.5.32 | MIT | https://www.npmjs.com/package/postcss |
 | npm | react-dom | 19.3.1 | MIT | https://www.npmjs.com/package/react-dom |
 | npm | react | 19.3.1 | MIT | https://www.npmjs.com/package/react |
-| npm | rolldown | 1.2.13 | MIT | https://www.npmjs.com/package/rolldown |
+| npm | rolldown | 1.2.16 | MIT | https://www.npmjs.com/package/rolldown |
 | npm | scheduler | 0.28.0 | MIT | https://www.npmjs.com/package/scheduler |
 | npm | source-map-js | 1.2.2 | BSD-3-Clause | https://www.npmjs.com/package/source-map-js |
 | npm | tinyglobby | 0.2.17 | MIT | https://www.npmjs.com/package/tinyglobby |
 | npm | typescript | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/typescript |
-| npm | vite | 8.3.4 | MIT | https://www.npmjs.com/package/vite |
+| npm | vite | 8.3.6 | MIT | https://www.npmjs.com/package/vite |
 | Rust | accesskit | 0.24.1 | MIT OR Apache-2.0 | https://github.com/AccessKit/accesskit |
+| Rust | accesskit | 0.25.2 | MIT OR Apache-2.0 | https://github.com/AccessKit/accesskit |
 | Rust | adler2 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | https://github.com/oyvindln/adler2 |
 | Rust | ahash | 0.8.12 | MIT OR Apache-2.0 | https://github.com/tkaitchuck/ahash |
 | Rust | aho-corasick | 1.1.5 | Unlicense OR MIT | https://github.com/BurntSushi/aho-corasick |
@@ -143,9 +144,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | cairo-rs | 0.18.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | Rust | cairo-sys-rs | 0.18.2 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | Rust | calloop-wayland-source | 0.3.0 | MIT | https://github.com/smithay/calloop-wayland-source |
-| Rust | calloop-wayland-source | 0.4.1 | MIT | https://github.com/smithay/calloop-wayland-source |
 | Rust | calloop | 0.13.0 | MIT | https://github.com/Smithay/calloop |
-| Rust | calloop | 0.14.5 | MIT | https://github.com/Smithay/calloop |
 | Rust | camino | 1.2.6 | MIT OR Apache-2.0 | https://github.com/camino-rs/camino |
 | Rust | cargo_metadata | 0.19.2 | MIT | https://github.com/oli-obk/cargo_metadata |
 | Rust | cargo_toml | 1.0.1 | Apache-2.0 OR MIT | https://gitlab.com/lib.rs/cargo_toml |
@@ -159,7 +158,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | cfg-if | 1.0.4 | MIT OR Apache-2.0 | https://github.com/rust-lang/cfg-if |
 | Rust | cgl | 0.3.2 | MIT / Apache-2.0 | https://github.com/servo/cgl-rs |
 | Rust | chrono | 0.4.45 | MIT OR Apache-2.0 | https://github.com/chronotope/chrono |
-| Rust | clipboard-win | 5.4.1 | BSL-1.0 | https://github.com/DoumanAsh/clipboard-win |
+| Rust | clipboard-win | 5.4.3 | BSL-1.0 | https://github.com/DoumanAsh/clipboard-win |
 | Rust | codespan-reporting | 0.13.1 | Apache-2.0 | https://github.com/brendanzab/codespan |
 | Rust | color | 0.3.3 | Apache-2.0 OR MIT | https://github.com/linebender/color |
 | Rust | combine | 4.6.8 | MIT | https://github.com/Marwes/combine |
@@ -192,9 +191,6 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | darling_macro | 0.24.1 | MIT | https://github.com/TedDriggs/darling |
 | Rust | darling | 0.24.1 | MIT | https://github.com/TedDriggs/darling |
 | Rust | dbus | 0.9.12 | Apache-2.0/MIT | https://github.com/diwic/dbus-rs |
-| Rust | defmt-macros | 1.1.1 | MIT OR Apache-2.0 | https://github.com/knurling-rs/defmt |
-| Rust | defmt-parser | 1.0.0 | MIT OR Apache-2.0 | https://github.com/knurling-rs/defmt |
-| Rust | defmt | 1.1.1 | MIT OR Apache-2.0 | https://github.com/knurling-rs/defmt |
 | Rust | deranged | 0.5.8 | MIT OR Apache-2.0 | https://github.com/jhpratt/deranged |
 | Rust | derive_more-impl | 2.1.1 | MIT | https://github.com/JelteF/derive_more |
 | Rust | derive_more | 2.1.1 | MIT | https://github.com/JelteF/derive_more |
@@ -217,19 +213,24 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | dunce | 1.0.5 | CC0-1.0 OR MIT-0 OR Apache-2.0 | https://gitlab.com/kornelski/dunce |
 | Rust | dyn-clone | 1.0.20 | MIT OR Apache-2.0 | https://github.com/dtolnay/dyn-clone |
 | Rust | ecolor | 0.36.2 | MIT OR Apache-2.0 | https://github.com/emilk/egui |
-| Rust | eframe | 0.36.2 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/eframe |
-| Rust | egui_glow | 0.36.2 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/egui_glow |
+| Rust | ecolor | 0.37.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui |
+| Rust | eframe | 0.37.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/eframe |
+| Rust | egui_glow | 0.37.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/egui_glow |
 | Rust | egui_tty | 0.2.0 | MIT | https://github.com/antoineMoPa/egui_tty |
-| Rust | egui-wgpu | 0.36.2 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/egui-wgpu |
-| Rust | egui-winit | 0.36.2 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/egui-winit |
+| Rust | egui-wgpu | 0.37.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/egui-wgpu |
+| Rust | egui-winit | 0.37.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/egui-winit |
 | Rust | egui | 0.36.2 | MIT OR Apache-2.0 | https://github.com/emilk/egui |
+| Rust | egui | 0.37.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui |
 | Rust | either | 1.19.0 | MIT OR Apache-2.0 | https://github.com/rayon-rs/either |
 | Rust | emath | 0.36.2 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/emath |
+| Rust | emath | 0.37.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/emath |
 | Rust | embed_plist | 1.2.2 | MIT OR Apache-2.0 | https://github.com/nvzqz/embed-plist-rs |
 | Rust | embed-resource | 3.0.12 | MIT | https://github.com/nabijaczleweli/rust-embed-resource |
 | Rust | endian-type | 0.2.0 | MIT | https://github.com/Lolirofle/endian-type.git |
 | Rust | epaint_default_fonts | 0.36.2 | (MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0 | https://github.com/emilk/egui/tree/main/crates/epaint_default_fonts |
+| Rust | epaint_default_fonts | 0.37.0 | (MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0 | https://github.com/emilk/egui/tree/main/crates/epaint_default_fonts |
 | Rust | epaint | 0.36.2 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/epaint |
+| Rust | epaint | 0.37.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/epaint |
 | Rust | equivalent | 1.0.2 | Apache-2.0 OR MIT | https://github.com/indexmap-rs/equivalent |
 | Rust | erased-serde | 0.4.10 | MIT OR Apache-2.0 | https://github.com/dtolnay/erased-serde |
 | Rust | errno | 0.3.14 | MIT OR Apache-2.0 | https://github.com/lambda-fairy/rust-errno |
@@ -243,8 +244,10 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | filedescriptor | 0.8.3 | MIT | https://github.com/wezterm/wezterm |
 | Rust | filetime | 0.2.29 | MIT/Apache-2.0 | https://github.com/alexcrichton/filetime |
 | Rust | find-msvc-tools | 0.1.14 | MIT OR Apache-2.0 | https://github.com/rust-lang/cc-rs |
-| Rust | flate2 | 1.1.10 | MIT OR Apache-2.0 | https://github.com/rust-lang/flate2-rs |
+| Rust | fixedbitset | 0.5.7 | MIT OR Apache-2.0 | https://github.com/petgraph/fixedbitset |
+| Rust | flate2 | 1.1.11 | MIT OR Apache-2.0 | https://github.com/rust-lang/flate2-rs |
 | Rust | fnv | 1.0.7 | Apache-2.0 / MIT | https://github.com/servo/rust-fnv |
+| Rust | foldhash | 0.1.5 | Zlib | https://github.com/orlp/foldhash |
 | Rust | foldhash | 0.2.0 | Zlib | https://github.com/orlp/foldhash |
 | Rust | font-types | 0.12.7 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
 | Rust | foreign-types-macros | 0.2.4 | MIT/Apache-2.0 | https://github.com/sfackler/foreign-types |
@@ -277,6 +280,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | glib-sys | 0.18.1 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | Rust | glib | 0.18.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | Rust | glifo | 0.2.0 | Apache-2.0 OR MIT | https://github.com/linebender/vello |
+| Rust | glifo | 0.3.0 | Apache-2.0 OR MIT | https://github.com/linebender/vello |
 | Rust | glob | 0.3.4 | MIT OR Apache-2.0 | https://github.com/rust-lang/glob |
 | Rust | glow | 0.17.0 | MIT OR Apache-2.0 OR Zlib | https://github.com/grovesNL/glow |
 | Rust | glutin_egl_sys | 0.7.1 | Apache-2.0 | https://github.com/rust-windowing/glutin |
@@ -292,6 +296,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | half | 2.7.1 | MIT OR Apache-2.0 | https://github.com/VoidStarKat/half-rs |
 | Rust | harfrust | 0.12.0 | MIT | https://github.com/harfbuzz/harfrust |
 | Rust | hashbrown | 0.12.3 | MIT OR Apache-2.0 | https://github.com/rust-lang/hashbrown |
+| Rust | hashbrown | 0.15.5 | MIT OR Apache-2.0 | https://github.com/rust-lang/hashbrown |
 | Rust | hashbrown | 0.17.1 | MIT OR Apache-2.0 | https://github.com/rust-lang/hashbrown |
 | Rust | heck | 0.4.1 | MIT OR Apache-2.0 | https://github.com/withoutboats/heck |
 | Rust | heck | 0.5.0 | MIT OR Apache-2.0 | https://github.com/withoutboats/heck |
@@ -308,7 +313,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | hyper | 1.12.0 | MIT | https://github.com/hyperium/hyper |
 | Rust | iana-time-zone-haiku | 0.1.2 | MIT OR Apache-2.0 | https://github.com/strawlab/iana-time-zone |
 | Rust | iana-time-zone | 0.1.65 | MIT OR Apache-2.0 | https://github.com/strawlab/iana-time-zone |
-| Rust | ico | 0.5.0 | MIT | https://github.com/mdsteele/rust-ico |
+| Rust | ico | 0.6.0 | MIT | https://github.com/mdsteele/rust-ico |
 | Rust | icu_collections | 2.3.0 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
 | Rust | icu_locale_core | 2.3.0 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
 | Rust | icu_normalizer_data | 2.3.0 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
@@ -329,11 +334,11 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | itoa | 1.0.18 | MIT OR Apache-2.0 | https://github.com/dtolnay/itoa |
 | Rust | javascriptcore-rs-sys | 1.1.1 | MIT | https://github.com/tauri-apps/javascriptcore-rs |
 | Rust | javascriptcore-rs | 1.1.2 | MIT | https://github.com/tauri-apps/javascriptcore-rs |
-| Rust | jiff-core | 0.1.1 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
-| Rust | jiff-static | 0.2.38 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
+| Rust | jiff-core | 0.1.8 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
+| Rust | jiff-static | 0.2.43 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
 | Rust | jiff-tzdb-platform | 0.1.3 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
 | Rust | jiff-tzdb | 0.1.9 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
-| Rust | jiff | 0.2.38 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
+| Rust | jiff | 0.2.43 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
 | Rust | jni-macros | 0.22.4 | MIT OR Apache-2.0 | https://github.com/jni-rs/jni-rs |
 | Rust | jni-sys-macros | 0.4.1 | MIT OR Apache-2.0 | https://github.com/jni-rs/jni-sys |
 | Rust | jni-sys | 0.3.1 | MIT OR Apache-2.0 | https://github.com/jni-rs/jni-sys |
@@ -385,6 +390,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | nix | 0.28.0 | MIT | https://github.com/nix-rust/nix |
 | Rust | nix | 0.31.3 | MIT | https://github.com/nix-rust/nix |
 | Rust | nohash-hasher | 0.2.0 | Apache-2.0 OR MIT | https://github.com/paritytech/nohash-hasher |
+| Rust | nom | 8.0.0 | MIT | https://github.com/rust-bakery/nom |
 | Rust | ntapi | 0.4.3 | Apache-2.0 OR MIT | https://github.com/MSxDOS/ntapi |
 | Rust | num_enum_derive | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | https://github.com/illicitonion/num_enum |
 | Rust | num_enum | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | https://github.com/illicitonion/num_enum |
@@ -427,12 +433,14 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | once_cell | 1.21.4 | MIT OR Apache-2.0 | https://github.com/matklad/once_cell |
 | Rust | option-ext | 0.2.0 | MPL-2.0 | https://github.com/soc/option-ext.git |
 | Rust | orbclient | 0.3.55 | MIT | https://gitlab.redox-os.org/redox-os/orbclient |
+| Rust | os_pipe | 1.2.3 | MIT | https://github.com/oconnor663/os_pipe.rs |
 | Rust | pango-sys | 0.18.0 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | Rust | pango | 0.18.3 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | Rust | parking_lot_core | 0.9.12 | MIT OR Apache-2.0 | https://github.com/Amanieu/parking_lot |
 | Rust | parking_lot | 0.12.5 | MIT OR Apache-2.0 | https://github.com/Amanieu/parking_lot |
 | Rust | peniko | 0.6.1 | Apache-2.0 OR MIT | https://github.com/linebender/peniko |
 | Rust | percent-encoding | 2.3.2 | MIT OR Apache-2.0 | https://github.com/servo/rust-url/ |
+| Rust | petgraph | 0.8.3 | MIT OR Apache-2.0 | https://github.com/petgraph/petgraph |
 | Rust | phf_codegen | 0.13.1 | MIT | https://github.com/rust-phf/rust-phf |
 | Rust | phf_generator | 0.13.1 | MIT | https://github.com/rust-phf/rust-phf |
 | Rust | phf_macros | 0.13.1 | MIT | https://github.com/rust-phf/rust-phf |
@@ -444,7 +452,6 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | pkg-config | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/pkg-config-rs |
 | Rust | plain | 0.2.3 | MIT/Apache-2.0 | https://github.com/randomites/plain |
 | Rust | plist | 1.10.1 | MIT | https://github.com/ebarnard/rust-plist/ |
-| Rust | png | 0.17.16 | MIT OR Apache-2.0 | https://github.com/image-rs/image-png |
 | Rust | png | 0.18.1 | MIT OR Apache-2.0 | https://github.com/image-rs/image-png |
 | Rust | polling | 3.11.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/polling |
 | Rust | polycool | 0.4.0 | MIT OR Apache-2.0 | https://github.com/linebender/kurbo |
@@ -489,7 +496,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | rustix | 0.38.44 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://github.com/bytecodealliance/rustix |
 | Rust | rustix | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://github.com/bytecodealliance/rustix |
 | Rust | rustversion | 1.0.23 | MIT OR Apache-2.0 | https://github.com/dtolnay/rustversion |
-| Rust | rustyline | 18.0.1 | MIT | https://github.com/kkawakam/rustyline |
+| Rust | rustyline | 19.0.0 | MIT | https://github.com/kkawakam/rustyline |
 | Rust | same-file | 1.0.6 | Unlicense/MIT | https://github.com/BurntSushi/same-file |
 | Rust | schemars_derive | 0.8.22 | MIT | https://github.com/GREsau/schemars |
 | Rust | schemars | 0.8.22 | MIT | https://github.com/GREsau/schemars |
@@ -500,6 +507,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | selectors | 0.38.0 | MPL-2.0 | https://github.com/servo/stylo |
 | Rust | self_cell | 1.3.0 | Apache-2.0 OR GPL-2.0-only | https://github.com/Voultapher/self_cell |
 | Rust | semver | 1.0.28 | MIT OR Apache-2.0 | https://github.com/dtolnay/semver |
+| Rust | send_wrapper | 0.6.0 | MIT/Apache-2.0 | https://github.com/thk1/send_wrapper |
 | Rust | serde_core | 1.0.229 | MIT OR Apache-2.0 | https://github.com/serde-rs/serde |
 | Rust | serde_derive_internals | 0.29.1 | MIT OR Apache-2.0 | https://github.com/serde-rs/serde |
 | Rust | serde_derive | 1.0.229 | MIT OR Apache-2.0 | https://github.com/serde-rs/serde |
@@ -530,10 +538,8 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | skrifa | 0.44.0 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
 | Rust | slab | 0.4.12 | MIT | https://github.com/tokio-rs/slab |
 | Rust | slotmap | 1.1.1 | Zlib | https://github.com/orlp/slotmap |
-| Rust | smallvec | 1.15.1 | MIT OR Apache-2.0 | https://github.com/servo/rust-smallvec |
+| Rust | smallvec | 1.16.4 | MIT OR Apache-2.0 | https://github.com/servo/rust-smallvec |
 | Rust | smithay-client-toolkit | 0.19.2 | MIT | https://github.com/smithay/client-toolkit |
-| Rust | smithay-client-toolkit | 0.20.0 | MIT | https://github.com/smithay/client-toolkit |
-| Rust | smithay-clipboard | 0.7.3 | MIT | https://github.com/smithay/smithay-clipboard |
 | Rust | smol_str | 0.2.2 | MIT OR Apache-2.0 | https://github.com/rust-analyzer/smol_str |
 | Rust | socket2 | 0.6.5 | MIT OR Apache-2.0 | https://github.com/rust-lang/socket2 |
 | Rust | softbuffer | 0.4.8 | MIT OR Apache-2.0 | https://github.com/rust-windowing/softbuffer |
@@ -557,14 +563,14 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | tao | 0.37.1 | Apache-2.0 | https://github.com/tauri-apps/tao |
 | Rust | tar | 0.4.46 | MIT OR Apache-2.0 | https://github.com/composefs/tar-rs |
 | Rust | target-lexicon | 0.12.16 | Apache-2.0 WITH LLVM-exception | https://github.com/bytecodealliance/target-lexicon |
-| Rust | tauri-build | 2.7.3 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
-| Rust | tauri-codegen | 2.7.3 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
-| Rust | tauri-macros | 2.7.3 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
-| Rust | tauri-runtime-wry | 2.12.2 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri-build | 2.7.4 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri-codegen | 2.7.4 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri-macros | 2.7.4 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri-runtime-wry | 2.12.3 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
 | Rust | tauri-runtime | 2.12.2 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
 | Rust | tauri-utils | 2.10.2 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
 | Rust | tauri-winres | 0.3.6 | MIT | https://github.com/tauri-apps/winres |
-| Rust | tauri | 2.12.4 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri | 2.12.5 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
 | Rust | tendril | 0.5.1 | MIT OR Apache-2.0 | https://github.com/servo/html5ever |
 | Rust | thiserror-impl | 1.0.69 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
 | Rust | thiserror-impl | 2.0.21 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
@@ -584,9 +590,9 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | toml_edit | 0.20.2 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | toml_edit | 0.25.17+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | toml_parser | 1.1.5+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
-| Rust | toml_writer | 1.1.3+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
+| Rust | toml_writer | 1.2.0+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | toml | 0.8.2 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
-| Rust | toml | 1.1.8+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
+| Rust | toml | 1.2.0+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | tower-http | 0.6.11 | MIT | https://github.com/tower-rs/tower-http |
 | Rust | tower-layer | 0.3.3 | MIT | https://github.com/tower-rs/tower |
 | Rust | tower-service | 0.3.3 | MIT | https://github.com/tower-rs/tower |
@@ -594,21 +600,25 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | tracing-core | 0.1.36 | MIT | https://github.com/tokio-rs/tracing |
 | Rust | tracing | 0.1.44 | MIT | https://github.com/tokio-rs/tracing |
 | Rust | tray-icon | 0.25.1 | MIT OR Apache-2.0 | https://github.com/tauri-apps/tray-icon |
+| Rust | tree_magic_mini | 3.2.2 | MIT | https://github.com/mbrubeck/tree_magic/ |
 | Rust | try-lock | 0.2.5 | MIT | https://github.com/seanmonstar/try-lock |
 | Rust | type-map | 0.5.1 | MIT/Apache-2.0 | https://github.com/kardeiz/type-map |
 | Rust | typeid | 1.0.3 | MIT OR Apache-2.0 | https://github.com/dtolnay/typeid |
 | Rust | typenum | 1.20.1 | MIT OR Apache-2.0 | https://github.com/paholg/typenum |
 | Rust | unicode-general-category | 1.1.0 | Apache-2.0 | https://github.com/yeslogic/unicode-general-category |
 | Rust | unicode-ident | 1.0.26 | (MIT OR Apache-2.0) AND Unicode-3.0 | https://github.com/dtolnay/unicode-ident |
+| Rust | unicode-properties | 0.1.4 | MIT/Apache-2.0 | https://github.com/unicode-rs/unicode-properties |
 | Rust | unicode-segmentation | 1.13.2 | MIT OR Apache-2.0 | https://github.com/unicode-rs/unicode-segmentation |
-| Rust | unicode-width | 0.2.2 | MIT OR Apache-2.0 | https://github.com/unicode-rs/unicode-width |
+| Rust | unicode-width | 0.2.3 | MIT OR Apache-2.0 | https://github.com/unicode-rs/unicode-width |
 | Rust | url | 2.5.8 | MIT OR Apache-2.0 | https://github.com/servo/rust-url |
 | Rust | urlpattern | 0.6.0 | MIT | https://github.com/denoland/rust-urlpattern |
 | Rust | utf8_iter | 1.0.4 | Apache-2.0 OR MIT | https://github.com/hsivonen/utf8_iter |
 | Rust | utf8parse | 0.2.2 | Apache-2.0 OR MIT | https://github.com/alacritty/vte |
 | Rust | uuid | 1.28.0 | Apache-2.0 OR MIT | https://github.com/uuid-rs/uuid |
 | Rust | vello_common | 0.1.0 | Apache-2.0 OR MIT | https://github.com/linebender/vello |
+| Rust | vello_common | 0.2.0 | Apache-2.0 OR MIT | https://github.com/linebender/vello |
 | Rust | vello_cpu | 0.1.0 | Apache-2.0 OR MIT | https://github.com/linebender/vello |
+| Rust | vello_cpu | 0.2.0 | Apache-2.0 OR MIT | https://github.com/linebender/vello |
 | Rust | version_check | 0.9.5 | MIT/Apache-2.0 | https://github.com/SergioBenitez/version_check |
 | Rust | version-compare | 0.2.1 | MIT | https://gitlab.com/timvisee/version-compare |
 | Rust | vswhom-sys | 0.1.3 | MIT | https://github.com/nabijaczleweli/vswhom-sys.rs |
@@ -627,8 +637,6 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | wayland-client | 0.31.15 | MIT | https://github.com/smithay/wayland-rs |
 | Rust | wayland-csd-frame | 0.3.0 | MIT | https://github.com/rust-windowing/wayland-csd-frame |
 | Rust | wayland-cursor | 0.31.14 | MIT | https://github.com/smithay/wayland-rs |
-| Rust | wayland-protocols-experimental | 20250721.0.1 | MIT | https://github.com/smithay/wayland-rs |
-| Rust | wayland-protocols-misc | 0.3.12 | MIT | https://github.com/smithay/wayland-rs |
 | Rust | wayland-protocols-plasma | 0.3.12 | MIT | https://github.com/smithay/wayland-rs |
 | Rust | wayland-protocols-wlr | 0.3.12 | MIT | https://github.com/smithay/wayland-rs |
 | Rust | wayland-protocols | 0.32.13 | MIT | https://github.com/smithay/wayland-rs |
@@ -693,6 +701,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | winreg | 0.10.1 | MIT | https://github.com/gentoo90/winreg-rs |
 | Rust | winreg | 0.56.0 | MIT | https://github.com/gentoo90/winreg-rs |
 | Rust | wit-bindgen | 0.57.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://github.com/bytecodealliance/wit-bindgen |
+| Rust | wl-clipboard-rs | 0.9.4 | MIT OR Apache-2.0 | https://github.com/YaLTeR/wl-clipboard-rs |
 | Rust | writeable | 0.6.4 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
 | Rust | wry | 0.57.0 | Apache-2.0 OR MIT | https://github.com/tauri-apps/wry |
 | Rust | x11-dl | 2.21.0 | MIT | https://github.com/AltF02/x11-rs.git |
