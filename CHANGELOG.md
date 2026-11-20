@@ -5,6 +5,14 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-20
+
+### Added
+
+- `scripts/ci-local.sh` replays the Linux gate of the CI, with the Security checks,
+  in the pinned Docker image and summarizes each step, for use when hosted
+  runners are unavailable.
+
 ### Fixed
 
 - A command typed while another program was still running was never executed:
@@ -16,12 +24,6 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   first command of a paste ran. The line editor read ahead into a buffer that it
   dropped after each prompt; enabling its `buffer-redux` feature keeps that
   buffer between prompts (Unix).
-
-### Added
-
-- `scripts/ci-local.sh` replays the Linux gate of the CI, with the Security checks,
-  in the pinned Docker image and summarizes each step, for use when hosted
-  runners are unavailable.
 
 ## [1.2.0] - 2026-11-20
 
