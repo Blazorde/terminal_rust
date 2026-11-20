@@ -59,14 +59,14 @@ runs:
       run: |
         New-Item -ItemType Directory -Path desktop\src-tauri\resources -Force | Out-Null
         $nanoBinary = 'desktop\src-tauri\resources\nano-win64.exe'
-        Invoke-WebRequest -Uri 'https://nano-editor.org/dist/windows/nano-v9.2-x64.exe' `
+        Invoke-WebRequest -MaximumRetryCount 5 -RetryIntervalSec 10 -Uri 'https://nano-editor.org/dist/windows/nano-v9.2-x64.exe' `
           -OutFile $nanoBinary
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $nanoBinary).Hash -ne `
           '0771BE067C73935B2D326DC8658B20E88F7C033DA2F590CEC82E985282CE3507') {
           throw 'The downloaded Nano binary did not match its pinned SHA-256.'
         }
         $nanoSource = 'desktop\src-tauri\resources\NANO-SOURCE-9.2.tar.xz'
-        Invoke-WebRequest -Uri 'https://nano-editor.org/dist/v9/nano-9.2.tar.xz' `
+        Invoke-WebRequest -MaximumRetryCount 5 -RetryIntervalSec 10 -Uri 'https://nano-editor.org/dist/v9/nano-9.2.tar.xz' `
           -OutFile $nanoSource
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $nanoSource).Hash -ne `
           '05ECB99247B782E8A5B3A25ED4101DD034B0236902F7449BC9795B717642F7E9') {
@@ -90,9 +90,9 @@ runs:
           'desktop\src-tauri\resources\git-runtime-version.txt',
           $runtimeVersions
         )
-        Invoke-WebRequest -Uri https://raw.githubusercontent.com/git/git/v2.56.0/COPYING `
+        Invoke-WebRequest -MaximumRetryCount 5 -RetryIntervalSec 10 -Uri https://raw.githubusercontent.com/git/git/v2.56.0/COPYING `
           -OutFile desktop\src-tauri\resources\GIT-COPYING
-        Invoke-WebRequest -Uri https://raw.githubusercontent.com/git/git/v2.56.0/LGPL-2.1 `
+        Invoke-WebRequest -MaximumRetryCount 5 -RetryIntervalSec 10 -Uri https://raw.githubusercontent.com/git/git/v2.56.0/LGPL-2.1 `
           -OutFile desktop\src-tauri\resources\GIT-COPYING.LIB
         conda run --no-capture-output --name git-runtime python scripts/stage_git_runtime_licenses.py `
           desktop\src-tauri\resources
