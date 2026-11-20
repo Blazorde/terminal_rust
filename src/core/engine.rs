@@ -2,7 +2,6 @@ use std::env;
 use std::path::PathBuf;
 
 use crate::app::command::{self, CommandResult, ShellState};
-use crate::app::parser::parse_with;
 use crate::commands::user::UserCommandRegistry;
 use crate::config::AppConfig;
 use crate::plugin::DeclarativeCommandRegistry;
@@ -95,18 +94,22 @@ impl ShellEngine {
     }
 
     pub fn execute_line(&mut self, input: &str) -> ExecutionResult {
-        let parsed = parse_with(input, &|name| self.state.variable(name));
-        match parsed {
-            Ok(args) if args.is_empty() => self.empty_result(),
-            Ok(args) => self.execute_args(&args),
-            Err(error) => self.failed_result(error),
+        if input.trim().is_empty() {
+            return self.empty_result();
         }
+        self.run_captured(|state| command::run_line(input, state))
     }
 
     pub fn execute_args(&mut self, args: &[String]) -> ExecutionResult {
+        self.run_captured(|state| command::execute(args, state))
+    }
+
+    fn run_captured(
+        &mut self,
+        run: impl FnOnce(&mut ShellState) -> CommandResult,
+    ) -> ExecutionResult {
         let previous_dir = env::current_dir().ok();
-        let (command_result, output) =
-            render::capture_output(|| command::execute(args, &mut self.state));
+        let (command_result, output) = render::capture_output(|| run(&mut self.state));
         let current_dir = env::current_dir().ok();
         let directory_change = match (&previous_dir, &current_dir) {
             (Some(previous), Some(current)) if previous != current => Some(DirectoryChange {
@@ -139,17 +142,6 @@ impl ShellEngine {
             stdout: String::new(),
             stderr: String::new(),
             error: None,
-            current_dir: env::current_dir().ok(),
-            directory_change: None,
-        }
-    }
-
-    fn failed_result(&self, error: String) -> ExecutionResult {
-        ExecutionResult {
-            status: ExecutionStatus::Failed,
-            stdout: String::new(),
-            stderr: String::new(),
-            error: Some(error),
             current_dir: env::current_dir().ok(),
             directory_change: None,
         }
@@ -494,5 +486,116 @@ response = "Hello from the official Terminal Rust plugin!\n"
         let result = engine.execute_line("1bad=x");
 
         assert_eq!(result.error.as_deref(), Some("unknown command: 1bad=x"));
+    }
+
+    #[test]
+    fn a_semicolon_runs_both_commands_in_order() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("echo one ; echo two");
+
+        assert_eq!(result.stdout, "one\ntwo\n");
+        assert_eq!(result.status, ExecutionStatus::Continue);
+    }
+
+    #[test]
+    fn and_skips_the_next_command_after_a_failure() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("cd /terminal-rust/no/such/directory && echo skipped");
+
+        assert_eq!(result.stdout, "");
+        assert_eq!(result.status, ExecutionStatus::Failed);
+        assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn and_runs_the_next_command_after_a_success() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("echo first && echo second");
+
+        assert_eq!(result.stdout, "first\nsecond\n");
+    }
+
+    #[test]
+    fn or_runs_the_next_command_only_after_a_failure() {
+        let mut engine = ShellEngine::new();
+
+        let recovered =
+            engine.execute_line("cd /terminal-rust/no/such/directory || echo recovered");
+        let skipped = engine.execute_line("echo fine || echo never");
+
+        assert_eq!(recovered.stdout, "recovered\n");
+        assert_eq!(recovered.status, ExecutionStatus::Continue);
+        assert!(
+            recovered.stderr.contains("cd:"),
+            "the skipped failure should still be reported: {}",
+            recovered.stderr
+        );
+        assert_eq!(skipped.stdout, "fine\n");
+    }
+
+    #[test]
+    fn the_status_variable_follows_each_segment_of_the_line() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("cd /terminal-rust/no/such/directory || echo status $?");
+
+        assert_eq!(result.stdout, "status 1\n");
+    }
+
+    #[test]
+    fn a_variable_set_in_one_segment_is_visible_in_the_next() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("TRS_CHAIN_VALUE=carried ; echo $TRS_CHAIN_VALUE");
+
+        assert_eq!(result.stdout, "carried\n");
+    }
+
+    #[test]
+    fn exit_stops_the_rest_of_the_line() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("echo before ; exit ; echo after");
+
+        assert_eq!(result.status, ExecutionStatus::Exit);
+        assert_eq!(result.stdout, "before\n");
+    }
+
+    #[test]
+    fn the_last_segment_decides_the_final_status() {
+        let mut engine = ShellEngine::new();
+
+        let failed_last = engine.execute_line("echo ok ; cd /terminal-rust/no/such/directory");
+        let succeeded_last = engine.execute_line("cd /terminal-rust/no/such/directory ; echo ok");
+
+        assert_eq!(failed_last.status, ExecutionStatus::Failed);
+        assert_eq!(succeeded_last.status, ExecutionStatus::Continue);
+    }
+
+    #[test]
+    fn a_pipe_is_rejected_instead_of_being_passed_as_an_argument() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("echo hello | cat");
+
+        assert_eq!(result.status, ExecutionStatus::Failed);
+        assert_eq!(
+            result.error.as_deref(),
+            Some("pipes (|) are not supported yet")
+        );
+        assert_eq!(result.stdout, "");
+    }
+
+    #[test]
+    fn nothing_runs_when_a_later_segment_has_a_syntax_error() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("echo first ; && echo second");
+
+        assert_eq!(result.stdout, "");
+        assert!(result.error.is_some());
     }
 }

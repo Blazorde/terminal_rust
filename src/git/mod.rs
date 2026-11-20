@@ -139,7 +139,7 @@ fn apply_git_environment(command: &mut Command) {
         command.env("GIT_SSL_CAINFO", ca_bundle);
     }
     // Exported variables come last so the user can override the bundled values.
-    crate::utils::shell_env::apply_to(command);
+    crate::utils::shell_env::prepare_child(command);
 }
 
 fn parse_prompt_status(stdout: &[u8]) -> Option<PromptGitInfo> {

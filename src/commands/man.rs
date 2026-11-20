@@ -27,7 +27,7 @@ pub fn show(entry: &Entry) -> io::Result<()> {
 /// Defer to the operating system's `man` for anything that is not a built-in.
 pub fn show_system(args: &[String]) -> io::Result<()> {
     let mut command = Command::new("man");
-    shell_env::apply_to(&mut command);
+    shell_env::prepare_child(&mut command);
     let status = match command.args(args).status() {
         Ok(status) => status,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {

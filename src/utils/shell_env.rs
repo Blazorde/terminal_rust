@@ -77,7 +77,10 @@ pub fn vars() -> Vec<(String, String)> {
     merged.into_iter().collect()
 }
 
-pub fn apply_to(command: &mut Command) {
+/// Get a child process ready to start: write the output captured so far, so
+/// that it stays ahead of what the child prints, then apply the exports.
+pub fn prepare_child(command: &mut Command) {
+    crate::render::flush_captured();
     let table = exports();
     command.envs(&table.set);
     for name in &table.removed {
@@ -129,7 +132,7 @@ mod tests {
         assert!(!vars().iter().any(|(name, _)| name == INHERITED));
 
         let mut command = Command::new("terminal-rust-unused");
-        apply_to(&mut command);
+        prepare_child(&mut command);
         let removed_for_child = command
             .get_envs()
             .any(|(name, value)| name == OsStr::new(INHERITED) && value.is_none());
@@ -143,7 +146,7 @@ mod tests {
         export("TRS_TEST_EXPORT_CHILD", "child");
 
         let mut command = Command::new("terminal-rust-unused");
-        apply_to(&mut command);
+        prepare_child(&mut command);
 
         assert!(
             command

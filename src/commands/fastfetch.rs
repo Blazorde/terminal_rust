@@ -4,7 +4,7 @@ use crate::utils::shell_env;
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut command = Command::new("fastfetch");
-    shell_env::apply_to(&mut command);
+    shell_env::prepare_child(&mut command);
     let status = command
         .args(args)
         .status()

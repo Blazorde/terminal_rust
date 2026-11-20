@@ -19,6 +19,7 @@ use crate::render;
 const HISTORY_FILE_ENV: &str = "TERMINAL_RUST_HISTORY_FILE";
 
 pub fn run() -> ExitCode {
+    render::stream_before_children(true);
     let args: Vec<String> = env::args().skip(1).collect();
 
     if args.is_empty() {
@@ -57,6 +58,7 @@ fn run_once(args: &[String]) -> ExitCode {
 }
 
 pub fn run_interactive() -> ExitCode {
+    render::stream_before_children(true);
     external::keep_shell_alive_on_interrupt();
     if io::stdin().is_terminal() {
         run_interactive_editor()

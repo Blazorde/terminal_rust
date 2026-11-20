@@ -139,6 +139,117 @@ fn expand_variable(
     Ok(!value.is_empty())
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Connector {
+    /// Run unconditionally: the first command, or after `;`.
+    Then,
+    /// Run only if the previous command succeeded (`&&`).
+    And,
+    /// Run only if the previous command failed (`||`).
+    Or,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct Segment {
+    pub connector: Connector,
+    pub text: String,
+}
+
+/// Split a line at the `;`, `&&` and `||` that are neither quoted nor escaped.
+///
+/// The text of each segment is returned untouched, so quotes and variables are
+/// handled later, right before that segment runs. Pipes, redirections and
+/// background jobs are rejected instead of being passed to a program as
+/// arguments.
+pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
+    let mut segments = Vec::new();
+    let mut current = String::new();
+    let mut connector = Connector::Then;
+    let mut quote: Option<Quote> = None;
+    let mut characters = input.chars().peekable();
+
+    while let Some(character) = characters.next() {
+        match (quote, character) {
+            (Some(Quote::Single), '\'') | (Some(Quote::Double), '"') => {
+                quote = None;
+                current.push(character);
+            }
+            (Some(Quote::Double), '\\') if matches!(characters.peek(), Some('"' | '\\' | '$')) => {
+                current.push(character);
+                current.extend(characters.next());
+            }
+            (Some(_), character) => current.push(character),
+            (None, '\'') => {
+                quote = Some(Quote::Single);
+                current.push(character);
+            }
+            (None, '"') => {
+                quote = Some(Quote::Double);
+                current.push(character);
+            }
+            (None, '\\') => {
+                current.push(character);
+                current.extend(characters.next());
+            }
+            (None, ';') => {
+                finish_segment(&mut segments, &mut current, connector, ";")?;
+                connector = Connector::Then;
+            }
+            (None, '&') if characters.peek() == Some(&'&') => {
+                characters.next();
+                finish_segment(&mut segments, &mut current, connector, "&&")?;
+                connector = Connector::And;
+            }
+            (None, '|') if characters.peek() == Some(&'|') => {
+                characters.next();
+                finish_segment(&mut segments, &mut current, connector, "||")?;
+                connector = Connector::Or;
+            }
+            (None, '&') => return Err("background jobs (&) are not supported yet".to_string()),
+            (None, '|') => return Err("pipes (|) are not supported yet".to_string()),
+            (None, '<' | '>') => {
+                return Err("redirections (< and >) are not supported yet".to_string());
+            }
+            (None, character) => current.push(character),
+        }
+    }
+
+    if quote.is_some() {
+        return Err("missing closing quote".to_string());
+    }
+    if !current.trim().is_empty() {
+        segments.push(Segment {
+            connector,
+            text: current,
+        });
+    } else if connector != Connector::Then {
+        let operator = if connector == Connector::And {
+            "&&"
+        } else {
+            "||"
+        };
+        return Err(format!("expected a command after {operator}"));
+    }
+
+    Ok(segments)
+}
+
+fn finish_segment(
+    segments: &mut Vec<Segment>,
+    current: &mut String,
+    connector: Connector,
+    operator: &str,
+) -> Result<(), String> {
+    if current.trim().is_empty() {
+        return Err(format!("syntax error near unexpected token '{operator}'"));
+    }
+    segments.push(Segment {
+        connector,
+        text: std::mem::take(current),
+    });
+    Ok(())
+}
+
 pub fn continuation_prefix(line: &str) -> Option<&str> {
     let line = line.trim_end_matches(['\r', '\n']).trim_end();
     let trailing_ticks = line
@@ -179,6 +290,138 @@ mod tests {
 
     fn parse_input(input: &str) -> Result<Vec<String>, String> {
         parse_with(input, &|_| None)
+    }
+
+    fn chain(input: &str) -> Result<Vec<(Connector, String)>, String> {
+        split_chain(input).map(|segments| {
+            segments
+                .into_iter()
+                .map(|segment| (segment.connector, segment.text.trim().to_string()))
+                .collect()
+        })
+    }
+
+    fn step(connector: Connector, text: &str) -> (Connector, String) {
+        (connector, text.to_string())
+    }
+
+    #[test]
+    fn a_line_without_operator_is_one_segment() {
+        assert_eq!(
+            chain("echo hello"),
+            Ok(vec![step(Connector::Then, "echo hello")])
+        );
+    }
+
+    #[test]
+    fn an_empty_line_has_no_segment() {
+        assert_eq!(chain("   "), Ok(Vec::new()));
+        assert_eq!(chain(""), Ok(Vec::new()));
+    }
+
+    #[test]
+    fn the_three_operators_split_the_line() {
+        assert_eq!(
+            chain("a ; b && c || d"),
+            Ok(vec![
+                step(Connector::Then, "a"),
+                step(Connector::Then, "b"),
+                step(Connector::And, "c"),
+                step(Connector::Or, "d"),
+            ])
+        );
+    }
+
+    #[test]
+    fn operators_without_spaces_split_too() {
+        assert_eq!(
+            chain("a;b&&c||d"),
+            Ok(vec![
+                step(Connector::Then, "a"),
+                step(Connector::Then, "b"),
+                step(Connector::And, "c"),
+                step(Connector::Or, "d"),
+            ])
+        );
+    }
+
+    #[test]
+    fn quoted_operators_are_text() {
+        assert_eq!(
+            chain(r#"echo "a && b" ; echo 'c | d > e' "#),
+            Ok(vec![
+                step(Connector::Then, r#"echo "a && b""#),
+                step(Connector::Then, "echo 'c | d > e'"),
+            ])
+        );
+    }
+
+    #[test]
+    fn an_escaped_operator_is_text() {
+        assert_eq!(
+            chain(r"echo a\;b"),
+            Ok(vec![step(Connector::Then, r"echo a\;b")])
+        );
+    }
+
+    #[test]
+    fn an_escaped_quote_does_not_end_a_double_quoted_string() {
+        let line = r#"echo "say \" ; hi""#;
+
+        assert_eq!(chain(line), Ok(vec![step(Connector::Then, line)]));
+    }
+
+    #[test]
+    fn a_trailing_semicolon_is_allowed() {
+        assert_eq!(chain("a ;"), Ok(vec![step(Connector::Then, "a")]));
+    }
+
+    #[test]
+    fn a_missing_command_is_a_syntax_error() {
+        assert_eq!(
+            chain("&& a"),
+            Err("syntax error near unexpected token '&&'".to_string())
+        );
+        assert_eq!(
+            chain("a ;; b"),
+            Err("syntax error near unexpected token ';'".to_string())
+        );
+        assert_eq!(
+            chain("a &&"),
+            Err("expected a command after &&".to_string())
+        );
+        assert_eq!(
+            chain("a ||"),
+            Err("expected a command after ||".to_string())
+        );
+    }
+
+    #[test]
+    fn pipes_redirections_and_background_jobs_are_rejected() {
+        assert_eq!(
+            chain("a | b"),
+            Err("pipes (|) are not supported yet".to_string())
+        );
+        assert_eq!(
+            chain("a > f"),
+            Err("redirections (< and >) are not supported yet".to_string())
+        );
+        assert_eq!(
+            chain("a < f"),
+            Err("redirections (< and >) are not supported yet".to_string())
+        );
+        assert_eq!(
+            chain("a &"),
+            Err("background jobs (&) are not supported yet".to_string())
+        );
+    }
+
+    #[test]
+    fn an_unclosed_quote_is_reported() {
+        assert_eq!(
+            chain("echo 'a ; b"),
+            Err("missing closing quote".to_string())
+        );
     }
 
     fn variables(name: &str) -> Option<String> {
