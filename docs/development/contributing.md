@@ -34,7 +34,7 @@ git switch -c feat/short-description
 | `feat/` | User-facing capability |
 | `fix/` | Behavior correction |
 | `chore/` | Documentation, CI or maintenance |
-| `refractor/` | Refactor without behavior change |
+| `refactor/` | Refactor without behavior change |
 | `hotfix/` | Urgent production correction |
 
 ## Add a command

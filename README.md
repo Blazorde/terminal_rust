@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="docs/assets/terminal-rust-cover.png" alt="Terminal Rust cover: the command prompt mark surrounded by native terminal workspaces" width="100%">
+<img src="docs/assets/terminal-rust-cover.png" alt="Hand-drawn cover: a terminal window running terminal_rust next to a smiling crab saying real PTY, no fake" width="100%">
 
 **A compact, cross-platform shell with a real Rust core and a focused desktop workspace.**
 

@@ -27,22 +27,27 @@ runs:
         nano_source_hash="$(shasum -a 256 desktop/src-tauri/resources/NANO-SOURCE-9.2.tar.xz | cut -d ' ' -f 1)"
         test "$nano_source_hash" = '05ecb99247b782e8a5b3a25ed4101dd034b0236902f7449bc9795b717642f7e9'
         conda env create --yes --file .github/git-pack-tool.yml
-        git_runtime_prefix="$(conda run --name git-runtime python -c 'import sys; print(sys.prefix)')"
-        conda run --name git-pack-tool conda-pack --prefix "$git_runtime_prefix" \
+        git_runtime_prefix="$(conda run --no-capture-output --name git-runtime python -c 'import sys; print(sys.prefix)')"
+        conda run --no-capture-output --name git-pack-tool conda-pack --prefix "$git_runtime_prefix" \
           --output desktop/src-tauri/resources/git-runtime.tar.gz
-        git_version="$(conda run --name git-runtime git --version | sed 's/^git version //')"
-        nvim_version="$(conda run --name git-runtime nvim --version | sed -n '1s/^NVIM v//p')"
-        nano_version="$(conda run --name git-runtime nano --version | sed -n '1s/^GNU nano, version //p' | cut -d ' ' -f 1)"
-        test -n "$git_version" && test -n "$nvim_version" && test -n "$nano_version"
+        git_version="$(conda run --no-capture-output --name git-runtime git --version | sed 's/^git version //')"
+        nvim_version="$(conda run --no-capture-output --name git-runtime nvim --version | sed -n '1s/^NVIM v//p')"
+        # `nano --version` prints " GNU nano, version X" with a leading space.
+        nano_version="$(conda run --no-capture-output --name git-runtime nano --version \
+          | sed -nE '1s/^[[:space:]]*GNU nano, version ([^[:space:]]+).*/\1/p')"
+        if [ -z "$git_version" ] || [ -z "$nvim_version" ] || [ -z "$nano_version" ]; then
+          echo "::error::Cannot read bundled runtime versions: git='$git_version' nvim='$nvim_version' nano='$nano_version'" >&2
+          exit 1
+        fi
         printf 'git=%s\nnvim=%s\nnano=%s\n' "$git_version" "$nvim_version" "$nano_version" \
           > desktop/src-tauri/resources/git-runtime-version.txt
         curl --fail --silent --show-error --location \
           https://raw.githubusercontent.com/git/git/v2.56.0/COPYING \
           --output desktop/src-tauri/resources/GIT-COPYING
         curl --fail --silent --show-error --location \
-          https://raw.githubusercontent.com/git/git/v2.56.0/COPYING.LIB \
+          https://raw.githubusercontent.com/git/git/v2.56.0/LGPL-2.1 \
           --output desktop/src-tauri/resources/GIT-COPYING.LIB
-        conda run --name git-runtime python scripts/stage_git_runtime_licenses.py \
+        conda run --no-capture-output --name git-runtime python scripts/stage_git_runtime_licenses.py \
           desktop/src-tauri/resources
         test -s desktop/src-tauri/resources/git-runtime.tar.gz
         test -s desktop/src-tauri/resources/GIT-COPYING
@@ -54,14 +59,14 @@ runs:
       run: |
         New-Item -ItemType Directory -Path desktop\src-tauri\resources -Force | Out-Null
         $nanoBinary = 'desktop\src-tauri\resources\nano-win64.exe'
-        Invoke-WebRequest -Uri 'https://nano-editor.org/dist/windows/nano-v9.2-x64.exe' `
+        Invoke-WebRequest -MaximumRetryCount 5 -RetryIntervalSec 10 -Uri 'https://nano-editor.org/dist/windows/nano-v9.2-x64.exe' `
           -OutFile $nanoBinary
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $nanoBinary).Hash -ne `
           '0771BE067C73935B2D326DC8658B20E88F7C033DA2F590CEC82E985282CE3507') {
           throw 'The downloaded Nano binary did not match its pinned SHA-256.'
         }
         $nanoSource = 'desktop\src-tauri\resources\NANO-SOURCE-9.2.tar.xz'
-        Invoke-WebRequest -Uri 'https://nano-editor.org/dist/v9/nano-9.2.tar.xz' `
+        Invoke-WebRequest -MaximumRetryCount 5 -RetryIntervalSec 10 -Uri 'https://nano-editor.org/dist/v9/nano-9.2.tar.xz' `
           -OutFile $nanoSource
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $nanoSource).Hash -ne `
           '05ECB99247B782E8A5B3A25ED4101DD034B0236902F7449BC9795B717642F7E9') {
@@ -72,11 +77,11 @@ runs:
           throw "Unexpected bundled Nano version: $nanoVersion"
         }
         conda env create --yes --file .github\git-pack-tool.yml
-        $gitRuntimePrefix = (conda run --name git-runtime python -c "import sys; print(sys.prefix)").Trim()
-        conda run --name git-pack-tool conda-pack --prefix $gitRuntimePrefix `
+        $gitRuntimePrefix = (conda run --no-capture-output --name git-runtime python -c "import sys; print(sys.prefix)").Trim()
+        conda run --no-capture-output --name git-pack-tool conda-pack --prefix $gitRuntimePrefix `
           --output desktop\src-tauri\resources\git-runtime.tar.gz
-        $gitVersion = (conda run --name git-runtime git --version).Replace('git version ', '').Trim()
-        $nvimVersion = (conda run --name git-runtime nvim --version | Select-Object -First 1).Replace('NVIM v', '').Trim()
+        $gitVersion = (conda run --no-capture-output --name git-runtime git --version).Replace('git version ', '').Trim()
+        $nvimVersion = (conda run --no-capture-output --name git-runtime nvim --version | Select-Object -First 1).Replace('NVIM v', '').Trim()
         if ([string]::IsNullOrWhiteSpace($gitVersion) -or [string]::IsNullOrWhiteSpace($nvimVersion)) {
           throw 'The bundled Git or Neovim executable is missing.'
         }
@@ -85,11 +90,11 @@ runs:
           'desktop\src-tauri\resources\git-runtime-version.txt',
           $runtimeVersions
         )
-        Invoke-WebRequest -Uri https://raw.githubusercontent.com/git/git/v2.56.0/COPYING `
+        Invoke-WebRequest -MaximumRetryCount 5 -RetryIntervalSec 10 -Uri https://raw.githubusercontent.com/git/git/v2.56.0/COPYING `
           -OutFile desktop\src-tauri\resources\GIT-COPYING
-        Invoke-WebRequest -Uri https://raw.githubusercontent.com/git/git/v2.56.0/COPYING.LIB `
+        Invoke-WebRequest -MaximumRetryCount 5 -RetryIntervalSec 10 -Uri https://raw.githubusercontent.com/git/git/v2.56.0/LGPL-2.1 `
           -OutFile desktop\src-tauri\resources\GIT-COPYING.LIB
-        conda run --name git-runtime python scripts/stage_git_runtime_licenses.py `
+        conda run --no-capture-output --name git-runtime python scripts/stage_git_runtime_licenses.py `
           desktop\src-tauri\resources
         if ((Get-Item desktop\src-tauri\resources\git-runtime.tar.gz).Length -eq 0) {
           throw 'The bundled Git archive is empty.'

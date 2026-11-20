@@ -2,6 +2,7 @@
 
 - [[Home]]
 - [[Installation]]
+- [[Linux]]
 - [[Usage]]
 - [[Configuration]]
 - [[Neovim]]
