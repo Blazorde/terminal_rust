@@ -7,6 +7,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Fixed
 
+- A command typed while another program was still running was never executed:
+  the terminal turned Enter into a line feed, and the shell bound that key
+  (`Ctrl+J`) to "insert a new line" instead of accepting the line. `Ctrl+J` now
+  validates the line like Enter, as in other shells. Multi-line input still uses
+  a trailing backtick, and `Shift+Enter` in the desktop terminal.
 - Lines pasted or typed faster than the shell reads them were lost: only the
   first command of a paste ran. The line editor read ahead into a buffer that it
   dropped after each prompt; enabling its `buffer-redux` feature keeps that
