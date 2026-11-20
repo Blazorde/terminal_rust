@@ -712,3 +712,44 @@ fn native_git_commands_work_from_a_path_with_spaces_and_unicode() {
         stderr(&delete_branch)
     );
 }
+
+#[test]
+fn a_name_that_is_not_built_in_runs_the_external_program() {
+    let directory = TestDirectory::new("external program");
+
+    let output = run_cli(directory.path(), &["rustc", "--version"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stdout(&output).starts_with("rustc "), "{}", stdout(&output));
+}
+
+#[test]
+fn a_failing_external_program_fails_the_shell_with_its_status() {
+    let directory = TestDirectory::new("external failure");
+
+    let output = run_cli(
+        directory.path(),
+        &["rustc", "--terminal-rust-no-such-option"],
+    );
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("rustc: exited with status"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn a_missing_program_still_reports_an_unknown_command() {
+    let directory = TestDirectory::new("external missing");
+
+    let output = run_cli(directory.path(), &["terminal-rust-no-such-program"]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("unknown command: terminal-rust-no-such-program"),
+        "{}",
+        stderr(&output)
+    );
+}

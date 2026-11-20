@@ -5,6 +5,15 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- Any command that is not built in now runs the program of that name found in
+  `PATH` (`PATHEXT` is honored on Windows), with the terminal streams, the
+  environment and the current directory of the shell. A missing program still
+  reports `unknown command`, and a failing one reports its exit status. See
+  ADR-0008.
+- `Ctrl+C` no longer ends the interactive shell while a program is running.
+
 ## [1.1.0] - 2026-11-20
 
 ### Added
