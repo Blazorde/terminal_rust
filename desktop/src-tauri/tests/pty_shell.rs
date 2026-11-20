@@ -37,6 +37,46 @@ fn wait_for_prompt_frame(
     );
 }
 
+/// Wait until the prompt that follows `marker` has been drawn.
+///
+/// Every keystroke redraws the prompt, so counting prompt frames cannot tell
+/// that a command has finished. The line editor also discards input typed
+/// before it starts reading again, hence the short settling delay.
+fn wait_for_prompt_after(
+    receiver: &Receiver<Vec<u8>>,
+    output: &mut Vec<u8>,
+    marker: &str,
+    writer: &mut dyn Write,
+    cursor_answered: &mut bool,
+) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
+            output.extend(chunk);
+        }
+        if cfg!(windows) && !*cursor_answered && output.windows(4).any(|bytes| bytes == b"\x1b[6n")
+        {
+            writer
+                .write_all(b"\x1b[1;1R")
+                .and_then(|()| writer.flush())
+                .expect("headless PTY should answer the cursor position query");
+            *cursor_answered = true;
+        }
+        let text = String::from_utf8_lossy(output);
+        if text
+            .rfind(marker)
+            .is_some_and(|index| text[index + marker.len()..].contains("]777;"))
+        {
+            thread::sleep(Duration::from_millis(150));
+            return;
+        }
+    }
+    panic!(
+        "desktop shell did not draw a prompt after {marker:?}: {}",
+        String::from_utf8_lossy(output)
+    );
+}
+
 fn wait_for_output(
     receiver: &Receiver<Vec<u8>>,
     output: &mut Vec<u8>,
@@ -413,10 +453,10 @@ fn interactive_pty_keeps_history_directory_changes_and_long_line_edits() {
         &mut cursor_answered,
     );
 
-    wait_for_prompt_frame(
+    wait_for_prompt_after(
         &receiver,
         &mut output,
-        6,
+        &expected,
         writer.as_mut(),
         &mut cursor_answered,
     );
