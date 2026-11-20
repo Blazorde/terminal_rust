@@ -2,9 +2,9 @@ use std::path::PathBuf;
 
 use crate::app::help;
 use crate::commands::{
-    appearance, arch, cat, cd, clear, dashboard, date, echo, editor, fastfetch, git_command,
-    hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime, user,
-    whoami,
+    appearance, arch, cat, cd, clear, dashboard, date, echo, editor, external, fastfetch,
+    git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime,
+    user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -384,7 +384,7 @@ fn execute_plugin_command(
         if let Some(reason) = state.plugin_commands.blocked_reason(name) {
             return CommandResult::Error(reason.to_string());
         }
-        return CommandResult::Error(CommandError::UnknownCommand(name.to_string()).to_string());
+        return execute_external(name, invocation_args);
     };
     if !invocation_args.is_empty() {
         return CommandResult::Error(format!(
@@ -393,6 +393,16 @@ fn execute_plugin_command(
         ));
     }
     map_prefixed_error(name, render::stdout(command.response))
+}
+
+fn execute_external(name: &str, args: &[String]) -> CommandResult {
+    match external::run(name, args) {
+        Ok(()) => CommandResult::Continue,
+        Err(external::RunError::NotFound) => {
+            CommandResult::Error(CommandError::UnknownCommand(name.to_string()).to_string())
+        }
+        Err(external::RunError::Failed(message)) => CommandResult::Error(message),
+    }
 }
 
 fn find_command(name: &str) -> Option<&'static CommandSpec> {

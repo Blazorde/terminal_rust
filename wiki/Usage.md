@@ -29,6 +29,21 @@ Run `help` inside Terminal Rust for the authoritative command list.
 Install [Blazorde's Neovim configuration](Neovim) to use the editor with the
 published CodeOpsHQ setup.
 
+## Running other programs
+
+A command that is not built in runs the program of that name found in your
+`PATH`, so tools such as `cargo`, `python` or `htop` work directly:
+
+```text
+cargo build --release
+python3 script.py
+```
+
+The program shares the terminal, the environment and the current directory.
+`Ctrl+C` stops the program and returns to the prompt. A built-in command always
+takes precedence over a program of the same name. Pipes, redirections and
+variables are not available yet.
+
 ## Paths containing spaces
 
 Quote a path containing spaces with single or double quotes so the command
