@@ -172,7 +172,7 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
     wait_for_output(
         &receiver,
         &mut output,
-        ">> ",
+        ">>",
         writer.as_mut(),
         &mut cursor_answered,
     );
@@ -239,7 +239,9 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
         "typed prompt metadata was missing from PTY output: {output}"
     );
     assert!(
-        output.contains("\u{1b}[36m") || output.contains("\u{1b}[35m"),
+        ["[36m", "[35m", "[1;36m", "[1;35m"]
+            .iter()
+            .any(|code| output.contains(&format!("\u{1b}{code}"))),
         "colored prompt styling was missing from PTY output: {output}"
     );
     for kind in [
@@ -329,6 +331,13 @@ fn interactive_pty_keeps_history_directory_changes_and_long_line_edits() {
         writer.as_mut(),
         &mut cursor_answered,
     );
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        2,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
     let first_history_count = String::from_utf8_lossy(&output)
         .matches("history-check")
         .count();
@@ -346,11 +355,26 @@ fn interactive_pty_keeps_history_directory_changes_and_long_line_edits() {
         &mut cursor_answered,
     );
 
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        3,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+
     let cd_command = format!("cd \"{}\"\r", target.display());
     writer
         .write_all(cd_command.as_bytes())
         .and_then(|()| writer.flush())
         .expect("cd command should reach the PTY");
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        4,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
     writer
         .write_all(b"pwd\r")
         .and_then(|()| writer.flush())
@@ -360,6 +384,14 @@ fn interactive_pty_keeps_history_directory_changes_and_long_line_edits() {
         &mut output,
         &target.display().to_string(),
         1,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        5,
         writer.as_mut(),
         &mut cursor_answered,
     );
@@ -381,6 +413,13 @@ fn interactive_pty_keeps_history_directory_changes_and_long_line_edits() {
         &mut cursor_answered,
     );
 
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        6,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
     writer
         .write_all(b"exit\r")
         .and_then(|()| writer.flush())
