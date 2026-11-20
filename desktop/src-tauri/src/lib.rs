@@ -5,6 +5,7 @@ use portable_pty::CommandBuilder;
 use tauri::{AppHandle, Manager, State};
 
 mod git_runtime;
+mod launch;
 mod pty;
 mod settings;
 
@@ -104,6 +105,7 @@ fn configure_development_nano(app: &AppHandle, command: &mut CommandBuilder) -> 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    launch::init_from_process_arguments();
     tauri::Builder::default()
         .manage(pty::PtyState::default())
         .setup(|app| {

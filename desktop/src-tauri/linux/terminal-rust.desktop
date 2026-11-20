@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name={{name}}
+GenericName=Terminal Emulator
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}}
+Icon={{icon}}
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=shell;prompt;command;console;terminal;git;
+StartupNotify=true
+StartupWMClass={{exec}}
