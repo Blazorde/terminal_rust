@@ -6,7 +6,7 @@ use crate::utils::shell_env;
 pub fn run(name: &str, executable: &str, args: &[String]) -> Result<(), String> {
     let program = bundled_program(executable).unwrap_or_else(|| OsString::from(executable));
     let mut command = Command::new(&program);
-    shell_env::apply_to(&mut command);
+    shell_env::prepare_child(&mut command);
     let status = command.args(args).status().map_err(|error| {
         format!(
             "{name}: cannot start {}: {error}",

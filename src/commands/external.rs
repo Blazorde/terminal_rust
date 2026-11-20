@@ -17,7 +17,7 @@ pub enum RunError {
 /// current directory of the shell.
 pub fn run(name: &str, args: &[String]) -> Result<(), RunError> {
     let mut command = Command::new(resolve(name));
-    shell_env::apply_to(&mut command);
+    shell_env::prepare_child(&mut command);
     let status = command
         .args(args)
         .status()

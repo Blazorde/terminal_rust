@@ -256,7 +256,7 @@ pub fn run_process(
     invocation_args: &[String],
 ) -> Result<(), String> {
     let mut process = Command::new(&command.target);
-    shell_env::apply_to(&mut process);
+    shell_env::prepare_child(&mut process);
     process.args(&command.args);
     if command.append_args {
         process.args(invocation_args);
