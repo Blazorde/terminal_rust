@@ -7,13 +7,15 @@ release history:
 - `V0.0.4`
 - `V0.1.0`
 - `v0.2.0`
-- `v0.3.0` — latest stable
-- `v1.0.0-alpha.1` — current prerelease
+- `v0.3.0`
+- `v1.0.0-alpha.1` — prerelease
+- `v1.1.0` — latest stable
 
-The alpha provides Windows and Linux archives plus native desktop installers.
-Each asset is covered by `SHA256SUMS.txt`; archives include the MIT license and
-third-party notices. Packages are currently unsigned. The macOS package remains
-pending until a native build and PTY launch are validated on Apple hardware.
+Releases provide Windows and Linux archives plus native desktop installers, and
+a macOS archive built by the release workflow. Each asset is covered by
+`SHA256SUMS.txt`; archives include the MIT license and third-party notices.
+Packages are currently unsigned. The macOS package has not been validated on
+Apple hardware.
 
 Release tags are immutable publication points after verification. A local build
 proves only its host platform. See the

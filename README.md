@@ -83,17 +83,17 @@ This opens the native application and real PTY sessions. The browser-only
 execute commands. The separate native UI prototype is experimental; see its
 [development notes](docs/development/desktop.md#native-ui-migration-prototype).
 
-## Download the alpha
+## Download
 
-[`v1.0.0-alpha.1`](https://github.com/Blazorde/terminal_rust/releases/tag/v1.0.0-alpha.1)
-is a prerelease and does not replace the latest stable version, `v0.3.0`.
-Verify downloads with the attached `SHA256SUMS.txt`.
+[`v1.1.0`](https://github.com/Blazorde/terminal_rust/releases/tag/v1.1.0)
+is the latest stable release. Verify downloads with the attached
+`SHA256SUMS.txt`.
 
-| Platform | Available alpha packages |
+| Platform | Available packages |
 | --- | --- |
 | Windows x86_64 | Portable `.zip` and NSIS `.exe` |
 | Linux x86_64 | Portable `.tar.gz`, `.deb` and `.AppImage` |
-| macOS | Build from source; the native-tested package is still pending |
+| macOS | Archive built by the release workflow; not yet tested on Apple hardware |
 
 The packages are currently unsigned. Read the
 [installation guide](docs/install.md) before granting an operating-system
@@ -129,13 +129,12 @@ expected behavior and the affected operating system.
 ## Platform support
 
 Windows, macOS and Linux are first-class targets in the architecture. The
-`v1.0.0-alpha.1` packages have native runtime evidence on Windows and Linux.
-The macOS code path and build configuration exist, but the native bundle and
+CI runs on Windows, Linux and macOS for every change. The macOS bundle and its
 PTY launch still require validation on Apple hardware.
 
 ## Project status
 
-The current product snapshot is `v1.0.0-alpha.1`. Plugin loading remains
+The current product snapshot is `v1.1.0`. Plugin loading remains
 deliberately bounded: manifests, compatibility, permissions and safe
 declarative commands are supported, while arbitrary third-party native
 libraries are not loaded. See [CHANGELOG.md](CHANGELOG.md) for delivered work

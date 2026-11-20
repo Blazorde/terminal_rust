@@ -1,15 +1,15 @@
 # Installation
 
-## Download the alpha
+## Download
 
-The [`v1.0.0-alpha.1` prerelease](https://github.com/Blazorde/terminal_rust/releases/tag/v1.0.0-alpha.1)
+The [`v1.1.0` release](https://github.com/Blazorde/terminal_rust/releases/tag/v1.1.0)
 contains the following unsigned packages:
 
 | Platform | Packages |
 | --- | --- |
 | Windows x86_64 | Portable ZIP and NSIS installer |
 | Linux x86_64 | Portable tarball, DEB and AppImage |
-| macOS | Build from source; native-tested bundle pending |
+| macOS | Archive built by the release workflow; not yet tested on Apple hardware |
 
 Verify every download with the release's `SHA256SUMS.txt` before granting an
 operating-system exception.

@@ -22,7 +22,5 @@ Repository files are the source of truth.
 
 ## Current status
 
-`v1.0.0-alpha.1` is the current prerelease; `v0.3.0` remains the latest stable
-release. Windows and Linux alpha packages have native runtime and PTY evidence.
-The macOS architecture and build configuration are present, but the native
-bundle still requires validation on Apple hardware.
+`v1.1.0` is the latest stable release. CI runs on Windows, Linux and macOS for
+every change. The macOS bundle still requires validation on Apple hardware.
