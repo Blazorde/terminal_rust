@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use crate::app::help;
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, fastfetch, git_command,
-    hostname, ls, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime, user, whoami,
+    hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime, user,
+    whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -285,6 +286,13 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_neovim,
     },
     CommandSpec {
+        name: "man",
+        usage: "man <command>",
+        summary: "display the manual of a command",
+        max_args: None,
+        handler: run_man,
+    },
+    CommandSpec {
         name: "hostname",
         usage: "hostname",
         summary: "display the system hostname",
@@ -531,6 +539,23 @@ Use 'commands list' to inspect configured shortcuts. Built-in shortcuts call a\n
 Terminal Rust command; process shortcuts start a configured program directly.\n\
 See docs/custom-commands.md for configuration and security details.\n";
 
+fn run_man(args: &[String], _state: &mut ShellState) -> CommandResult {
+    let Some(topic) = args.first() else {
+        return CommandResult::Error(
+            "man: what manual page do you want? Usage: man <command>".into(),
+        );
+    };
+    if let (1, Some(command)) = (args.len(), find_command(topic)) {
+        let entry = man::Entry {
+            name: command.name,
+            usage: command.usage,
+            summary: command.summary,
+        };
+        return map_prefixed_error("man", man::show(&entry));
+    }
+    map_display_error(man::show_system(args))
+}
+
 fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_result(help::print_help(command_help()), |error| {
         format!("help: {error}")
@@ -645,5 +670,27 @@ mod tests {
         assert!(!output.stdout.contains("after failure"));
         assert_eq!(state.script_depth, 0);
         std::fs::remove_file(path).expect("script fixture should be removed");
+    }
+
+    #[test]
+    fn man_shows_the_manual_of_a_built_in_command() {
+        let mut state = test_state();
+        let (result, output) =
+            render::capture_output(|| execute(&string_args(&["man", "printenv"]), &mut state));
+
+        assert!(matches!(result, CommandResult::Continue));
+        assert!(output.stdout.contains("NAME\n    printenv - "));
+        assert!(output.stdout.contains("SYNOPSIS\n    printenv [variable]"));
+    }
+
+    #[test]
+    fn man_without_a_topic_explains_how_to_use_it() {
+        let mut state = test_state();
+        let result = execute(&string_args(&["man"]), &mut state);
+
+        assert!(matches!(
+            result,
+            CommandResult::Error(message) if message.contains("Usage: man <command>")
+        ));
     }
 }

@@ -11,6 +11,7 @@ pub mod fastfetch;
 pub mod git_command;
 pub mod hostname;
 pub mod ls;
+pub mod man;
 pub mod mkdir;
 pub mod nproc;
 pub mod plugins;

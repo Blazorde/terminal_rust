@@ -12,6 +12,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 - Added `nano`, `nvim` and `neovim` commands and made the bundled editors
   available to Git's configured interactive editor.
 - Added an `echo` command that prints its arguments separated by spaces.
+- Added a `man` command: built-in commands show their name and synopsis, and any
+  other topic is handed to the system `man` when it is installed.
 - Added a whoami command that prints the current user’s username.
 - Added an arch command that prints the system architecture.
 - Added an nproc command that prints the number of available processing units.
