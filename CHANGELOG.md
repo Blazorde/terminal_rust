@@ -7,6 +7,10 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Fixed
 
+- Pressing Tab after a no-break space or another multi-byte whitespace crashed
+  the shell, because the completion assumed a whitespace takes one byte. The
+  word start is now computed from the character width and the cursor position is
+  moved back to a character boundary.
 - The remove command could delete what the user did not mean to: asking it to
   remove the current directory or its parent emptied them. Those two targets and
   the root directory are now refused, before anything is removed, as in GNU `rm`.
