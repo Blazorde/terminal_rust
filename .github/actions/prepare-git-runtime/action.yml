@@ -45,7 +45,7 @@ runs:
           https://raw.githubusercontent.com/git/git/v2.56.0/COPYING \
           --output desktop/src-tauri/resources/GIT-COPYING
         curl --fail --silent --show-error --location \
-          https://raw.githubusercontent.com/git/git/v2.56.0/COPYING.LIB \
+          https://raw.githubusercontent.com/git/git/v2.56.0/LGPL-2.1 \
           --output desktop/src-tauri/resources/GIT-COPYING.LIB
         conda run --no-capture-output --name git-runtime python scripts/stage_git_runtime_licenses.py \
           desktop/src-tauri/resources
@@ -92,7 +92,7 @@ runs:
         )
         Invoke-WebRequest -Uri https://raw.githubusercontent.com/git/git/v2.56.0/COPYING `
           -OutFile desktop\src-tauri\resources\GIT-COPYING
-        Invoke-WebRequest -Uri https://raw.githubusercontent.com/git/git/v2.56.0/COPYING.LIB `
+        Invoke-WebRequest -Uri https://raw.githubusercontent.com/git/git/v2.56.0/LGPL-2.1 `
           -OutFile desktop\src-tauri\resources\GIT-COPYING.LIB
         conda run --no-capture-output --name git-runtime python scripts/stage_git_runtime_licenses.py `
           desktop\src-tauri\resources
