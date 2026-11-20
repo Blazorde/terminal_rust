@@ -14,6 +14,7 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0005](0005-desktop-gui-stack.md) | Accepted | Tauri desktop layer around the Rust engine |
 | [0006](0006-plugin-boundary.md) | Accepted | Declarative, isolatable plugin boundary |
 | [0007](0007-full-native-git-and-editors.md) | Accepted | Full native Git with bundled terminal editors |
+| [0008](0008-external-programs.md) | Accepted | Run external programs from the shell |
 
 ## Lifecycle
 
