@@ -95,11 +95,62 @@ fn remove_targets(
     targets: &[PathBuf],
     confirm: fn(&str) -> io::Result<bool>,
 ) -> Result<(), RmError> {
+    // Refuse before anything is removed, so one dangerous target cancels the command.
     for target in targets {
-        remove_target(options, target, confirm)?;
+        ensure_not_protected(target)?;
     }
 
-    Ok(())
+    let mut errors = Vec::new();
+    for target in targets {
+        if let Err(error) = remove_target(options, target, confirm) {
+            errors.push(error);
+        }
+    }
+
+    match errors.len() {
+        0 => Ok(()),
+        1 => Err(errors.remove(0)),
+        count => {
+            for error in &errors {
+                let _ = render::stderr_line(error);
+            }
+            Err(RmError::Several(count))
+        }
+    }
+}
+
+/// Refuse `.`, `..` and the root directory, as GNU `rm` does.
+fn ensure_not_protected(path: &Path) -> Result<(), RmError> {
+    let text = path.to_string_lossy();
+    let trimmed = text.trim_end_matches(['/', '\\']);
+    let last = trimmed.rsplit(['/', '\\']).next().unwrap_or("");
+    let reason = if last == "." || last == ".." {
+        Some("'.' and '..' are not removable")
+    } else if (trimmed.is_empty() && !text.is_empty())
+        || fs::canonicalize(path).is_ok_and(|resolved| resolved.parent().is_none())
+    {
+        Some("it is the root directory")
+    } else {
+        None
+    };
+
+    match reason {
+        Some(reason) => Err(RmError::Refused {
+            path: path.to_path_buf(),
+            reason,
+        }),
+        None => Ok(()),
+    }
+}
+
+/// Look at the path itself: a symlink is a file, even when it points to a
+/// directory or to nothing.
+fn exists_without_following(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok()
+}
+
+fn is_real_directory(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_dir())
 }
 
 fn remove_target(
@@ -107,7 +158,7 @@ fn remove_target(
     path: &Path,
     confirm: fn(&str) -> io::Result<bool>,
 ) -> Result<(), RmError> {
-    if !path.exists() {
+    if !exists_without_following(path) {
         return if options.force {
             Ok(())
         } else {
@@ -119,17 +170,26 @@ fn remove_target(
         return Ok(());
     }
 
-    if path.is_dir() {
+    if is_real_directory(path) {
         return remove_directory(options, path);
     }
 
-    fs::remove_file(path).map_err(|source| RmError::DeleteFailed {
+    remove_file_or_link(path).map_err(|source| RmError::DeleteFailed {
         path: path.to_path_buf(),
         source,
     })?;
 
     print_removed(options, path)?;
     Ok(())
+}
+
+fn remove_file_or_link(path: &Path) -> io::Result<()> {
+    let removed = fs::remove_file(path);
+    // Windows removes a directory symlink with remove_dir.
+    if removed.is_err() && fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()) {
+        return fs::remove_dir(path);
+    }
+    removed
 }
 
 fn remove_directory(options: &RmOptions, path: &Path) -> Result<(), RmError> {
@@ -156,7 +216,7 @@ fn should_confirm(options: &RmOptions, path: &Path) -> bool {
 }
 
 fn is_dangerous_removal(options: &RmOptions, path: &Path) -> bool {
-    options.recursive && path.is_dir()
+    options.recursive && is_real_directory(path)
 }
 
 fn confirm_removal(
@@ -181,6 +241,8 @@ fn confirm_removal(
 
 fn ask_confirmation(message: &str) -> io::Result<bool> {
     render::stdout(message)?;
+    // The question is captured like any output; show it before waiting.
+    render::flush_captured();
 
     let mut answer = String::new();
     io::stdin().read_line(&mut answer)?;
@@ -329,5 +391,139 @@ mod tests {
 
         assert!(path.exists());
         fs::remove_file(path).expect("test file should be removed");
+    }
+
+    #[test]
+    fn dot_dot_dot_and_the_root_are_protected() {
+        for target in [
+            ".", "..", "./", "../", "a/..", "a/.", "a/../", "/", "//", "/.",
+        ] {
+            let result = ensure_not_protected(Path::new(target));
+
+            assert!(
+                matches!(result, Err(RmError::Refused { .. })),
+                "{target:?} should be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_names_are_not_protected() {
+        for target in [
+            "a",
+            ".hidden",
+            "..data",
+            "a..b",
+            "...",
+            "dir/file.txt",
+            "dir/.git",
+        ] {
+            assert!(
+                ensure_not_protected(Path::new(target)).is_ok(),
+                "{target:?} should be allowed"
+            );
+        }
+    }
+
+    #[test]
+    fn a_protected_target_cancels_the_whole_command() {
+        let file = temp_path("rm", "guard-first");
+        fs::write(&file, "keep me").expect("test file should be written");
+        // Recursive without force asks before removing a directory, and the
+        // answer is no, so this test cannot delete anything even if the guard broke.
+        let options = RmOptions {
+            recursive: true,
+            ..RmOptions::default()
+        };
+
+        let result = remove_targets(&options, &[file.clone(), PathBuf::from(".")], confirm_no);
+
+        assert!(matches!(result, Err(RmError::Refused { .. })));
+        assert!(
+            file.exists(),
+            "nothing should be removed before the refusal"
+        );
+        fs::remove_file(file).expect("test file should be removed");
+    }
+
+    #[test]
+    fn rm_continues_with_the_other_targets_after_a_failure() {
+        let first = temp_path("rm", "continue-first");
+        let last = temp_path("rm", "continue-last");
+        let missing = temp_path("rm", "continue-missing");
+        fs::write(&first, "a").expect("test file should be written");
+        fs::write(&last, "c").expect("test file should be written");
+
+        let result = rm(&[
+            first.to_string_lossy().into_owned(),
+            missing.to_string_lossy().into_owned(),
+            last.to_string_lossy().into_owned(),
+        ]);
+
+        assert!(matches!(result, Err(RmError::NotFound(path)) if path == missing));
+        assert!(!first.exists() && !last.exists());
+    }
+
+    #[test]
+    fn rm_force_ignores_missing_targets_and_still_removes_the_rest() {
+        let present = temp_path("rm", "force-present");
+        let missing = temp_path("rm", "force-missing");
+        fs::write(&present, "a").expect("test file should be written");
+
+        rm(&[
+            "-f".to_string(),
+            missing.to_string_lossy().into_owned(),
+            present.to_string_lossy().into_owned(),
+        ])
+        .expect("rm -f should ignore the missing target");
+
+        assert!(!present.exists());
+    }
+
+    #[test]
+    fn several_failures_are_all_printed_and_counted() {
+        let first = temp_path("rm", "several-first");
+        let second = temp_path("rm", "several-second");
+
+        let result = rm(&[
+            first.to_string_lossy().into_owned(),
+            second.to_string_lossy().into_owned(),
+        ]);
+
+        assert!(matches!(result, Err(RmError::Several(2))));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_broken_symlink_can_be_removed() {
+        let link = temp_path("rm", "broken-link");
+        std::os::unix::fs::symlink(temp_path("rm", "nowhere"), &link)
+            .expect("symlink should be created");
+
+        rm(&[link.to_string_lossy().into_owned()]).expect("a broken link should be removable");
+
+        assert!(fs::symlink_metadata(&link).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn removing_a_symlink_to_a_directory_leaves_the_directory_alone() {
+        let directory = temp_path("rm", "link-target");
+        let link = temp_path("rm", "link-to-directory");
+        fs::create_dir(&directory).expect("test directory should be created");
+        fs::write(directory.join("keep.txt"), "keep").expect("test file should be written");
+        std::os::unix::fs::symlink(&directory, &link).expect("symlink should be created");
+        let options = RmOptions {
+            force: true,
+            recursive: true,
+            ..RmOptions::default()
+        };
+
+        remove_targets(&options, std::slice::from_ref(&link), confirm_unexpected)
+            .expect("the link should be removed without confirmation");
+
+        assert!(fs::symlink_metadata(&link).is_err());
+        assert!(directory.join("keep.txt").exists());
+        fs::remove_dir_all(directory).expect("test directory should be removed");
     }
 }
