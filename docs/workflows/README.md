@@ -49,4 +49,6 @@ cargo test --all-targets --all-features
 
 Open the PR into `develop`. Stable promotion uses a `develop` to `main` PR.
 Required checks should be bypassed only under the documented maintainer policy,
-with local evidence recorded when hosted jobs cannot execute.
+with local evidence recorded when hosted jobs cannot execute: run
+`scripts/ci-local.sh` for the Linux gate and say which platforms were not
+replayed.

@@ -50,6 +50,22 @@ before publishing a release.
 
 ## Reproduce the Linux gate locally
 
+`scripts/ci-local.sh` replays the whole Linux gate, with the Security checks, in
+the pinned validation image and prints one `PASS` or `FAIL` line per step. It
+exits with a non-zero status when a step fails and shows the last lines of the
+failing log:
+
+```bash
+scripts/ci-local.sh            # every step, including cargo-deny
+scripts/ci-local.sh --no-deny  # skip cargo-deny
+scripts/ci-local.sh --fresh    # drop the cached Cargo registry, target and tools
+DOCKER_CONTEXT=default scripts/ci-local.sh   # choose another Docker daemon
+```
+
+Three Docker volumes cache the Cargo registry, the build output and the tools, so
+a second run takes seconds instead of minutes. The script does not cover Windows,
+macOS, a visible desktop window or the test that needs the bundled Git runtime.
+
 When hosted runners are unavailable, Docker can execute the complete Rust gate
 against WebKitGTK and the other native Tauri dependencies used by Linux. Build
 the pinned validation image from the repository root:

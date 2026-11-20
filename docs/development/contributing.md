@@ -56,5 +56,7 @@ or replaces an existing decision.
 ## Pull requests
 
 Target `develop` and include the problem or ticket, important choices, executed
-validation and known limits or follow-up work. See the complete
-[GitHub workflow guide](../workflows/README.md).
+validation and known limits or follow-up work. Run `scripts/ci-local.sh` and
+list its result when hosted checks cannot execute; see
+[Reproduce the Linux gate locally](testing.md#reproduce-the-linux-gate-locally).
+See the complete [GitHub workflow guide](../workflows/README.md).
