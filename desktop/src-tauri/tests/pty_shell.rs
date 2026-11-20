@@ -488,6 +488,110 @@ fn interactive_pty_keeps_history_directory_changes_and_long_line_edits() {
     fs::remove_dir_all(root).expect("PTY fixture directory should be removed");
 }
 
+// rustyline keeps lines typed ahead only on Unix (its `buffer-redux` feature), so
+// this guards a Unix behavior: pasted lines must all run, in order.
+#[cfg(unix)]
+#[test]
+fn lines_pasted_in_one_write_all_run_in_order() {
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows: 24,
+            cols: 100,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .expect("native PTY should open");
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .expect("PTY output should be readable");
+    let mut writer = pair
+        .master
+        .take_writer()
+        .expect("PTY input should be writable");
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut buffer = [0; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(length) => {
+                    if sender.send(buffer[..length].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    command.arg("--pty-shell");
+    command.env("TERMINAL_RUST_GUI", "1");
+    command.env("TERM", "xterm-256color");
+    let mut child = pair
+        .slave
+        .spawn_command(command)
+        .expect("desktop shell mode should start");
+    drop(pair.slave);
+
+    let mut output = Vec::new();
+    let mut cursor_answered = false;
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        1,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+
+    writer
+        .write_all(b"echo x1\recho x2\recho x3\r")
+        .and_then(|()| writer.flush())
+        .expect("pasted lines should reach the PTY");
+
+    // Every keystroke redraws the prompt, so a slow machine needs time to get
+    // through the whole paste. A command's output starts a line; its typed echo
+    // does not.
+    let results = ["\r\nx1\r\n", "\r\nx2\r\n", "\r\nx3\r\n"];
+    let paste_deadline = Instant::now() + Duration::from_secs(30);
+    let text = loop {
+        if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
+            output.extend(chunk);
+        }
+        let text = String::from_utf8_lossy(&output).into_owned();
+        if results.iter().all(|result| text.contains(result)) {
+            break text;
+        }
+        assert!(
+            Instant::now() < paste_deadline,
+            "pasted commands did not all run: {text}"
+        );
+    };
+    let positions: Vec<usize> = results
+        .iter()
+        .map(|result| text.find(result).unwrap_or(usize::MAX))
+        .collect();
+    assert!(
+        positions.windows(2).all(|pair| pair[0] < pair[1]),
+        "pasted commands should run in order: {text}"
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut next_exit = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("shell status should be readable") {
+            break status;
+        }
+        assert!(Instant::now() < deadline, "shell did not exit: {text}");
+        if Instant::now() >= next_exit {
+            let _ = writer.write_all(b"exit\r").and_then(|()| writer.flush());
+            next_exit = Instant::now() + Duration::from_millis(500);
+        }
+        thread::sleep(Duration::from_millis(20));
+    };
+    assert!(status.success(), "shell should exit cleanly");
+}
+
 #[test]
 fn live_dashboard_exits_and_restores_the_desktop_pty() {
     let pair = native_pty_system()
