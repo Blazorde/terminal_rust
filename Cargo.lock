@@ -301,6 +301,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "buffer-redux"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "431a9cc8d7efa49bc326729264537f5e60affce816c66edf434350778c9f4f54"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4092,6 +4101,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56e1d6bd81c2d5feafd2419138df9183c45a10a492c4e873b8b0acb8eb2b549e"
 dependencies = [
  "bitflags 2.13.2",
+ "buffer-redux",
  "clipboard-win",
  "home",
  "libc",
@@ -5045,7 +5055,7 @@ dependencies = [
 
 [[package]]
 name = "terminal-rust-desktop"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "flate2",
  "portable-pty",
@@ -5060,14 +5070,14 @@ dependencies = [
 
 [[package]]
 name = "terminal-rust-example-plugin"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "terminal-rust-plugin-sdk",
 ]
 
 [[package]]
 name = "terminal-rust-native-prototype"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "arboard",
  "eframe",
@@ -5078,7 +5088,7 @@ dependencies = [
 
 [[package]]
 name = "terminal-rust-plugin-sdk"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -5086,7 +5096,7 @@ dependencies = [
 
 [[package]]
 name = "terminal_rust"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "crossterm",
  "ctrlc",

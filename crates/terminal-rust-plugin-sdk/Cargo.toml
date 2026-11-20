@@ -1,6 +1,6 @@
 [package]
 name = "terminal-rust-plugin-sdk"
-version = "1.2.0"
+version = "1.2.1"
 edition = "2024"
 description = "Runtime-independent DTOs for Terminal Rust plugins"
 license = "MIT"

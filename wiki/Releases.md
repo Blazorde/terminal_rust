@@ -10,7 +10,8 @@ release history:
 - `v0.3.0`
 - `v1.0.0-alpha.1` — prerelease
 - `v1.1.0`
-- `v1.2.0` — latest stable
+- `v1.2.0`
+- `v1.2.1` — latest stable
 
 Releases provide Windows and Linux archives plus native desktop installers, and
 a macOS archive built by the release workflow. Each asset is covered by
