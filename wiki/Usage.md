@@ -82,6 +82,23 @@ succeeded, and `||` only if it failed. They are evaluated from left to right and
 redirections (`<`, `>`) and background jobs (`&`) are not available yet: the
 shell says so instead of passing them to a program.
 
+## Pasting several lines
+
+A block of several lines runs like the same lines typed one after another, in
+order. The same is true of a command you type while another program is still
+running: it runs when the prompt comes back.
+
+```text
+echo first
+make
+echo done
+```
+
+Each line runs on its own, so a line that fails is reported and the next lines
+still run. To stop at the first failure, join the commands with `&&` on one
+line (`make && echo done`), or put them in a script, which stops at the first
+failing command.
+
 ## Paths containing spaces
 
 Quote a path containing spaces with single or double quotes so the command
