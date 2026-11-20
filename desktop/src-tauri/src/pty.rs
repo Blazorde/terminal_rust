@@ -68,10 +68,28 @@ pub fn start_session(
         .openpty(pty_size(cols, rows))
         .map_err(|error| format!("cannot open native PTY: {error}"))?;
 
-    let executable = std::env::current_exe()
-        .map_err(|error| format!("cannot locate desktop executable: {error}"))?;
-    let mut command = CommandBuilder::new(executable);
-    command.arg("--pty-shell");
+    let launch = crate::launch::take_for_first_session();
+    let mut command = match launch.command.split_first() {
+        Some((program, arguments)) => {
+            let mut command = CommandBuilder::new(program);
+            command.args(arguments);
+            command
+        }
+        None => {
+            let executable = std::env::current_exe()
+                .map_err(|error| format!("cannot locate desktop executable: {error}"))?;
+            let mut command = CommandBuilder::new(executable);
+            command.arg("--pty-shell");
+            command
+        }
+    };
+    if let Some(directory) = launch
+        .working_directory
+        .as_ref()
+        .filter(|path| path.is_dir())
+    {
+        command.cwd(directory);
+    }
     command.env("TERMINAL_RUST_GUI", "1");
     command.env("TERM", "xterm-256color");
     command.env(

@@ -48,6 +48,13 @@
       "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
       "resources/": "resources/",
       "../../config/": "config/"
+    },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "linux/terminal-rust.desktop",
+        "postInstallScript": "linux/postinst.sh",
+        "preRemoveScript": "linux/prerm.sh"
+      }
     }
   }
 }

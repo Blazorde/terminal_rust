@@ -14,6 +14,8 @@ contains the following unsigned packages:
 Verify every download with the release's `SHA256SUMS.txt` before granting an
 operating-system exception.
 
+On Linux, see [[Linux]] to use Terminal Rust as your terminal.
+
 ## Run from source
 
 Install a current Rust toolchain, clone the repository and run:
