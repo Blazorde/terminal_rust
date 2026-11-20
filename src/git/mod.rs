@@ -67,7 +67,7 @@ fn run_native_command_with_program(
     program: impl AsRef<OsStr>,
 ) -> Result<ExitStatus, GitCommandError> {
     let mut command = Command::new(program);
-    apply_bundled_git_environment(&mut command);
+    apply_git_environment(&mut command);
     command
         .current_dir(path)
         .args(args)
@@ -89,7 +89,7 @@ fn run_native_command_with_program(
 
 fn is_inside_work_tree_with_program(path: &Path, program: impl AsRef<OsStr>) -> bool {
     let mut command = Command::new(program);
-    apply_bundled_git_environment(&mut command);
+    apply_git_environment(&mut command);
     let output = command
         .arg("-C")
         .arg(path)
@@ -106,7 +106,7 @@ fn is_inside_work_tree_with_program(path: &Path, program: impl AsRef<OsStr>) -> 
 
 fn prompt_info_with_program(path: &Path, program: impl AsRef<OsStr>) -> Option<PromptGitInfo> {
     let mut command = Command::new(program);
-    apply_bundled_git_environment(&mut command);
+    apply_git_environment(&mut command);
     let output = command
         .arg("--no-optional-locks")
         .arg("-C")
@@ -128,7 +128,7 @@ fn prompt_info_with_program(path: &Path, program: impl AsRef<OsStr>) -> Option<P
     parse_prompt_status(&output.stdout)
 }
 
-fn apply_bundled_git_environment(command: &mut Command) {
+fn apply_git_environment(command: &mut Command) {
     if let Some(exec_path) = std::env::var_os("TERMINAL_RUST_GIT_EXEC_PATH") {
         command.env("GIT_EXEC_PATH", exec_path);
     }
@@ -138,6 +138,8 @@ fn apply_bundled_git_environment(command: &mut Command) {
     if let Some(ca_bundle) = std::env::var_os("TERMINAL_RUST_GIT_CA_BUNDLE") {
         command.env("GIT_SSL_CAINFO", ca_bundle);
     }
+    // Exported variables come last so the user can override the bundled values.
+    crate::utils::shell_env::apply_to(command);
 }
 
 fn parse_prompt_status(stdout: &[u8]) -> Option<PromptGitInfo> {

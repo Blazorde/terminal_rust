@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::{CommandResult, ShellState, map_prefixed_error};
-use crate::app::parser::{continuation_prefix, parse_input};
+use crate::app::parser::{continuation_prefix, parse_with};
 use crate::config;
 use crate::render;
 
@@ -146,7 +146,8 @@ fn execute_contents(content: &str, script_path: &Path, state: &mut ShellState) -
             continue;
         }
         pending.push_str(line);
-        let result = match parse_input(&pending) {
+        let parsed = parse_with(&pending, &|name| state.variable(name));
+        let result = match parsed {
             Ok(args) if args.is_empty() => CommandResult::Continue,
             Ok(args) => super::execute(&args, state),
             Err(error) => CommandResult::Error(error),

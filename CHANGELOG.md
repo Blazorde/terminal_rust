@@ -7,6 +7,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Variables in command lines: `$NAME`, `${NAME}`, `$?` and a leading `~` are
+  expanded outside and inside double quotes (not inside single quotes), `\$`
+  writes a dollar sign, and `NAME=value` sets a variable. `export NAME[=value]`
+  passes a variable to the programs the shell starts, `unset NAME` removes it,
+  and `PATH=$PATH:dir` updates the search path. See ADR-0009.
 - Any command that is not built in now runs the program of that name found in
   `PATH` (`PATHEXT` is honored on Windows), with the terminal streams, the
   environment and the current directory of the shell. A missing program still

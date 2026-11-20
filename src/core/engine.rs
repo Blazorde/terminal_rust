@@ -2,7 +2,7 @@ use std::env;
 use std::path::PathBuf;
 
 use crate::app::command::{self, CommandResult, ShellState};
-use crate::app::parser::parse_input;
+use crate::app::parser::parse_with;
 use crate::commands::user::UserCommandRegistry;
 use crate::config::AppConfig;
 use crate::plugin::DeclarativeCommandRegistry;
@@ -95,7 +95,8 @@ impl ShellEngine {
     }
 
     pub fn execute_line(&mut self, input: &str) -> ExecutionResult {
-        match parse_input(input) {
+        let parsed = parse_with(input, &|name| self.state.variable(name));
+        match parsed {
             Ok(args) if args.is_empty() => self.empty_result(),
             Ok(args) => self.execute_args(&args),
             Err(error) => self.failed_result(error),
@@ -120,6 +121,7 @@ impl ShellEngine {
             CommandResult::Exit => (ExecutionStatus::Exit, None),
             CommandResult::Error(error) => (ExecutionStatus::Failed, Some(error)),
         };
+        self.state.record_status(status == ExecutionStatus::Failed);
 
         ExecutionResult {
             status,
@@ -366,5 +368,131 @@ response = "Hello from the official Terminal Rust plugin!\n"
             )
         );
         fs::remove_dir_all(root).expect("plugin fixture should be removed");
+    }
+
+    #[test]
+    fn a_variable_set_on_one_line_is_expanded_on_the_next() {
+        let mut engine = ShellEngine::new();
+
+        engine.execute_line("TRS_ENGINE_SET=five");
+        let result = engine.execute_line("echo $TRS_ENGINE_SET and ${TRS_ENGINE_SET}");
+
+        assert_eq!(result.stdout, "five and five\n");
+    }
+
+    #[test]
+    fn single_quotes_keep_the_dollar_sign() {
+        let mut engine = ShellEngine::new();
+        engine.execute_line("TRS_ENGINE_QUOTE=x");
+
+        let result = engine.execute_line("echo '$TRS_ENGINE_QUOTE' \"$TRS_ENGINE_QUOTE\"");
+
+        assert_eq!(result.stdout, "$TRS_ENGINE_QUOTE x\n");
+    }
+
+    #[test]
+    fn the_last_status_follows_success_and_failure() {
+        let mut engine = ShellEngine::new();
+
+        engine.execute_line("echo fine");
+        assert_eq!(engine.execute_line("echo $?").stdout, "0\n");
+
+        engine.execute_line("terminal-rust-no-such-program");
+        assert_eq!(engine.execute_line("echo $?").stdout, "1\n");
+    }
+
+    #[test]
+    fn export_makes_a_variable_visible_to_printenv() {
+        let mut engine = ShellEngine::new();
+
+        engine.execute_line("export TRS_ENGINE_EXPORT=shared");
+        let result = engine.execute_line("printenv TRS_ENGINE_EXPORT");
+
+        assert_eq!(result.stdout, "shared\n");
+    }
+
+    #[test]
+    fn an_unexported_variable_is_not_part_of_the_environment() {
+        let mut engine = ShellEngine::new();
+
+        engine.execute_line("TRS_ENGINE_LOCAL=private");
+        let result = engine.execute_line("printenv TRS_ENGINE_LOCAL");
+
+        assert_eq!(result.status, ExecutionStatus::Failed);
+        assert_eq!(result.stdout, "");
+    }
+
+    #[test]
+    fn export_without_a_value_exports_the_current_one() {
+        let mut engine = ShellEngine::new();
+        engine.execute_line("TRS_ENGINE_PROMOTE=kept");
+
+        engine.execute_line("export TRS_ENGINE_PROMOTE");
+
+        assert_eq!(
+            engine.execute_line("printenv TRS_ENGINE_PROMOTE").stdout,
+            "kept\n"
+        );
+    }
+
+    #[test]
+    fn assigning_an_exported_variable_updates_what_programs_receive() {
+        let mut engine = ShellEngine::new();
+        engine.execute_line("export TRS_ENGINE_UPDATE=old");
+
+        engine.execute_line("TRS_ENGINE_UPDATE=new");
+
+        assert_eq!(
+            engine.execute_line("printenv TRS_ENGINE_UPDATE").stdout,
+            "new\n"
+        );
+    }
+
+    #[test]
+    fn unset_removes_local_and_exported_variables() {
+        let mut engine = ShellEngine::new();
+        engine.execute_line("export TRS_ENGINE_GONE=1");
+        engine.execute_line("TRS_ENGINE_GONE_LOCAL=2");
+
+        engine.execute_line("unset TRS_ENGINE_GONE TRS_ENGINE_GONE_LOCAL");
+
+        assert_eq!(
+            engine
+                .execute_line("echo [$TRS_ENGINE_GONE][$TRS_ENGINE_GONE_LOCAL]")
+                .stdout,
+            "[][]\n"
+        );
+        assert_eq!(
+            engine.execute_line("printenv TRS_ENGINE_GONE").status,
+            ExecutionStatus::Failed
+        );
+    }
+
+    #[test]
+    fn export_and_unset_reject_invalid_names() {
+        let mut engine = ShellEngine::new();
+
+        let export = engine.execute_line("export 1bad=x");
+        let unset = engine.execute_line("unset bad-name");
+        let missing = engine.execute_line("unset");
+
+        assert_eq!(
+            export.error.as_deref(),
+            Some("export: not a valid name: 1bad")
+        );
+        assert_eq!(
+            unset.error.as_deref(),
+            Some("unset: not a valid name: bad-name")
+        );
+        assert_eq!(missing.status, ExecutionStatus::Failed);
+    }
+
+    #[test]
+    fn a_word_that_is_not_an_assignment_is_still_a_command() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("1bad=x");
+
+        assert_eq!(result.error.as_deref(), Some("unknown command: 1bad=x"));
     }
 }
