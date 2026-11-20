@@ -5,6 +5,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/ci-local.sh` replays the Linux gate of the CI, with the Security checks,
+  in the pinned Docker image and summarizes each step, for use when hosted
+  runners are unavailable.
+
 ## [1.2.0] - 2026-11-20
 
 ### Added
