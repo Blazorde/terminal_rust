@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::app::help;
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, fastfetch, git_command,
-    hostname, ls, mkdir, nproc, plugins, pwd, rm, theme, touch, uptime, user, whoami, printenv,
+    hostname, ls, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime, user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;

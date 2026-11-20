@@ -9,7 +9,7 @@ use tar::Archive;
 
 const ARCHIVE_NAME: &str = "git-runtime.tar.gz";
 const VERSION_NAME: &str = "git-runtime-version.txt";
-#[cfg(windows)]
+#[cfg_attr(not(windows), allow(dead_code))]
 const WINDOWS_NANO_NAME: &str = "nano-win64.exe";
 const READY_NAME: &str = ".ready-version";
 const RUNTIME_DIRECTORY: &str = "git-runtime";
