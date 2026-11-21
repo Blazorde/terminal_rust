@@ -54,24 +54,19 @@ pub fn parse(args: &[String]) -> Result<Request, String> {
 }
 
 /// Take the next line of input: from the pipe or redirection of this command, or
-/// from `fallback` (the terminal). `None` at the end of the input.
+/// from `fallback` (the terminal) when there is none. `None` at the end of the input.
 pub fn next_line(fallback: &mut dyn BufRead) -> Option<String> {
-    let mut line = String::new();
-    match pipe_input::take() {
-        Some(bytes) => {
-            if bytes.is_empty() {
-                return None;
-            }
-            let text = String::from_utf8_lossy(&bytes);
-            line.push_str(text.split('\n').next().unwrap_or_default());
-        }
-        None => {
+    match pipe_input::next_line() {
+        pipe_input::Line::Text(line) => Some(line),
+        pipe_input::Line::End => None,
+        pipe_input::Line::NoInput => {
+            let mut line = String::new();
             if fallback.read_line(&mut line).ok()? == 0 {
                 return None;
             }
+            Some(line.trim_end_matches(['\n', '\r']).to_string())
         }
     }
-    Some(line.trim_end_matches(['\n', '\r']).to_string())
 }
 
 /// Split `line` into one value per name: fields are separated by blanks, and the
@@ -181,11 +176,15 @@ mod tests {
     }
 
     #[test]
-    fn the_line_comes_from_the_pipe_first_and_the_terminal_otherwise() {
+    fn the_lines_come_from_the_pipe_one_by_one_and_from_the_terminal_without_one() {
         pipe_input::provide(Some(b"from pipe\nsecond\n".to_vec()));
         let mut terminal = Cursor::new(b"from terminal\n".to_vec());
         assert_eq!(next_line(&mut terminal).as_deref(), Some("from pipe"));
-        // The pipe is used up; the next read falls back to the terminal.
+        // The pipe still has a line: the terminal is not read yet.
+        assert_eq!(next_line(&mut terminal).as_deref(), Some("second"));
+        // Then the input is over, and a finished input is not the terminal.
+        assert_eq!(next_line(&mut terminal), None);
+        pipe_input::provide(None);
         assert_eq!(next_line(&mut terminal).as_deref(), Some("from terminal"));
         assert_eq!(next_line(&mut terminal), None);
     }

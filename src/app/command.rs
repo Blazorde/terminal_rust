@@ -695,7 +695,7 @@ fn run_expanded(
             Err(error) => CommandResult::Error(error),
         };
     }
-    pipeline::run(stages, state, background.then_some(text))
+    pipeline::run(stages, state, background.then_some(text), None)
 }
 
 /// How a pipeline stage runs.
@@ -706,6 +706,9 @@ enum StageKind {
     Program { program: String, args: Vec<String> },
     /// The native Git, which has its own environment (the bundled runtime).
     Git { args: Vec<String> },
+    /// A `for`, `while`, `if`, `case` or `{ }` that is a stage of a pipeline or has
+    /// redirections: it runs inside the shell, and its output is collected.
+    Compound,
 }
 
 fn classify(args: &[String], state: &ShellState) -> Result<StageKind, String> {
