@@ -2,7 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 struct TestDirectory {
     path: PathBuf,
@@ -837,13 +837,13 @@ fn a_failure_stops_an_and_chain_and_runs_an_or_chain() {
 }
 
 #[test]
-fn a_background_job_is_still_refused_with_a_clear_message() {
+fn a_background_job_cannot_follow_an_and_or_list() {
     let directory = TestDirectory::new("background refused");
 
-    let output = run_interactive(directory.path(), "echo hello &\nexit\n");
+    let output = run_interactive(directory.path(), "echo hello && echo world &\nexit\n");
 
     assert!(
-        stderr(&output).contains("background jobs (&) are not supported yet"),
+        stderr(&output).contains("a background job cannot follow && or ||"),
         "{}",
         stderr(&output)
     );
@@ -1479,4 +1479,131 @@ fn several_prefixed_variables_reach_a_built_in_and_a_program() {
     );
 
     assert!(printed.contains("2\n"), "{printed}\n{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_background_job_gives_the_prompt_back_at_once() {
+    let directory = TestDirectory::new("background prompt");
+    let started = std::time::Instant::now();
+
+    let output = run_interactive(
+        directory.path(),
+        "sleep 20 &\necho prompt-is-back\njobs\nkill %1\nexit\n",
+    );
+
+    let printed = stdout(&output);
+    let errors = stderr(&output);
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "waited for the job"
+    );
+    assert!(errors.contains("[1] "), "{errors}");
+    assert!(printed.contains("prompt-is-back\n"), "{printed}");
+    assert!(printed.contains("[1]+  Running  sleep 20"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_finished_job_is_reported_once_before_the_next_prompt() {
+    let directory = TestDirectory::new("background notice");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["sh -c 'exit 3' &", "sleep 0.5", "echo next", "echo again"],
+    );
+
+    assert_eq!(printed.matches("Exit 3").count(), 1, "{printed}\n{errors}");
+    let notice = printed.find("[1]+  Exit 3").expect("the notice");
+    let next = printed.find("next\n").expect("the next command");
+    assert!(notice < next, "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn fg_and_wait_return_the_exit_code_of_the_job() {
+    let directory = TestDirectory::new("background fg");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'sleep 0.2; exit 4' &",
+            "fg",
+            "echo fg=$?",
+            "sh -c 'sleep 0.2; exit 5' &",
+            "wait",
+            "echo wait=$?",
+            "jobs",
+            "echo done-listing",
+        ],
+    );
+
+    assert!(printed.contains("fg=4\n"), "{printed}\n{errors}");
+    assert!(printed.contains("wait=5\n"), "{printed}\n{errors}");
+    assert!(!printed.contains("Running"), "{printed}");
+    assert!(errors.contains("fg: exited with status 4"), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_background_program_reads_an_empty_input() {
+    let directory = TestDirectory::new("background stdin");
+
+    let (_, errors) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'cat > seen.txt; echo finished > finished.txt' &",
+            "wait",
+        ],
+    );
+
+    assert!(errors.contains("[1] "), "{errors}");
+    assert_eq!(
+        fs::read_to_string(directory.path().join("seen.txt")).expect("cat output"),
+        ""
+    );
+    assert!(directory.path().join("finished.txt").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_background_pipeline_runs_with_its_redirections() {
+    let directory = TestDirectory::new("background pipeline");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "printf 'b\\na\\n' | sort > sorted.txt &",
+            "wait",
+            "cat sorted.txt",
+        ],
+    );
+
+    assert!(printed.contains("a\nb\n"), "{printed}\n{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn kill_stops_a_job_and_an_unknown_job_is_an_error() {
+    let directory = TestDirectory::new("background kill");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "fg",
+            "sleep 20 &",
+            "kill %1",
+            "sleep 0.5",
+            "echo checked",
+            "fg %9",
+        ],
+    );
+
+    assert!(errors.contains("fg: no current job"), "{errors}");
+    assert!(errors.contains("fg: %9: no such job"), "{errors}");
+    assert!(
+        printed.contains("[1]+  Exit 137  sleep 20"),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("checked\n"), "{printed}");
 }
