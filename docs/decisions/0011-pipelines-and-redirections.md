@@ -46,8 +46,8 @@ of using Terminal Rust as the default terminal.
 5. In-process commands run in the shell, not in a copy of it: `cd` or `export`
    in a pipeline stage takes effect for the next commands. This differs from
    POSIX shells, which run each stage in a subshell, and is documented.
-6. Background jobs (`&`) stay rejected until job control is designed. `&` is
-   only accepted right after `>` in `>&`.
+6. A lone `&` runs a command in the background (see
+   [ADR-0013](0013-background-jobs.md)); right after `>` it is part of `>&`.
 7. A syntax error (an empty stage, a redirection without a target, an
    unsupported form such as `>&3`) rejects the whole line before anything runs. A
    file that cannot be opened is an error for that stage: the stage does not run
@@ -76,7 +76,7 @@ of using Terminal Rust as the default terminal.
 ### Negative
 
 - No here-documents (`<<`), no process substitution, no file descriptors above 2,
-  no `pipefail`, no `|&`, no globs (separate work), no background jobs.
+  no `pipefail`, no `|&`, no globs (separate work, see ADR-0012).
 - In-process stages cannot be interrupted while they run, and a built-in in the
   middle of a pipeline does not read its stdin.
 - `cd` and `export` in a pipeline are not isolated.

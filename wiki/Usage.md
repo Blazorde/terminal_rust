@@ -89,9 +89,8 @@ make || echo "build failed"
 
 `;` always runs the next command, `&&` runs it only if the previous one
 succeeded, and `||` only if it failed. They are evaluated from left to right and
-`exit` stops the line. Quote an operator to use it as text. Background jobs
-(`&`) are not available yet: the shell says so instead of passing the `&` to a
-program.
+`exit` stops the line. Quote an operator to use it as text. A trailing `&` runs
+a command in the background, see [Background jobs](#background-jobs).
 
 ## File name patterns
 
@@ -143,8 +142,33 @@ The status of a pipeline is the status of its last command. Built-in commands
 work in a pipeline too: `ls | grep txt`, `echo hi > file`, `echo hi | cat`.
 `cat` without a file copies its input; other built-in commands ignore theirs.
 Unlike other shells, a built-in such as `cd` or `export` inside a pipeline takes
-effect in the shell itself. Here-documents (`<<`), file descriptors above 2 and
-background jobs are not available.
+effect in the shell itself. Here-documents (`<<`) and file descriptors above 2
+are not available.
+
+## Background jobs
+
+End a command with `&` to run it in the background and keep the prompt:
+
+```text
+npm run dev &
+[1] 4242
+build & test
+```
+
+The shell prints the job number and the process id. A background program reads no
+input (its standard input is empty) and its output still goes to the terminal.
+
+| Command | Effect |
+| --- | --- |
+| `jobs` | list the jobs: `[1]+  Running  npm run dev` |
+| `fg [%n]` | wait for a job (the latest by default); `$?` is its exit code |
+| `wait [%n]` | wait for one job, or for all of them |
+| `kill %n` | stop a job (`kill 1234` still reaches the system `kill`) |
+
+When a job ends the shell says so once, before the next prompt: `[1]+  Done
+npm run dev` or `[1]+  Exit 3  ...`. A job is one command or one pipeline: `a &&
+b &` is rejected. Programs keep running if you leave the shell. There is no
+`Ctrl+Z` and no `bg`: an interactive program has to run in the foreground.
 
 ## Pasting several lines
 
