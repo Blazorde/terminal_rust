@@ -92,6 +92,22 @@ succeeded, and `||` only if it failed. They are evaluated from left to right and
 `exit` stops the line. Quote an operator to use it as text. A trailing `&` runs
 a command in the background, see [Background jobs](#background-jobs).
 
+## Brace expansion
+
+`{a,b,c}` in a word gives one word per alternative, and `{1..5}` or `{a..e}` a
+sequence:
+
+```text
+mkdir -p project/{src,tests,docs}
+cp config.toml{,.bak}
+touch note{1..3}.txt
+echo {a,b}{1,2}
+```
+
+`{01..10}` pads with zeros and `{1..10..3}` steps by three. Quote the braces to
+keep them as text (`'{a,b}'`); `${NAME}` is a variable, not a group. A word that
+also holds a redirection (`echo {a,b}>file`) is not expanded.
+
 ## Command substitution
 
 `$(command)` is replaced by what the command prints, without its final newlines:
