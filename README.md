@@ -85,7 +85,7 @@ execute commands. The separate native UI prototype is experimental; see its
 
 ## Download
 
-[`v1.9.0`](https://github.com/Blazorde/terminal_rust/releases/tag/v1.9.0)
+[`v1.9.1`](https://github.com/Blazorde/terminal_rust/releases/tag/v1.9.1)
 is the latest stable release. Verify downloads with the attached
 `SHA256SUMS.txt`.
 
@@ -134,7 +134,7 @@ PTY launch still require validation on Apple hardware.
 
 ## Project status
 
-The current product snapshot is `v1.9.0`. Plugin loading remains
+The current product snapshot is `v1.9.1`. Plugin loading remains
 deliberately bounded: manifests, compatibility, permissions and safe
 declarative commands are supported, while arbitrary third-party native
 libraries are not loaded. See [CHANGELOG.md](CHANGELOG.md) for delivered work
