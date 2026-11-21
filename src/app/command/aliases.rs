@@ -89,6 +89,11 @@ fn define(name: &str, words: &[String], persistent: bool, state: &mut ShellState
     {
         return CommandResult::Error(format!("alias: {error}"));
     }
+    // A file that defines aliases (a startup script, a sourced file) says nothing:
+    // the confirmation is for someone typing at the prompt.
+    if state.script_depth > 0 {
+        return CommandResult::Continue;
+    }
     map_prefixed_error(
         "alias",
         render::stdout(format!(
