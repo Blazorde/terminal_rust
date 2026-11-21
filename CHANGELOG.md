@@ -5,6 +5,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-21
+
 ### Security
 
 - A file or directory name holding a terminal escape sequence could rewrite the
