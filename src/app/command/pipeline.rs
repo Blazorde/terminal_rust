@@ -14,6 +14,7 @@ use super::{
 };
 use crate::app::parser::{Redirect, Stage, parse_args, parse_with};
 use crate::commands::external::{self, RunError};
+use crate::git;
 use crate::render;
 use crate::utils::{pipe_input, shell_env};
 
@@ -120,8 +121,8 @@ pub(super) fn run(
                     let _ = render::stderr_line(message);
                 }
             }
-            StageKind::Program { program, args } => {
-                match start_program(&plan, opened, previous, program, args, is_last) {
+            StageKind::Program { .. } | StageKind::Git { .. } => {
+                match start_program(&plan, opened, previous, is_last) {
                     Ok(started) => {
                         input = started.next_input;
                         feeders.extend(started.feeder);
@@ -407,12 +408,14 @@ fn start_program(
     plan: &Plan,
     opened: Opened,
     previous: Input,
-    program: &str,
-    args: &[String],
     is_last: bool,
 ) -> Result<Started, String> {
-    let name = plan.args.first().map(String::as_str).unwrap_or(program);
-    let mut command = external::command(program, args);
+    let name = plan.args.first().map(String::as_str).unwrap_or_default();
+    let mut command = match &plan.kind {
+        StageKind::Program { program, args } => external::command(program, args),
+        StageKind::Git { args } => git::native_command(args),
+        StageKind::InProcess => return Err(format!("{name}: not a program")),
+    };
     // After the exports that `command` applied, so a prefix wins over them.
     command.envs(plan.env.iter().map(|(name, value)| (name, value)));
 

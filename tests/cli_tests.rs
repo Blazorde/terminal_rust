@@ -1633,3 +1633,63 @@ fn error_messages_neutralize_control_characters_in_quoted_names() {
     );
     assert!(printed.contains("still-alive\n"), "{printed}");
 }
+
+fn git_is_installed() -> bool {
+    Command::new("git")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success())
+}
+
+#[test]
+fn the_output_of_git_goes_through_pipes_and_redirections() {
+    if !git_is_installed() {
+        return;
+    }
+    let directory = TestDirectory::new("git pipeline");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "git --version | cat",
+            "git --version > version.txt",
+            "cat version.txt",
+            "echo x | git hash-object --stdin",
+        ],
+    );
+
+    // `git --version` is printed twice: through the pipe and from the file.
+    assert_eq!(
+        printed.matches("git version").count(),
+        2,
+        "{printed}\n{errors}"
+    );
+    let written =
+        fs::read_to_string(directory.path().join("version.txt")).expect("redirected output");
+    assert!(written.starts_with("git version"), "{written}");
+    // The blob id of "x\n": the built-in `echo` fed Git's standard input.
+    assert!(
+        printed.contains("587be6b4c3f93f93c489c0111bba5596147a26cb"),
+        "{printed}\n{errors}"
+    );
+}
+
+#[test]
+fn a_failing_git_in_a_pipeline_sets_its_exit_code() {
+    if !git_is_installed() {
+        return;
+    }
+    let directory = TestDirectory::new("git failure");
+
+    let (printed, _) = shell_lines(
+        &directory,
+        &[
+            "git definitely-not-a-git-command 2> err.txt",
+            "echo code=$?",
+        ],
+    );
+
+    assert!(!printed.contains("code=0"), "{printed}");
+    let logged = fs::read_to_string(directory.path().join("err.txt")).expect("stderr file");
+    assert!(logged.contains("not a git command"), "{logged}");
+}

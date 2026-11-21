@@ -58,6 +58,16 @@ pub fn prompt_info(path: &Path) -> Option<PromptGitInfo> {
     prompt_info_with_program(path, git_program())
 }
 
+/// The command that runs Git with `args` in the current directory, with the
+/// bundled runtime's environment and the shell's exports, for a pipeline stage
+/// that connects its streams itself.
+pub(crate) fn native_command(args: &[String]) -> Command {
+    let mut command = Command::new(git_program());
+    apply_git_environment(&mut command);
+    command.args(args);
+    command
+}
+
 pub fn run_native_command(path: &Path, args: &[String]) -> Result<ExitStatus, GitCommandError> {
     run_native_command_with_program(path, args, git_program())
 }
