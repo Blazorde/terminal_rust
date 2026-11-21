@@ -15,7 +15,8 @@ release history:
 - `v1.2.2`
 - `v1.3.0`
 - `v1.4.0`
-- `v1.5.0` — latest stable
+- `v1.5.0`
+- `v1.6.0` — latest stable
 
 Releases provide Windows and Linux archives plus native desktop installers, and
 a macOS archive built by the release workflow. Each asset is covered by
