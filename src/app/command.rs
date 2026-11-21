@@ -1184,4 +1184,137 @@ mod tests {
             CommandResult::Error(message) if message.contains("Usage: man <command>")
         ));
     }
+
+    /// Random text made of the characters the parsers care about must never make
+    /// one of them panic: a shell that dies on a strange line is a bad shell. A
+    /// fixed seed keeps a failure reproducible.
+    #[test]
+    fn the_parsers_never_panic_on_random_input() {
+        const PIECES: [&str; 40] = [
+            "a", "b", "x", "1", "2", " ", "  ", "\n", "\t", "$", "$(", "${", "(", ")", "{", "}",
+            ",", "..", ";", "&", "&&", "|", "||", "<", ">", ">>", "2>&1", "'", "\"", "\\", "*",
+            "?", "[", "]", "~", "=", "for ", "do ", "done", "if ",
+        ];
+        let mut seed = 0x9E37_79B9_7F4A_7C15_u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for _ in 0..150_000 {
+            let length = 1 + (next() % 20) as usize;
+            let text: String = (0..length)
+                .map(|_| PIECES[(next() % PIECES.len() as u64) as usize])
+                .collect();
+
+            let outcome = std::panic::catch_unwind(|| {
+                let _ = braces::expand(&text);
+                let _ = flow::is_incomplete(&text);
+                let _ = crate::app::parser::parse_words(&text, &|_| None);
+                let _ = split_stages(&text);
+                if let Ok(segments) = split_chain(&text) {
+                    let _ = flow::parse(segments);
+                }
+            });
+            assert!(outcome.is_ok(), "a parser panicked on {text:?}");
+        }
+    }
+
+    /// Run random lines made of harmless commands. Nothing may panic or hang,
+    /// whatever the mix of quotes, loops, substitutions and redirections.
+    #[test]
+    fn random_lines_of_harmless_commands_never_panic_or_hang() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        const PIECES: [&str; 36] = [
+            "echo ",
+            "true",
+            "false",
+            "test ",
+            "[ ",
+            " ]",
+            "break",
+            "continue",
+            "a",
+            "b",
+            "1",
+            " ",
+            " ",
+            "; ",
+            " && ",
+            " || ",
+            " | ",
+            " > ",
+            " >> ",
+            " 2>&1 ",
+            "$(",
+            ")",
+            "{a,b}",
+            "{1..3}",
+            "'",
+            "\"",
+            "$x",
+            "*",
+            "for x in 1 2; do ",
+            "; done",
+            "if true; then ",
+            "; fi",
+            "if false; then ",
+            "; else ",
+            "\n",
+            "x=",
+        ];
+        let _guard = crate::test_support::cwd_lock()
+            .lock()
+            .expect("cwd lock is poisoned");
+        let root = std::env::temp_dir().join(format!(
+            "terminal-rust-fuzz-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("fixture directory");
+        let original = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(&root).expect("enter the fixture");
+
+        let (sender, receiver) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let mut state = test_state();
+            let mut seed = 0xD1B5_4A32_D192_ED03_u64;
+            let mut next = move || {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                seed
+            };
+            for _ in 0..6_000 {
+                let length = 1 + (next() % 14) as usize;
+                let line: String = (0..length)
+                    .map(|_| PIECES[(next() % PIECES.len() as u64) as usize])
+                    .collect();
+                let _ = sender.send(line.clone());
+                // The output goes nowhere: it is captured and dropped.
+                let _ = render::capture_output(|| run_line(&line, &mut state));
+            }
+        });
+
+        let mut last = String::new();
+        let mut finished = false;
+        while let Ok(line) = receiver.recv_timeout(Duration::from_secs(20)) {
+            last = line;
+        }
+        // The sender is gone when the worker ended; a worker still running means
+        // it hung on `last`.
+        if worker.is_finished() {
+            finished = true;
+        }
+        let result = if finished { worker.join() } else { Ok(()) };
+        std::env::set_current_dir(original).expect("restore cwd");
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(finished, "the shell hung on {last:?}");
+        assert!(result.is_ok(), "the shell panicked on {last:?}");
+    }
 }
