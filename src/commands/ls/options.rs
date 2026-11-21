@@ -81,11 +81,25 @@ fn apply_long_flag(arg: &str, options: &mut LsOptions) -> Result<(), LsError> {
         "--recursive" => options.recursive = true,
         "--reverse" => options.reverse = true,
         "--indicator-style=slash" => options.slash_directories = true,
+        // The output has no colors: the option is accepted so that the usual
+        // `alias ls='ls --color=auto'` works, and changes nothing.
+        "--color" => {}
+        option if option.starts_with("--color=") => check_color_when(option)?,
         option if option.starts_with("--sort=") => apply_sort_mode(option, options)?,
         _ => return Err(LsError::UnknownOption(arg.to_string())),
     }
 
     Ok(())
+}
+
+/// The values `--color` takes in other `ls` programs.
+fn check_color_when(arg: &str) -> Result<(), LsError> {
+    match arg.strip_prefix("--color=") {
+        Some("always" | "yes" | "force" | "auto" | "tty" | "if-tty" | "never" | "no" | "none") => {
+            Ok(())
+        }
+        _ => Err(LsError::UnknownOption(arg.to_string())),
+    }
 }
 
 fn apply_sort_mode(arg: &str, options: &mut LsOptions) -> Result<(), LsError> {
@@ -130,6 +144,28 @@ mod tests {
         let (_, targets) = parse_args(&args(&["--", "-not-a-flag"])).expect("args should parse");
 
         assert_eq!(targets, vec![PathBuf::from("-not-a-flag")]);
+    }
+
+    #[test]
+    fn color_options_are_accepted_and_change_nothing() {
+        for option in [
+            "--color",
+            "--color=auto",
+            "--color=always",
+            "--color=never",
+            "--color=tty",
+        ] {
+            let (options, targets) =
+                parse_args(&args(&["-l", option, "src"])).expect("color option should parse");
+
+            assert!(options.long_format, "{option}");
+            assert_eq!(targets, vec![PathBuf::from("src")], "{option}");
+        }
+        // A value no `ls` knows is still a mistake.
+        for option in ["--color=", "--color=blue", "--colour=auto"] {
+            let error = parse_args(&args(&[option])).expect_err("bad color value should fail");
+            assert!(matches!(error, LsError::UnknownOption(_)), "{option}");
+        }
     }
 
     #[test]
