@@ -694,6 +694,123 @@ fn a_command_typed_while_a_program_runs_is_executed_afterwards() {
     assert!(status.success(), "shell should exit cleanly");
 }
 
+// A configured process command used to run with its output captured and no
+// standard input, so an interactive program saw an empty input. In a terminal it
+// must read what the user types.
+#[cfg(unix)]
+#[test]
+fn a_process_command_reads_what_the_user_types() {
+    let directory = std::env::temp_dir().join(format!(
+        "terminal-rust-process-stdin-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should follow the Unix epoch")
+            .as_nanos()
+    ));
+    fs::create_dir(&directory).expect("fixture directory should be created");
+    let config = directory.join("config.toml");
+    fs::write(
+        &config,
+        "version = 1\n[commands.ask]\nkind = \"process\"\ntarget = \"sh\"\nargs = [\"-c\", \"read answer; echo got:$answer\"]\nappend_args = false\n",
+    )
+    .expect("configuration should be written");
+
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows: 24,
+            cols: 100,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .expect("native PTY should open");
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .expect("PTY output should be readable");
+    let mut writer = pair
+        .master
+        .take_writer()
+        .expect("PTY input should be writable");
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut buffer = [0; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(length) => {
+                    if sender.send(buffer[..length].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    command.arg("--pty-shell");
+    command.env("TERMINAL_RUST_GUI", "1");
+    command.env("TERM", "xterm-256color");
+    command.env("TERMINAL_RUST_CONFIG", &config);
+    let mut child = pair
+        .slave
+        .spawn_command(command)
+        .expect("desktop shell mode should start");
+    drop(pair.slave);
+
+    let mut output = Vec::new();
+    let mut cursor_answered = false;
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        1,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+
+    writer
+        .write_all(b"ask\r")
+        .and_then(|()| writer.flush())
+        .expect("the command should reach the PTY");
+    // Give the program time to start and wait for its input.
+    thread::sleep(Duration::from_millis(500));
+    writer
+        .write_all(b"hello\r")
+        .and_then(|()| writer.flush())
+        .expect("the answer should reach the PTY");
+
+    let result = "\r\ngot:hello\r\n";
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let text = loop {
+        if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
+            output.extend(chunk);
+        }
+        let text = String::from_utf8_lossy(&output).into_owned();
+        if text.contains(result) {
+            break text;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the program did not receive what was typed: {text}"
+        );
+    };
+
+    let exit_deadline = Instant::now() + Duration::from_secs(10);
+    let mut next_exit = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("shell status should be readable") {
+            break status;
+        }
+        assert!(Instant::now() < exit_deadline, "shell did not exit: {text}");
+        if Instant::now() >= next_exit {
+            let _ = writer.write_all(b"exit\r").and_then(|()| writer.flush());
+            next_exit = Instant::now() + Duration::from_millis(500);
+        }
+        thread::sleep(Duration::from_millis(20));
+    };
+    assert!(status.success(), "shell should exit cleanly");
+    fs::remove_dir_all(directory).expect("fixture directory should be removed");
+}
+
 #[test]
 fn live_dashboard_exits_and_restores_the_desktop_pty() {
     let pair = native_pty_system()

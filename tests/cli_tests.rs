@@ -902,3 +902,24 @@ fn rm_refuses_dot_and_dot_dot_and_removes_nothing() {
     assert!(errors.contains("refusing to remove '.'"), "{errors}");
     assert!(errors.contains("refusing to remove '..'"), "{errors}");
 }
+
+#[cfg(unix)]
+#[test]
+fn a_failing_process_command_names_its_exit_status() {
+    let directory = TestDirectory::new("process status");
+    let config = directory.path().join("config.toml");
+    fs::write(
+        &config,
+        "version = 1\n[commands.fail]\nkind = \"process\"\ntarget = \"sh\"\nargs = [\"-c\", \"exit 3\"]\nappend_args = false\n",
+    )
+    .expect("configuration should be written");
+
+    let output = run_cli_with_config(directory.path(), &["fail"], &config);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("fail: exited with status 3"),
+        "{}",
+        stderr(&output)
+    );
+}
