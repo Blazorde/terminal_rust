@@ -7,6 +7,16 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Fixed
 
+- Desktop: `Ctrl+W` (delete a word) and `Ctrl+T` (swap two characters) no longer
+  close or open a tab, they reach the shell. On Linux and Windows the tab
+  shortcuts are now `Ctrl+Shift+T` and `Ctrl+Shift+W`, as in other terminals;
+  macOS keeps `Command+T` and `Command+W`.
+- Desktop: the first output of a new session (the prompt) could be lost when it
+  arrived before the tab knew its session id. It is now held and shown in order.
+- Desktop: starting a session and writing to it no longer run on the thread that
+  draws the window, so the interface stays responsive during the first start,
+  which can extract the Git runtime, or when the shell is slow to read input. A
+  blocked write no longer holds up the other sessions.
 - The shell no longer exits when its current directory is deleted from another
   terminal: the prompt shows `(deleted)` and `cd` can leave the directory.
 - `cat` shows a file that is not valid UTF-8 (a binary file, Latin-1 text) with
