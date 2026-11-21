@@ -923,3 +923,45 @@ fn a_failing_process_command_names_its_exit_status() {
         stderr(&output)
     );
 }
+
+// A directory name can hold an escape sequence. Shown as it is, this one would set
+// the window title; every display of a name must neutralize it.
+#[cfg(unix)]
+const HOSTILE_NAME: &str = "evil\u{1b}]0;PWNED\u{7}name";
+
+#[cfg(unix)]
+#[test]
+fn ls_neutralizes_control_characters_in_file_names() {
+    let directory = TestDirectory::new("ls hostile");
+    fs::create_dir(directory.path().join(HOSTILE_NAME)).expect("hostile directory should exist");
+    fs::write(directory.path().join("plain.txt"), "x").expect("plain file should exist");
+
+    let output = run_cli(directory.path(), &["ls"]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("evil?]0;PWNED?name"), "{text:?}");
+    assert!(text.contains("plain.txt"), "{text:?}");
+    assert!(
+        !text.contains('\u{1b}') && !text.contains('\u{7}'),
+        "{text:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn pwd_neutralizes_control_characters_in_the_current_directory() {
+    let directory = TestDirectory::new("pwd hostile");
+    let hostile = directory.path().join(HOSTILE_NAME);
+    fs::create_dir(&hostile).expect("hostile directory should exist");
+
+    let output = run_cli(&hostile, &["pwd"]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("evil?]0;PWNED?name"), "{text:?}");
+    assert!(
+        !text.contains('\u{1b}') && !text.contains('\u{7}'),
+        "{text:?}"
+    );
+}

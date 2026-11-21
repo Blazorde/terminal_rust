@@ -12,6 +12,7 @@ use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
 use crate::plugin::DeclarativeCommandRegistry;
 use crate::render;
+use crate::render::printable::printable_multiline;
 use crate::utils::shell_env;
 
 mod aliases;
@@ -476,7 +477,7 @@ fn execute_plugin_command(
             command.plugin_id
         ));
     }
-    map_prefixed_error(name, render::stdout(command.response))
+    map_prefixed_error(name, render::stdout(printable_multiline(&command.response)))
 }
 
 fn execute_external(name: &str, args: &[String]) -> CommandResult {

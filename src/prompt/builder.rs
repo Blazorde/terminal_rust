@@ -6,6 +6,7 @@ use serde::Serialize;
 use crate::config::AppConfig;
 use crate::core::ExecutionStatus;
 use crate::git::PromptGitInfo;
+use crate::render::printable::printable;
 
 use super::context::PromptContext;
 use super::segment::{PromptSegment, SegmentKind};
@@ -120,7 +121,7 @@ fn path_segment(path: &Path, config: &AppConfig) -> PromptSegment {
         path.display().to_string()
     };
 
-    PromptSegment::new(SegmentKind::Path, value, "primary")
+    PromptSegment::new(SegmentKind::Path, printable(&value).into_owned(), "primary")
         .with_label("Chemin")
         .with_icon("folder", "")
 }

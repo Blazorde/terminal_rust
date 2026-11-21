@@ -6,6 +6,7 @@ use crate::commands::ls::item::LsItem;
 use crate::commands::ls::options::LsOptions;
 use crate::errors::ls::LsError;
 use crate::render::ansi::{self, AnsiColor, AnsiStyle};
+use crate::render::printable::printable;
 
 pub fn print_target_header(
     path: &Path,
@@ -21,12 +22,12 @@ pub fn print_target_header(
         writeln!(writer).map_err(LsError::Output)?;
     }
 
-    writeln!(writer, "{}:", path.display()).map_err(LsError::Output)
+    writeln!(writer, "{}:", printable(&path.display().to_string())).map_err(LsError::Output)
 }
 
 pub fn print_recursive_header(path: &Path, writer: &mut impl Write) -> Result<(), LsError> {
     writeln!(writer).map_err(LsError::Output)?;
-    writeln!(writer, "{}:", path.display()).map_err(LsError::Output)
+    writeln!(writer, "{}:", printable(&path.display().to_string())).map_err(LsError::Output)
 }
 
 pub fn print_item(
@@ -36,7 +37,7 @@ pub fn print_item(
     writer: &mut impl Write,
 ) -> Result<(), LsError> {
     let indicator = type_indicator(item, options);
-    let label = format!("{}{}", item.name, indicator);
+    let label = format!("{}{}", printable(&item.name), indicator);
     let label = ansi::paint(&label, item_style(item), color);
 
     if options.long_format {
@@ -72,7 +73,7 @@ pub fn print_items(
     let labels = items
         .iter()
         .map(|item| {
-            let plain = format!("{}{}", item.name, type_indicator(item, options));
+            let plain = format!("{}{}", printable(&item.name), type_indicator(item, options));
             let styled = ansi::paint(&plain, item_style(item), color);
             (plain, styled)
         })
