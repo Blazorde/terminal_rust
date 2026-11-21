@@ -5,15 +5,7 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
-### Fixed
-
-- A block that follows `&&` or `||` ran its first command with the connector of the
-  block itself: `cmd || { echo failed; }` printed nothing, `false || if false; then …`
-  took its branch, and `false || while …` never ended. The first command of a block
-  (`{`, `if`, `while`, `until`, `case`, a function body) now runs unconditionally once the
-  block is entered.
-
-## [1.8.0] - 2026-11-21
+## [1.9.0] - 2026-11-22
 
 ### Added
 
@@ -26,6 +18,19 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   `if … fi | cmd`, `case … esac >> log`. `read` takes one line at a time from the
   block's input, `cat` takes what is left, programs started inside the block are
   collected, and the end of the input is the end of the file, not the keyboard.
+
+### Fixed
+
+- A block that follows `&&` or `||` ran its first command with the connector of the
+  block itself: `cmd || { echo failed; }` printed nothing, `false || if false; then …`
+  took its branch, and `false || while …` never ended. The first command of a block
+  (`{`, `if`, `while`, `until`, `case`, a function body) now runs unconditionally once the
+  block is entered.
+
+## [1.8.0] - 2026-11-21
+
+### Added
+
 - Functions and positional parameters (ADR-0021): `name() { …; }`, `function name { … }`
   and `{ …; }` groups; `$1`…`$9`, `${1:-x}`, `$#`, `$*`, `$@` and `"$@"` (one word per
   argument); `shift`, `return [N]` and `local`; recursion limited to 64 calls;
