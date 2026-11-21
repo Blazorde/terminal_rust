@@ -46,7 +46,8 @@ takes precedence over a program of the same name. See
 
 ## Variables
 
-`$NAME`, `${NAME}` and `$?` (`0` after a success, `1` after a failure) are
+`$NAME`, `${NAME}` and `$?` (`0` after a success, the exit code of a program
+that failed, `127` for an unknown program, `1` for a failure inside the shell) are
 expanded in command lines, and a leading `~` stands for your home directory.
 Double quotes expand variables, single quotes do not, and `\$` writes a literal
 dollar sign:
@@ -63,8 +64,18 @@ unset NAME
 `NAME=value` creates a variable that only the shell sees. `export NAME` (or
 `export NAME=value`) also passes it to the programs you start, and `unset NAME`
 removes it. A variable that is not set expands to nothing, and an expansion is
-never split into several arguments. Setting a variable for a single command
-(`NAME=value command`) is not available yet.
+never split into several arguments. Put `NAME=value` words before a command to
+set variables for that command only (`LANG=C sort names.txt`, `PORT=8080 node
+app.js`): the program sees them, the shell does not keep them, and the previous
+value comes back afterwards.
+
+## Leaving the shell
+
+`exit` closes the shell with the status of the last command. `exit 3` closes it
+with code 3 (the code is taken modulo 256, so `exit -1` is 255), which scripts
+and callers can test. `exit soon` is an error and the shell stays open. When the
+input ends (`Ctrl+D`, the end of a script piped in) the shell also leaves with
+the status of the last command.
 
 ## Chaining commands
 
@@ -78,9 +89,8 @@ make || echo "build failed"
 
 `;` always runs the next command, `&&` runs it only if the previous one
 succeeded, and `||` only if it failed. They are evaluated from left to right and
-`exit` stops the line. Quote an operator to use it as text. Background jobs
-(`&`) are not available yet: the shell says so instead of passing the `&` to a
-program.
+`exit` stops the line. Quote an operator to use it as text. A trailing `&` runs
+a command in the background, see [Background jobs](#background-jobs).
 
 ## File name patterns
 
@@ -132,8 +142,33 @@ The status of a pipeline is the status of its last command. Built-in commands
 work in a pipeline too: `ls | grep txt`, `echo hi > file`, `echo hi | cat`.
 `cat` without a file copies its input; other built-in commands ignore theirs.
 Unlike other shells, a built-in such as `cd` or `export` inside a pipeline takes
-effect in the shell itself. Here-documents (`<<`), file descriptors above 2 and
-background jobs are not available.
+effect in the shell itself. Here-documents (`<<`) and file descriptors above 2
+are not available.
+
+## Background jobs
+
+End a command with `&` to run it in the background and keep the prompt:
+
+```text
+npm run dev &
+[1] 4242
+build & test
+```
+
+The shell prints the job number and the process id. A background program reads no
+input (its standard input is empty) and its output still goes to the terminal.
+
+| Command | Effect |
+| --- | --- |
+| `jobs` | list the jobs: `[1]+  Running  npm run dev` |
+| `fg [%n]` | wait for a job (the latest by default); `$?` is its exit code |
+| `wait [%n]` | wait for one job, or for all of them |
+| `kill %n` | stop a job (`kill 1234` still reaches the system `kill`) |
+
+When a job ends the shell says so once, before the next prompt: `[1]+  Done
+npm run dev` or `[1]+  Exit 3  ...`. A job is one command or one pipeline: `a &&
+b &` is rejected. Programs keep running if you leave the shell. There is no
+`Ctrl+Z` and no `bg`: an interactive program has to run in the foreground.
 
 ## Pasting several lines
 

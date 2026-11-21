@@ -5,6 +5,35 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-21
+
+### Added
+
+- Background jobs ([ADR-0013](docs/decisions/0013-background-jobs.md)): a trailing
+  `&` runs a command or a pipeline in the background and prints `[1] pid`. New
+  commands `jobs`, `fg [%n]`, `wait [%n]` and `kill %n`; a finished job is
+  reported once before the next prompt (`[1]+  Done  command`, `Exit 3`). A
+  background program reads no input. There is no `Ctrl+Z` or `bg`, and
+  `a && b &` is rejected.
+- `NAME=value command`: variables set for a single command (and for one stage of
+  a pipeline), restored afterwards.
+- `exit [code]`: the shell leaves with the given code (modulo 256), or with the
+  status of the last command; an invalid code is an error and the shell stays
+  open. The shell also leaves with the status of the last command when its input
+  ends, and `terminal_rust <command>` returns the exact code of the command.
+- Completion offers the programs found in `PATH` next to the built-in commands,
+  also after `;`, `|`, `&&` and `||` (it used to work only at the start of the
+  line), and completes environment variable names after a `$` or `${`.
+
+### Changed
+
+- `$?` is now the exact exit code of the last program (`3` after `exit 3`, `137`
+  after a kill), `127` for a program that does not exist, and the code of the
+  last program of a pipeline. It used to be only `0` or `1`. A command that fails
+  inside the shell is still `1`, and so is a line that cannot be parsed.
+- A script that ends on a failing command now exits with that command's status
+  instead of 0.
+
 ## [1.3.0] - 2026-11-21
 
 ### Added

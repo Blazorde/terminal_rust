@@ -11,7 +11,7 @@ Windows:
 
 ```powershell
 .\scripts\install.ps1
-.\scripts\install.ps1 -NoPathUpdate -Version v1.3.0
+.\scripts\install.ps1 -NoPathUpdate -Version v1.4.0
 ```
 
 The default directory is `%LOCALAPPDATA%\Programs\TerminalRust`; PATH changes
@@ -22,7 +22,7 @@ Linux x86_64 or macOS Apple Silicon:
 ```bash
 chmod +x scripts/install.sh
 ./scripts/install.sh
-TERMINAL_RUST_VERSION=v1.3.0 ./scripts/install.sh
+TERMINAL_RUST_VERSION=v1.4.0 ./scripts/install.sh
 ```
 
 The default is `~/.local/bin`; the script prints the required PATH line instead

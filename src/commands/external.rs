@@ -13,6 +13,40 @@ pub enum RunError {
     Failed(String),
 }
 
+thread_local! {
+    static EXIT_CODE: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
+}
+
+/// The status a command that did not exit normally reports: `127` when the
+/// program does not exist, as in POSIX shells.
+pub(crate) const COMMAND_NOT_FOUND: i32 = 127;
+
+/// The status code of a finished program: its exit code, or 128 plus the number
+/// of the signal that stopped it (`137` for a kill).
+pub(crate) fn exit_code(status: ExitStatus) -> i32 {
+    if let Some(code) = status.code() {
+        return code;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            return 128 + signal;
+        }
+    }
+    1
+}
+
+/// Remember the code of the program that just failed, for `$?`.
+pub(crate) fn note_exit_code(code: i32) {
+    EXIT_CODE.with(|slot| slot.set(Some(code)));
+}
+
+/// Take the code noted since the last command, if a program failed.
+pub(crate) fn take_exit_code() -> Option<i32> {
+    EXIT_CODE.with(std::cell::Cell::take)
+}
+
 /// Run `name` with `args`, sharing the terminal streams, the environment and the
 /// current directory of the shell.
 pub fn run(name: &str, args: &[String]) -> Result<(), RunError> {
@@ -23,6 +57,7 @@ pub fn run(name: &str, args: &[String]) -> Result<(), RunError> {
     if status.success() {
         Ok(())
     } else {
+        note_exit_code(exit_code(status));
         Err(RunError::Failed(describe_exit(name, status)))
     }
 }

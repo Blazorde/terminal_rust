@@ -89,6 +89,18 @@ impl ShellEngine {
             .collect()
     }
 
+    /// The notices for the background jobs that ended since the last call
+    /// (`[1]+  Done  command`), for a front end to show before the next prompt.
+    pub fn job_notices(&mut self) -> Vec<String> {
+        self.state.finished_job_notices()
+    }
+
+    /// The code a front end should exit with: the one given to `exit`, or the
+    /// status of the last command.
+    pub fn exit_code(&self) -> u8 {
+        self.state.exit_code()
+    }
+
     pub(crate) fn startup_script(&self) -> Option<&str> {
         self.state.startup_script()
     }
@@ -101,7 +113,11 @@ impl ShellEngine {
     }
 
     pub fn execute_args(&mut self, args: &[String]) -> ExecutionResult {
-        self.run_captured(|state| command::execute(args, state))
+        self.run_captured(|state| {
+            let result = command::execute(args, state);
+            state.record_status(matches!(result, CommandResult::Error(_)));
+            result
+        })
     }
 
     fn run_captured(
@@ -128,7 +144,6 @@ impl ShellEngine {
                 Some(error).filter(|e| !e.is_empty()),
             ),
         };
-        self.state.record_status(status == ExecutionStatus::Failed);
 
         ExecutionResult {
             status,
@@ -393,7 +408,17 @@ response = "Hello from the official Terminal Rust plugin!\n"
         engine.execute_line("echo fine");
         assert_eq!(engine.execute_line("echo $?").stdout, "0\n");
 
+        // A program that does not exist is 127, as in POSIX shells.
         engine.execute_line("terminal-rust-no-such-program");
+        assert_eq!(engine.execute_line("echo $?").stdout, "127\n");
+
+        // A command that fails inside the shell is 1.
+        engine.execute_line("cat");
+        assert_eq!(engine.execute_line("echo $?").stdout, "1\n");
+
+        // A line that cannot be parsed fails too.
+        engine.execute_line("echo fine");
+        engine.execute_line("echo 'unclosed");
         assert_eq!(engine.execute_line("echo $?").stdout, "1\n");
     }
 

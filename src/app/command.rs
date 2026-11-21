@@ -16,6 +16,7 @@ use crate::render::printable::printable_multiline;
 use crate::utils::shell_env;
 
 mod aliases;
+mod jobs;
 mod pipeline;
 mod scripts;
 
@@ -26,7 +27,11 @@ pub struct ShellState {
     startup_script: Option<String>,
     script_depth: usize,
     variables: HashMap<String, String>,
-    last_failed: bool,
+    /// The status of the last command, the value of `$?`.
+    last_status: i32,
+    /// The code the shell leaves with, once `exit` has run.
+    exit_code: Option<u8>,
+    jobs: jobs::Jobs,
 }
 
 impl ShellState {
@@ -42,7 +47,9 @@ impl ShellState {
             startup_script,
             script_depth: 0,
             variables: HashMap::new(),
-            last_failed: false,
+            last_status: 0,
+            exit_code: None,
+            jobs: jobs::Jobs::default(),
         }
     }
 
@@ -50,7 +57,7 @@ impl ShellState {
     /// environment the programs would receive.
     pub(crate) fn variable(&self, name: &str) -> Option<String> {
         if name == "?" {
-            return Some(if self.last_failed { "1" } else { "0" }.to_string());
+            return Some(self.last_status.to_string());
         }
         self.variables
             .get(name)
@@ -58,8 +65,23 @@ impl ShellState {
             .or_else(|| shell_env::value(name))
     }
 
+    /// Record the outcome of a command as `$?`: 0, or the exit code of the
+    /// program that failed, or 1 for a command that failed inside the shell.
     pub(crate) fn record_status(&mut self, failed: bool) {
-        self.last_failed = failed;
+        let program_code = external::take_exit_code();
+        self.last_status = if failed { program_code.unwrap_or(1) } else { 0 };
+    }
+
+    /// The code the shell process should exit with: the one given to `exit`, or
+    /// the status of the last command.
+    pub(crate) fn exit_code(&self) -> u8 {
+        self.exit_code
+            .unwrap_or_else(|| status_byte(i64::from(self.last_status)))
+    }
+
+    /// The notices for the background jobs that ended since the last call.
+    pub(crate) fn finished_job_notices(&mut self) -> Vec<String> {
+        self.jobs.finished_notices()
     }
 
     pub(crate) fn user_command_names(&self) -> Vec<String> {
@@ -242,9 +264,9 @@ const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "exit",
-        usage: "exit",
-        summary: "close the terminal",
-        max_args: Some(0),
+        usage: "exit [code]",
+        summary: "close the terminal with an exit code",
+        max_args: Some(1),
         handler: run_exit,
     },
     CommandSpec {
@@ -311,6 +333,34 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_neovim,
     },
     CommandSpec {
+        name: "jobs",
+        usage: "jobs",
+        summary: "list the background jobs",
+        max_args: Some(0),
+        handler: run_jobs,
+    },
+    CommandSpec {
+        name: "fg",
+        usage: "fg [%job]",
+        summary: "wait for a background job and show its result",
+        max_args: Some(1),
+        handler: run_fg,
+    },
+    CommandSpec {
+        name: "wait",
+        usage: "wait [%job]",
+        summary: "wait for one background job, or for all of them",
+        max_args: Some(1),
+        handler: run_wait,
+    },
+    CommandSpec {
+        name: "kill",
+        usage: "kill %job | kill [options] pid",
+        summary: "stop a background job, or send a signal to a process",
+        max_args: None,
+        handler: run_kill,
+    },
+    CommandSpec {
         name: "man",
         usage: "man <command>",
         summary: "display the manual of a command",
@@ -373,14 +423,14 @@ pub(crate) fn command_help() -> impl Iterator<Item = (&'static str, &'static str
 pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
     let segments = match split_chain(input) {
         Ok(segments) => segments,
-        Err(error) => return CommandResult::Error(error),
+        Err(error) => return syntax_error(error, state),
     };
     // A syntax error anywhere rejects the whole line before anything runs.
     let mut lines = Vec::with_capacity(segments.len());
     for segment in segments {
         match split_stages(&segment.text) {
             Ok(stages) => lines.push((segment, stages)),
-            Err(error) => return CommandResult::Error(error),
+            Err(error) => return syntax_error(error, state),
         }
     }
 
@@ -401,7 +451,7 @@ pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
             let _ = render::stderr_line(error);
         }
 
-        last = run_segment(&segment.text, &stages, state);
+        last = run_segment(&segment.text, &stages, segment.background, state);
         state.record_status(matches!(last, CommandResult::Error(_)));
         if last == CommandResult::Exit {
             break;
@@ -410,10 +460,22 @@ pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
     last
 }
 
+/// A line that cannot be parsed fails without running anything.
+fn syntax_error(message: String, state: &mut ShellState) -> CommandResult {
+    state.record_status(true);
+    CommandResult::Error(message)
+}
+
 /// Run one segment: a single command, or a pipeline and its redirections.
-fn run_segment(text: &str, stages: &[Stage], state: &mut ShellState) -> CommandResult {
+fn run_segment(
+    text: &str,
+    stages: &[Stage],
+    background: bool,
+    state: &mut ShellState,
+) -> CommandResult {
     if let [stage] = stages
         && stage.redirects.is_empty()
+        && !background
     {
         return match parse_args(text, &|name| state.variable(name)) {
             Ok(args) if args.is_empty() => CommandResult::Continue,
@@ -421,7 +483,7 @@ fn run_segment(text: &str, stages: &[Stage], state: &mut ShellState) -> CommandR
             Err(error) => CommandResult::Error(error),
         };
     }
-    pipeline::run(stages, state)
+    pipeline::run(stages, state, background.then_some(text))
 }
 
 /// How a pipeline stage runs.
@@ -462,7 +524,29 @@ fn classify(args: &[String], state: &ShellState) -> Result<StageKind, String> {
     })
 }
 
+/// Split the leading `NAME=value` words off a command: `FOO=1 BAR=2 cmd args`.
+/// They only apply when a command follows; alone they assign shell variables.
+fn split_env_prefix(args: &[String]) -> (Vec<(String, String)>, &[String]) {
+    let count = args
+        .iter()
+        .take_while(|word| split_assignment(word).is_some())
+        .count();
+    if count == 0 || count == args.len() {
+        return (Vec::new(), args);
+    }
+    let vars = args[..count]
+        .iter()
+        .filter_map(|word| split_assignment(word))
+        .map(|(name, value)| (name.to_string(), value.to_string()))
+        .collect();
+    (vars, &args[count..])
+}
+
 pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
+    let (env, rest) = split_env_prefix(args);
+    if !env.is_empty() {
+        return shell_env::with_temporary(&env, || execute(rest, state));
+    }
     let Some(command_name) = args.first().map(String::as_str) else {
         return run_help(&[], state);
     };
@@ -542,6 +626,7 @@ fn execute_external(name: &str, args: &[String]) -> CommandResult {
     match external::run(name, args) {
         Ok(()) => CommandResult::Continue,
         Err(external::RunError::NotFound) => {
+            external::note_exit_code(external::COMMAND_NOT_FOUND);
             CommandResult::Error(CommandError::UnknownCommand(name.to_string()).to_string())
         }
         Err(external::RunError::Failed(message)) => CommandResult::Error(message),
@@ -772,8 +857,73 @@ fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
     })
 }
 
-fn run_exit(_args: &[String], _state: &mut ShellState) -> CommandResult {
+fn run_jobs(_args: &[String], state: &mut ShellState) -> CommandResult {
+    for line in state.jobs.listing() {
+        if let Err(error) = render::stdout_line(line) {
+            return CommandResult::Error(format!("jobs: {error}"));
+        }
+    }
+    CommandResult::Continue
+}
+
+/// The outcome of a job that was waited for: its exit code, as `$?`.
+fn job_outcome(name: &str, status: Option<std::process::ExitStatus>) -> CommandResult {
+    match jobs::describe(status) {
+        (_, 0) => CommandResult::Continue,
+        (_, code) => {
+            external::note_exit_code(code);
+            CommandResult::Error(format!("{name}: exited with status {code}"))
+        }
+    }
+}
+
+fn run_fg(args: &[String], state: &mut ShellState) -> CommandResult {
+    match state.jobs.foreground(optional_arg(args)) {
+        Ok((text, status)) => {
+            let _ = render::stdout_line(&text);
+            job_outcome("fg", status)
+        }
+        Err(error) => CommandResult::Error(format!("fg: {error}")),
+    }
+}
+
+fn run_wait(args: &[String], state: &mut ShellState) -> CommandResult {
+    match state.jobs.wait(optional_arg(args)) {
+        Ok(status) => job_outcome("wait", status),
+        Err(error) => CommandResult::Error(format!("wait: {error}")),
+    }
+}
+
+/// `kill %n` stops a job of the shell; anything else is the system `kill`.
+fn run_kill(args: &[String], state: &mut ShellState) -> CommandResult {
+    match args {
+        [spec] if spec.starts_with('%') => match state.jobs.kill(spec) {
+            Ok(()) => CommandResult::Continue,
+            Err(error) => CommandResult::Error(format!("kill: {error}")),
+        },
+        _ => execute_external("kill", args),
+    }
+}
+
+fn run_exit(args: &[String], state: &mut ShellState) -> CommandResult {
+    state.exit_code = match args.first() {
+        // Without a code the shell leaves with the status of the last command.
+        None => Some(status_byte(i64::from(state.last_status))),
+        Some(argument) => match argument.parse::<i64>() {
+            Ok(code) => Some(status_byte(code)),
+            Err(_) => {
+                return CommandResult::Error(format!(
+                    "exit: numeric argument required: '{argument}'"
+                ));
+            }
+        },
+    };
     CommandResult::Exit
+}
+
+/// An exit code as the operating system keeps it: modulo 256.
+fn status_byte(code: i64) -> u8 {
+    code.rem_euclid(256) as u8
 }
 
 fn map_result<T, E, F>(result: Result<T, E>, format_error: F) -> CommandResult

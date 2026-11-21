@@ -77,6 +77,26 @@ pub fn vars() -> Vec<(String, String)> {
     merged.into_iter().collect()
 }
 
+/// Run `operation` with `vars` exported, then put the previous values back.
+/// This is `NAME=value command`: the variable exists for that command only.
+pub fn with_temporary<T>(vars: &[(String, String)], operation: impl FnOnce() -> T) -> T {
+    let saved: Vec<(String, Option<String>)> = vars
+        .iter()
+        .map(|(name, _)| (name.clone(), value(name)))
+        .collect();
+    for (name, new_value) in vars {
+        export(name, new_value);
+    }
+    let result = operation();
+    for (name, previous) in saved {
+        match previous {
+            Some(previous) => export(&name, &previous),
+            None => remove(&name),
+        }
+    }
+    result
+}
+
 /// Get a child process ready to start: write the output captured so far, so
 /// that it stays ahead of what the child prints, then apply the exports.
 pub fn prepare_child(command: &mut Command) {

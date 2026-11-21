@@ -2,7 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 struct TestDirectory {
     path: PathBuf,
@@ -837,13 +837,13 @@ fn a_failure_stops_an_and_chain_and_runs_an_or_chain() {
 }
 
 #[test]
-fn a_background_job_is_still_refused_with_a_clear_message() {
+fn a_background_job_cannot_follow_an_and_or_list() {
     let directory = TestDirectory::new("background refused");
 
-    let output = run_interactive(directory.path(), "echo hello &\nexit\n");
+    let output = run_interactive(directory.path(), "echo hello && echo world &\nexit\n");
 
     assert!(
-        stderr(&output).contains("background jobs (&) are not supported yet"),
+        stderr(&output).contains("a background job cannot follow && or ||"),
         "{}",
         stderr(&output)
     );
@@ -1028,7 +1028,7 @@ fn the_status_of_a_pipeline_is_the_status_of_its_last_stage() {
     );
 
     assert!(printed.contains("first=0\n"), "{printed}\n{errors}");
-    assert!(printed.contains("second=1\n"), "{printed}\n{errors}");
+    assert!(printed.contains("second=4\n"), "{printed}\n{errors}");
     assert!(printed.contains("third=0\n"), "{printed}\n{errors}");
     assert!(errors.contains("exited with status 4"), "{errors}");
 }
@@ -1320,4 +1320,290 @@ fn a_pattern_works_with_commands_and_pipes() {
     assert!(directory.path().join(".hidden.txt").exists());
     assert!(printed.contains("done\n"), "{printed}");
     assert!(printed.contains("[draft] one.md c.md\n"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn the_status_is_the_exit_code_of_the_program() {
+    let directory = TestDirectory::new("exit codes");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'exit 3'",
+            "echo code=$?",
+            "sh -c 'exit 0'",
+            "echo code=$?",
+            "terminal-rust-no-such-program",
+            "echo code=$?",
+            "cd /terminal-rust-missing-directory",
+            "echo code=$?",
+            "sh -c 'kill -9 $$'",
+            "echo code=$?",
+        ],
+    );
+
+    let codes: Vec<&str> = printed
+        .lines()
+        .filter_map(|line| line.rsplit("> ").next())
+        .filter(|line| line.starts_with("code="))
+        .collect();
+    assert_eq!(
+        codes,
+        ["code=3", "code=0", "code=127", "code=1", "code=137"],
+        "{printed}\n{errors}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn the_code_of_a_pipeline_is_the_code_of_its_last_program() {
+    let directory = TestDirectory::new("pipeline codes");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'exit 3' | sh -c 'cat > /dev/null; exit 4'",
+            "echo code=$?",
+            "sh -c 'exit 5' | cat",
+            "echo code=$?",
+            "echo x | sh -c 'exit 6'",
+            "echo code=$?",
+        ],
+    );
+
+    let codes: Vec<&str> = printed
+        .lines()
+        .filter_map(|line| line.rsplit("> ").next())
+        .filter(|line| line.starts_with("code="))
+        .collect();
+    assert_eq!(codes, ["code=4", "code=0", "code=6"], "{printed}\n{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn and_or_chains_still_follow_success_and_failure_with_exact_codes() {
+    let directory = TestDirectory::new("chain codes");
+
+    let (printed, _) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'exit 9' && echo wrong || echo recovered",
+            "sh -c 'exit 0' && echo ok",
+        ],
+    );
+
+    assert!(printed.contains("recovered"), "{printed}");
+    assert!(!printed.contains("wrong"), "{printed}");
+    assert!(printed.contains("ok"), "{printed}");
+}
+
+#[test]
+fn exit_leaves_with_the_given_code_or_the_last_status() {
+    let directory = TestDirectory::new("exit code");
+
+    for (input, expected) in [
+        ("exit 3\n", 3),
+        ("exit 0\n", 0),
+        ("exit 300\n", 44),
+        ("exit 200\n", 200),
+        ("exit -1\n", 255),
+        ("echo fine\nexit\n", 0),
+        ("cat\nexit\n", 1),
+        ("cat\n", 1),
+        ("echo fine\n", 0),
+    ] {
+        let output = run_interactive(directory.path(), input);
+
+        assert_eq!(
+            output.status.code(),
+            Some(expected),
+            "input {input:?}: {}",
+            stderr(&output)
+        );
+    }
+}
+
+#[test]
+fn exit_rejects_a_code_that_is_not_a_number_and_keeps_the_shell() {
+    let directory = TestDirectory::new("exit invalid");
+
+    let (printed, errors) = shell_lines(&directory, &["exit soon", "echo still-here"]);
+
+    assert!(
+        errors.contains("exit: numeric argument required: 'soon'"),
+        "{errors}"
+    );
+    assert!(printed.contains("still-here\n"), "{printed}");
+}
+
+#[test]
+fn a_variable_prefix_applies_to_one_command_only() {
+    let directory = TestDirectory::new("env prefix");
+    let shell = env!("CARGO_BIN_EXE_terminal_rust");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            &format!("TRS_PREFIX=temporary \"{shell}\" printenv TRS_PREFIX"),
+            "echo after=$TRS_PREFIX",
+            &format!("TRS_PREFIX=temporary \"{shell}\" printenv TRS_PREFIX | cat"),
+            "export TRS_KEPT=original",
+            &format!("TRS_KEPT=changed \"{shell}\" printenv TRS_KEPT"),
+            &format!("\"{shell}\" printenv TRS_KEPT"),
+            "TRS_PLAIN=assigned",
+            "echo plain=$TRS_PLAIN",
+        ],
+    );
+
+    assert_eq!(
+        printed.matches("temporary\n").count(),
+        2,
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("after=\n"), "{printed}");
+    assert!(printed.contains("changed\n"), "{printed}");
+    assert!(printed.contains("original\n"), "{printed}");
+    // Without a command, the words still assign a shell variable.
+    assert!(printed.contains("plain=assigned\n"), "{printed}");
+}
+
+#[test]
+fn several_prefixed_variables_reach_a_built_in_and_a_program() {
+    let directory = TestDirectory::new("env prefixes");
+    let shell = env!("CARGO_BIN_EXE_terminal_rust");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[&format!("TRS_ONE=1 TRS_TWO=2 \"{shell}\" printenv TRS_TWO")],
+    );
+
+    assert!(printed.contains("2\n"), "{printed}\n{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_background_job_gives_the_prompt_back_at_once() {
+    let directory = TestDirectory::new("background prompt");
+    let started = std::time::Instant::now();
+
+    let output = run_interactive(
+        directory.path(),
+        "sleep 20 &\necho prompt-is-back\njobs\nkill %1\nexit\n",
+    );
+
+    let printed = stdout(&output);
+    let errors = stderr(&output);
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "waited for the job"
+    );
+    assert!(errors.contains("[1] "), "{errors}");
+    assert!(printed.contains("prompt-is-back\n"), "{printed}");
+    assert!(printed.contains("[1]+  Running  sleep 20"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_finished_job_is_reported_once_before_the_next_prompt() {
+    let directory = TestDirectory::new("background notice");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["sh -c 'exit 3' &", "sleep 0.5", "echo next", "echo again"],
+    );
+
+    assert_eq!(printed.matches("Exit 3").count(), 1, "{printed}\n{errors}");
+    let notice = printed.find("[1]+  Exit 3").expect("the notice");
+    let next = printed.find("next\n").expect("the next command");
+    assert!(notice < next, "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn fg_and_wait_return_the_exit_code_of_the_job() {
+    let directory = TestDirectory::new("background fg");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'sleep 0.2; exit 4' &",
+            "fg",
+            "echo fg=$?",
+            "sh -c 'sleep 0.2; exit 5' &",
+            "wait",
+            "echo wait=$?",
+            "jobs",
+            "echo done-listing",
+        ],
+    );
+
+    assert!(printed.contains("fg=4\n"), "{printed}\n{errors}");
+    assert!(printed.contains("wait=5\n"), "{printed}\n{errors}");
+    assert!(!printed.contains("Running"), "{printed}");
+    assert!(errors.contains("fg: exited with status 4"), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_background_program_reads_an_empty_input() {
+    let directory = TestDirectory::new("background stdin");
+
+    let (_, errors) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'cat > seen.txt; echo finished > finished.txt' &",
+            "wait",
+        ],
+    );
+
+    assert!(errors.contains("[1] "), "{errors}");
+    assert_eq!(
+        fs::read_to_string(directory.path().join("seen.txt")).expect("cat output"),
+        ""
+    );
+    assert!(directory.path().join("finished.txt").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_background_pipeline_runs_with_its_redirections() {
+    let directory = TestDirectory::new("background pipeline");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "printf 'b\\na\\n' | sort > sorted.txt &",
+            "wait",
+            "cat sorted.txt",
+        ],
+    );
+
+    assert!(printed.contains("a\nb\n"), "{printed}\n{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn kill_stops_a_job_and_an_unknown_job_is_an_error() {
+    let directory = TestDirectory::new("background kill");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "fg",
+            "sleep 20 &",
+            "kill %1",
+            "sleep 0.5",
+            "echo checked",
+            "fg %9",
+        ],
+    );
+
+    assert!(errors.contains("fg: no current job"), "{errors}");
+    assert!(errors.contains("fg: %9: no such job"), "{errors}");
+    assert!(
+        printed.contains("[1]+  Exit 137  sleep 20"),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("checked\n"), "{printed}");
 }

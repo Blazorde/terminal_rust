@@ -51,10 +51,9 @@ fn run_once(args: &[String]) -> ExitCode {
     let result = engine.execute_args(args);
     emit_result(&result);
 
-    match result.status {
-        ExecutionStatus::Continue | ExecutionStatus::Exit => ExitCode::SUCCESS,
-        ExecutionStatus::Failed => ExitCode::FAILURE,
-    }
+    // The exact code of the program or command that ran, 1 for a failure inside
+    // the shell.
+    ExitCode::from(engine.exit_code())
 }
 
 pub fn run_interactive() -> ExitCode {
@@ -100,6 +99,7 @@ fn run_interactive_editor() -> ExitCode {
     }
 
     let exit_code = loop {
+        show_job_notices(&mut engine);
         let (prompt, styled_prompt) = match shell_prompt.render_for_editor() {
             Ok(prompt) => prompt,
             Err(error) => {
@@ -115,7 +115,7 @@ fn run_interactive_editor() -> ExitCode {
                     let _ = editor.add_history_entry(trimmed);
                 }
                 if handle_input(&input, &mut engine, &mut shell_prompt) == ExecutionStatus::Exit {
-                    break ExitCode::SUCCESS;
+                    break ExitCode::from(engine.exit_code());
                 }
                 editor.set_helper(Some(ShellHelper::with_command_names(
                     engine.command_names(),
@@ -124,7 +124,7 @@ fn run_interactive_editor() -> ExitCode {
             Err(ReadlineError::Interrupted) => {
                 let _ = render::stdout_line("^C");
             }
-            Err(ReadlineError::Eof) => break ExitCode::SUCCESS,
+            Err(ReadlineError::Eof) => break ExitCode::from(engine.exit_code()),
             Err(error) => {
                 let _ = render::stderr_line(format_args!("read: {error}"));
                 break ExitCode::FAILURE;
@@ -150,11 +150,19 @@ fn history_path() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// Say which background jobs ended, once, before the next prompt.
+fn show_job_notices(engine: &mut ShellEngine) {
+    for notice in engine.job_notices() {
+        let _ = render::stdout_line(notice);
+    }
+}
+
 fn run_interactive_plain() -> ExitCode {
     let mut input = String::new();
     let (mut engine, mut shell_prompt) = load_interactive_shell();
 
     loop {
+        show_job_notices(&mut engine);
         if let Err(error) = shell_prompt.print() {
             let _ = render::stderr_line(format_args!("prompt: {error}"));
             return ExitCode::FAILURE;
@@ -165,7 +173,7 @@ fn run_interactive_plain() -> ExitCode {
         // confirmation from stdin itself, and the lock is not reentrant.
         match read_plain_command(&mut io::stdin().lock(), &mut input) {
             Ok(true) => {}
-            Ok(false) => return ExitCode::SUCCESS,
+            Ok(false) => return ExitCode::from(engine.exit_code()),
             Err(error) => {
                 let _ = render::stderr_line(format_args!("read: {error}"));
                 return ExitCode::FAILURE;
@@ -173,7 +181,7 @@ fn run_interactive_plain() -> ExitCode {
         }
 
         if handle_input(&input, &mut engine, &mut shell_prompt) == ExecutionStatus::Exit {
-            return ExitCode::SUCCESS;
+            return ExitCode::from(engine.exit_code());
         }
     }
 }
