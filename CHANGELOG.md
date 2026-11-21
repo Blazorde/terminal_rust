@@ -5,6 +5,16 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Fixed
+
+- Desktop: two copies of the application starting together could delete and
+  extract the bundled Git runtime at the same time and leave a broken one. The
+  installation now takes a lock file shared by all processes (released when the
+  process ends, even after a crash), and re-checks the runtime once it holds it.
+- Desktop: the bundled runtime archive, several hundred megabytes, was read in
+  full at every start to compute its digest. The digest is now kept with the size
+  and date of the archive and only recomputed when they change.
+
 ## [1.4.0] - 2026-11-21
 
 ### Added
