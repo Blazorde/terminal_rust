@@ -1,6 +1,6 @@
 [package]
 name = "terminal-rust-desktop"
-version = "1.9.0"
+version = "1.9.1"
 description = "Desktop interface for Terminal Rust"
 edition = "2024"
 rust-version = "1.95"

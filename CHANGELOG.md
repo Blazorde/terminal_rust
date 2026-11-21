@@ -5,6 +5,16 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-11-22
+
+### Fixed
+
+- `ls` accepts `--color` and `--color=WHEN` (it prints no colors), so the usual
+  `alias ls='ls --color=auto'` works instead of failing with `unknown option`.
+- `alias` no longer prints `Alias 'name' saved for this session.` when it runs inside a
+  file (a startup script, a `source`d file): the confirmation is for the prompt, and a
+  startup script with aliases said it at every start.
+
 ## [1.9.0] - 2026-11-22
 
 ### Added
