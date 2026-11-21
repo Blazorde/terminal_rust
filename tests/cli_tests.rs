@@ -2502,3 +2502,49 @@ fn type_only_finds_executable_files_that_exist() {
     );
     assert!(!printed.contains("plainfile is"), "{printed}");
 }
+
+#[test]
+fn parameter_expansion_gives_defaults_alternatives_and_lengths() {
+    let directory = TestDirectory::new("parameter expansion");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo default=${TR_UNSET:-fallback}",
+            "TR_SET=value",
+            "echo kept=${TR_SET:-fallback} alt=${TR_SET:+yes} none=[${TR_UNSET:+yes}]",
+            "TR_EMPTY=",
+            "echo empty=${TR_EMPTY:-fallback} bare=${TR_EMPTY-fallback}end",
+            "echo length=${#TR_SET}",
+            "echo nested=${TR_UNSET:-${TR_SET}}",
+            "echo quoted=\"${TR_UNSET:-two words}\"",
+            "echo before ${TR_UNSET:?missing value} after",
+            "echo status=$?",
+            "echo ${TR_UNSET:=x}",
+        ],
+    );
+
+    for expected in [
+        "default=fallback\n",
+        "kept=value alt=yes none=[]\n",
+        "empty=fallback bare=end\n",
+        "length=5\n",
+        "nested=value\n",
+        "quoted=two words\n",
+        "status=1\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(
+        !printed.contains("before"),
+        "a failed expansion must not run the command: {printed}"
+    );
+    assert!(errors.contains("TR_UNSET: missing value"), "{errors}");
+    assert!(
+        errors.contains("assigning in an expansion is not supported"),
+        "{errors}"
+    );
+}
