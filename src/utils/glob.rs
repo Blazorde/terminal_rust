@@ -1,8 +1,9 @@
-//! File name patterns: `*`, `?` and `[...]` (see ADR-0012).
+//! File name patterns: `*`, `?`, `[...]` and `**` (see ADR-0012 and ADR-0020).
 //!
 //! A pattern is matched one path segment at a time, so `*` never crosses a `/`.
 //! A segment that starts with `.` is only matched by a pattern that starts with
-//! `.` as well, which keeps hidden files out of `*`.
+//! `.` as well, which keeps hidden files out of `*`. A segment that is exactly
+//! `**` stands for any number of directories, including none.
 
 use std::fs;
 use std::path::Path;
@@ -160,6 +161,11 @@ fn match_tokens(tokens: &[Token], name: &str) -> bool {
     tokens[t..].iter().all(|token| *token == Token::Star)
 }
 
+/// The deepest directory a `**` goes down to, and the most paths one pattern may
+/// give: a `**` started in a huge tree must not run for minutes or fill the memory.
+const MAX_DEPTH: usize = 32;
+const MAX_MATCHES: usize = 50_000;
+
 /// The paths that match `pattern`, sorted. Empty when nothing matches.
 ///
 /// Only the segments that hold a pattern read a directory, so `src/*/mod.rs`
@@ -178,6 +184,60 @@ pub fn expand(pattern: &str) -> Vec<String> {
     found
 }
 
+fn join(base: &str, name: &str) -> String {
+    if base.is_empty() || base.ends_with('/') {
+        format!("{base}{name}")
+    } else {
+        format!("{base}/{name}")
+    }
+}
+
+/// The names in `base` (the current directory when empty) that are not hidden,
+/// with whether each is a real directory. A link to a directory is not followed,
+/// so a `**` cannot loop.
+fn visible_entries(base: &str) -> Vec<(String, bool)> {
+    let directory = if base.is_empty() { "." } else { base };
+    let Ok(entries) = fs::read_dir(Path::new(directory)) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name().into_string().ok()?;
+            let is_directory = entry.file_type().ok()?.is_dir();
+            (!name.starts_with('.')).then_some((name, is_directory))
+        })
+        .collect()
+}
+
+/// `**` followed by `rest`: `rest` in `base` and in every directory below it.
+/// With nothing after it, everything below `base`.
+fn globstar(base: &str, rest: &[&str], found: &mut Vec<String>, depth: usize) {
+    if found.len() >= MAX_MATCHES {
+        return;
+    }
+    if rest.is_empty() {
+        for (name, is_directory) in visible_entries(base) {
+            let path = join(base, &name);
+            found.push(path.clone());
+            if is_directory && depth < MAX_DEPTH && found.len() < MAX_MATCHES {
+                globstar(&path, rest, found, depth + 1);
+            }
+        }
+        return;
+    }
+    // No directory at all, then one more level at a time.
+    walk(base, rest, found);
+    if depth >= MAX_DEPTH {
+        return;
+    }
+    for (name, is_directory) in visible_entries(base) {
+        if is_directory {
+            globstar(&join(base, &name), rest, found, depth + 1);
+        }
+    }
+}
+
 fn walk(base: &str, segments: &[&str], found: &mut Vec<String>) {
     let Some((segment, rest)) = segments.split_first() else {
         if !base.is_empty() {
@@ -185,13 +245,11 @@ fn walk(base: &str, segments: &[&str], found: &mut Vec<String>) {
         }
         return;
     };
-    let join = |name: &str| {
-        if base.is_empty() || base.ends_with('/') {
-            format!("{base}{name}")
-        } else {
-            format!("{base}/{name}")
-        }
-    };
+    let join = |name: &str| join(base, name);
+    if *segment == "**" {
+        globstar(base, rest, found, 0);
+        return;
+    }
 
     let tokens = compile(segment);
     if !tokens.iter().any(is_wildcard) {
@@ -358,6 +416,113 @@ mod tests {
         assert_eq!(absolute(&root, "*/*.rs"), ["src/x.rs"]);
         assert_eq!(absolute(&root, "s*/*/y.rs"), ["src/sub/y.rs"]);
         assert_eq!(absolute(&root, "src/sub/?.rs"), ["src/sub/y.rs"]);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_double_star_segment_goes_through_every_directory() {
+        let root = fixture("globstar");
+
+        // Zero directories and every depth, sorted, without hidden files.
+        assert_eq!(
+            absolute(&root, "**/*.rs"),
+            ["a.rs", "b.rs", "src/sub/y.rs", "src/x.rs"]
+        );
+        assert_eq!(absolute(&root, "**/y.rs"), ["src/sub/y.rs"]);
+        assert_eq!(absolute(&root, "src/**/*.rs"), ["src/sub/y.rs", "src/x.rs"]);
+        // In the middle, with something before and after it.
+        assert_eq!(absolute(&root, "src/**/y.rs"), ["src/sub/y.rs"]);
+        assert_eq!(absolute(&root, "s*/**/*.rs"), ["src/sub/y.rs", "src/x.rs"]);
+        // A pattern after it still applies to the whole name.
+        assert!(absolute(&root, "**/*.zip").is_empty());
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_trailing_double_star_lists_everything_below() {
+        let root = fixture("trailing");
+
+        assert_eq!(
+            absolute(&root, "**"),
+            [
+                "a.rs",
+                "b.rs",
+                "c.txt",
+                "src",
+                "src/sub",
+                "src/sub/y.rs",
+                "src/x.rs"
+            ]
+        );
+        assert_eq!(
+            absolute(&root, "src/**"),
+            ["src/sub", "src/sub/y.rs", "src/x.rs"]
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_double_star_skips_hidden_directories_and_does_not_follow_links() {
+        let root = fixture("hiddenstar");
+        fs::create_dir_all(root.join(".git/objects")).expect("fixture");
+        fs::write(root.join(".git/objects/z.rs"), "").expect("fixture");
+        #[cfg(unix)]
+        {
+            // A link back to the root would make the walk endless if followed.
+            std::os::unix::fs::symlink(&root, root.join("src/loop")).expect("symlink");
+        }
+
+        let found = absolute(&root, "**/*.rs");
+        assert!(!found.iter().any(|path| path.contains(".git")), "{found:?}");
+        assert!(
+            !found.iter().any(|path| path.contains("loop/")),
+            "{found:?}"
+        );
+        assert_eq!(found, ["a.rs", "b.rs", "src/sub/y.rs", "src/x.rs"]);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn an_escaped_or_embedded_double_star_is_not_a_globstar() {
+        let root = fixture("embedded");
+        // `a**` is an ordinary star pattern: one level only.
+        assert_eq!(absolute(&root, "s**"), ["src"]);
+        assert_eq!(absolute(&root, "*/x**"), ["src/x.rs"]);
+        // Escaped stars are literal text.
+        assert!(absolute(&root, "\\*\\*/*.rs").is_empty());
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_double_star_stops_at_the_depth_limit() {
+        let root = std::env::temp_dir().join(format!(
+            "terminal-rust-glob-deep-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let mut deep = root.clone();
+        for level in 0..(MAX_DEPTH + 6) {
+            deep = deep.join(format!("d{level}"));
+        }
+        fs::create_dir_all(&deep).expect("fixture");
+        fs::write(deep.join("far.txt"), "").expect("fixture");
+        fs::write(root.join("d0").join("near.txt"), "").expect("fixture");
+
+        let found = absolute(&root, "**/*.txt");
+        assert_eq!(
+            found,
+            ["d0/near.txt"],
+            "the file below the limit is not reached"
+        );
+        // A trailing `**` has the same limit.
+        let everything = absolute(&root, "**");
+        assert!(everything.iter().any(|path| path.ends_with("near.txt")));
+        assert!(
+            !everything.iter().any(|path| path.ends_with("far.txt")),
+            "the file below the limit is not reached"
+        );
         fs::remove_dir_all(root).expect("cleanup");
     }
 

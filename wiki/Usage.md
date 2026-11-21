@@ -230,7 +230,13 @@ character of a set. A pattern matches within one directory level (`*` never
 matches `/`), and names that start with `.` need a pattern that starts with `.`.
 A pattern that matches nothing stays as written. Quote it (`'*.rs'`) or put a
 backslash before it (`\*`, on Linux and macOS) to use it as text. The value of a
-variable is never a pattern. There is no `**` and no `{a,b}` yet.
+variable is never a pattern.
+
+A segment that is exactly `**` goes through any number of directories, so
+`ls **/*.rs` lists every `.rs` file below the current directory (and in it), and
+`src/**` lists everything under `src`. Hidden directories are not entered, links to
+directories are not followed, and a `**` stops after 32 levels or 50 000 paths.
+`a**` is an ordinary `*`. For `{a,b}` see [Brace expansion](#brace-expansion).
 
 ## Pipes and redirections
 

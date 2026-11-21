@@ -1285,6 +1285,11 @@ mod tests {
 
     #[test]
     fn session_aliases_are_created_and_executed() {
+        // `pwd` and the expected value must see the same directory: other tests
+        // change it while they hold this lock.
+        let _guard = crate::test_support::cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut state = test_state();
         let (result, _) = render::capture_output(|| {
             execute(&string_args(&["alias", "where", "pwd"]), &mut state)
