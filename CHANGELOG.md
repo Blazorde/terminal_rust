@@ -7,6 +7,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- `alias name=value`, the form most people type (`alias ll="ls -la"`), next to
+  `alias name command...`; one `alias` can define several names, and the value is
+  read like a command line.
+- `echo` reads escapes with `-e` (`\n`, `\t`, `\e`, `\xHH`, `\0NNN`, `\uHHHH`,
+  `\c`), accepts grouped options (`-ne`) and `-E`, and `pwd` accepts `-L` and `-P`.
+
 - Git completion (ADR-0019): `Tab` after `git ` completes the subcommands, and after
   `checkout`, `switch`, `merge`, `rebase`, `branch`, `diff`, `log`, `push`, `pull`
   and a few more it completes branches, remote branches and tags, read from the

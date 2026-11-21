@@ -14,7 +14,7 @@ Run `help` inside Terminal Rust for the authoritative command list.
 | `plugins help`, `plugin help` | Explain what plugins support and how to inspect them |
 | `commands list` | Inspect configured custom commands |
 | `commands help` | Explain custom commands and where to configure them |
-| `echo [-n] [text...]` | Print text, without a trailing newline with `-n` |
+| `echo [-n] [-e\|-E] [text...]` | Print text; `-n` leaves out the newline, `-e` reads escapes (`\n`, `\t`, `\e`, `\xHH`, `\0NNN`, `\uHHHH`, `\c`), `-E` turns them off |
 | `whoami` | Prints the username of the current user. |
 | `arch` | Prints the system architecture. |
 | `nproc` | Prints the number of processing units available. |

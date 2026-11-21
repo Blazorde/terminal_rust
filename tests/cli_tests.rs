@@ -2869,3 +2869,100 @@ fn a_program_started_after_cd_sees_the_new_pwd() {
     );
     assert!(printed.contains("OLDPWD="), "{printed}");
 }
+
+#[test]
+fn an_alias_defined_with_an_equals_sign_runs_like_the_original_form() {
+    let directory = TestDirectory::new("alias equals");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "alias greet=\"echo hello world\"",
+            "greet there",
+            "alias a1=pwd b1='echo second'",
+            "b1 x",
+            "alias bad=",
+            "alias old echo old-form",
+            "old y",
+        ],
+    );
+
+    assert!(
+        printed.contains("hello world there\n"),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("second x\n"), "{printed}");
+    assert!(printed.contains("old-form y\n"), "{printed}");
+    assert!(
+        printed.contains("Alias 'greet' saved for this session."),
+        "{printed}"
+    );
+    assert!(
+        errors.contains("alias: bad: the definition is empty"),
+        "{errors}"
+    );
+}
+
+#[test]
+fn echo_reads_escapes_with_dash_e_and_can_skip_the_newline() {
+    let directory = TestDirectory::new("echo options");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo -e 'a\\tb\\nc'",
+            "echo -e \"x\\\\y\"",
+            "echo -n no-newline",
+            "echo",
+            "echo -ne 'one\\ctwo'",
+            "echo",
+            "echo plain 'a\\tb'",
+            "echo -E 'raw\\n'",
+            "echo -e '\\x41\\0102\\u00e9'",
+            "echo -x -n",
+        ],
+    );
+
+    for expected in [
+        "a\tb\nc\n",
+        "x\\y\n",
+        "no-newline",
+        "one",
+        "plain a\\tb\n",
+        "raw\\n\n",
+        "AB\u{e9}\n",
+        "-x -n\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(
+        !printed.contains("two"),
+        "\\c must stop the output: {printed}"
+    );
+}
+
+#[test]
+fn pwd_accepts_the_logical_and_physical_options_and_refuses_others() {
+    let directory = TestDirectory::new("pwd options");
+
+    let (printed, errors) = shell_lines(&directory, &["pwd -L", "pwd -P", "pwd -x", "pwd a b"]);
+
+    let lines: Vec<&str> = printed
+        .lines()
+        .filter_map(|line| line.rsplit("> ").next())
+        .filter(|text| text.starts_with('/'))
+        .collect();
+    assert!(
+        lines
+            .iter()
+            .filter(|text| same_place(text, directory.path()))
+            .count()
+            >= 2,
+        "{printed}"
+    );
+    assert!(errors.contains("pwd: invalid option: -x"), "{errors}");
+    assert!(errors.contains("too many arguments"), "{errors}");
+}
