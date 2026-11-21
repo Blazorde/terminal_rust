@@ -54,7 +54,7 @@ process environment.
    stale one) and kept if it is another path to it (a symbolic link); the inherited
    `OLDPWD` is dropped, since there is no previous directory yet. After a `cd` the
    value is the physical path, with symbolic links resolved. `cd -` prints the
-   directory it goes to. (Added in 1.7.0.)
+   directory it goes to. (Added in 1.8.0.)
 
 ## Options considered
 

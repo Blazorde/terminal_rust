@@ -1,6 +1,6 @@
 [package]
 name = "terminal_rust"
-version = "1.7.0"
+version = "1.8.0"
 edition = "2024"
 rust-version = "1.95"
 description = "Mini shell Rust for developers on macOS, Linux, and Windows. A simple command-line interface for executing commands and managing files."
