@@ -7,6 +7,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Fixed
 
+- Custom commands and aliases of the `process` kind ran with their output
+  captured and no standard input, so interactive programs (a prompt, `python`,
+  `ssh`, `less`) could not work and the output only appeared at the end. They now
+  share the terminal like any other program, and a failure reports the exact exit
+  status (`name: exited with status 3`) instead of a doubled message.
 - Pressing Tab after a no-break space or another multi-byte whitespace crashed
   the shell, because the completion assumed a whitespace takes one byte. The
   word start is now computed from the character width and the cursor position is

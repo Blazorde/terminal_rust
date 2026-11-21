@@ -1,9 +1,8 @@
 use std::collections::{BTreeMap, HashSet};
-use std::io;
 use std::process::Command;
 
+use crate::commands::external;
 use crate::config::{UserCommandConfig, UserCommandKind};
-use crate::render;
 use crate::utils::shell_env;
 
 #[derive(Debug, Clone, Default)]
@@ -266,29 +265,16 @@ pub fn run_process(
         ));
     }
 
-    let output = process
-        .output()
+    // Inherit the terminal streams: capturing them would give the program no
+    // terminal and no stdin, which breaks every interactive tool.
+    let status = process
+        .status()
         .map_err(|error| format!("{name}: cannot start '{}': {error}", command.target))?;
-    write_process_output(&output.stdout, &output.stderr)
-        .map_err(|error| format!("{name}: cannot write process output: {error}"))?;
-    if output.status.success() {
+    if status.success() {
         Ok(())
     } else {
-        Err(format!(
-            "{name}: process exited with status {}",
-            output.status
-        ))
+        Err(external::describe_exit(name, status))
     }
-}
-
-fn write_process_output(stdout: &[u8], stderr: &[u8]) -> io::Result<()> {
-    if !stdout.is_empty() {
-        render::stdout(String::from_utf8_lossy(stdout))?;
-    }
-    if !stderr.is_empty() {
-        render::stderr(String::from_utf8_lossy(stderr))?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -367,5 +353,25 @@ mod tests {
         let error = run_process("missing-tool", &command, &[]).unwrap_err();
         assert!(error.contains("missing-tool: cannot start"));
         assert!(error.contains(&command.target));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_failing_process_reports_its_exit_status() {
+        let mut command = command(UserCommandKind::Process, "sh");
+        command.args = vec!["-c".into(), "exit 3".into()];
+
+        let error = run_process("fails", &command, &[]).unwrap_err();
+
+        assert_eq!(error, "fails: exited with status 3");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_successful_process_returns_ok() {
+        let mut command = command(UserCommandKind::Process, "sh");
+        command.args = vec!["-c".into(), "exit 0".into()];
+
+        assert_eq!(run_process("works", &command, &[]), Ok(()));
     }
 }
