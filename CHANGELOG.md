@@ -14,6 +14,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Fixed
 
+- Plugin discovery is tolerant: a plugin folder that cannot be read is reported
+  as an error and no longer disables every plugin, user command and alias. When
+  several compatible versions of a plugin are installed only the newest is used
+  (the others are `superseded`) instead of blocking all its commands as a name
+  conflict, and a manifest whose `id` differs from its folder name is rejected.
 - Desktop: `Ctrl+W` (delete a word) and `Ctrl+T` (swap two characters) no longer
   close or open a tab, they reach the shell. On Linux and Windows the tab
   shortcuts are now `Ctrl+Shift+T` and `Ctrl+Shift+W`, as in other terminals;
