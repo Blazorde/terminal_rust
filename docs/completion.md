@@ -18,6 +18,17 @@ history entry. Empty history produces no suggestion and consecutive duplicates
 are stored once. Suggestions containing terminal control characters are not
 displayed.
 
+A word at the start of a command (the line start, or after `;`, `|`, `&&` or
+`||`) completes to the built-in, custom and plugin commands and to the programs
+found in `PATH` (the executable files of its directories, without the `.exe`
+extension on Windows). Programs are only offered once you have typed a first
+character, and the list is reread every ten seconds or when `PATH` changes. A
+word that looks like a path (`./run`, `~/bin/x`) completes as a file.
+
+After a `$`, `Tab` completes the names of the environment variables, with the
+closing brace in the `${NAME}` form. Variables that were set but not exported are
+not listed.
+
 The path completer preserves quoted paths, spaces, Unicode and the native path
 separator on Windows, macOS and Linux. Directory candidates keep a trailing
 separator so another `Tab` can continue into the directory.
