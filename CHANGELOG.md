@@ -5,6 +5,19 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- Control flow ([ADR-0016](docs/decisions/0016-control-flow.md)): `for NAME in
+  WORDS; do …; done`, `while` and `until` loops, and `if … then … elif … else …
+  fi`, which nest and hold chains and pipelines. New built-in commands `break`,
+  `continue`, `true` and `false`. A newline now works like `;`, a block can be
+  typed or pasted over several lines (the shell asks for more with `>> ` until
+  `done` or `fi`) and used in `.trs` scripts, and `Ctrl+C` stops a loop between
+  two commands. A failing condition is not reported as an error. The structure
+  is checked before anything runs.
+- `Ctrl+C` during a line now also abandons the commands that were still to run on
+  that line, as in other shells.
+
 ### Fixed
 
 - `cat` accepts several files (it read only the first one, so `cat *.txt` was

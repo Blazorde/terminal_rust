@@ -2,6 +2,7 @@ use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::utils::shell_env;
 
@@ -83,8 +84,21 @@ pub(crate) fn start_error(name: &str, error: &io::Error) -> RunError {
 /// Keep `Ctrl+C` from ending the shell while a program is running: the interrupt
 /// reaches the foreground program, which stops, and the prompt comes back.
 pub fn keep_shell_alive_on_interrupt() {
-    // A second call reports an existing handler, which is the state we want.
-    let _ = ctrlc::set_handler(|| {});
+    // A second call reports an existing handler, which is the state we want. The
+    // flag lets a loop of the shell notice that the user asked to stop.
+    let _ = ctrlc::set_handler(|| INTERRUPTED.store(true, Ordering::SeqCst));
+}
+
+static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+
+/// Whether `Ctrl+C` was pressed since the last line began.
+pub(crate) fn interrupt_requested() -> bool {
+    INTERRUPTED.load(Ordering::SeqCst)
+}
+
+/// Forget an interrupt: called when a new line starts.
+pub(crate) fn clear_interrupt() {
+    INTERRUPTED.store(false, Ordering::SeqCst);
 }
 
 pub(crate) fn describe_exit(name: &str, status: ExitStatus) -> String {

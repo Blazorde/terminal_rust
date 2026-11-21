@@ -92,6 +92,27 @@ succeeded, and `||` only if it failed. They are evaluated from left to right and
 `exit` stops the line. Quote an operator to use it as text. A trailing `&` runs
 a command in the background, see [Background jobs](#background-jobs).
 
+## Loops and conditions
+
+```text
+for f in *.log; do gzip $f; done
+for n in {1..3}; do echo turn $n; done
+while test ! -f ready.txt; do sleep 1; done
+until ping -c1 server; do sleep 2; done
+if grep -q error build.log; then echo failed; elif test -f ok; then echo ok; else echo unknown; fi
+```
+
+`for` goes through the words after `in`, expanded like the arguments of any
+command (braces, `$(...)`, variables, patterns), and leaves the variable set
+afterwards. `while` and `until` repeat while a command succeeds or fails, and
+`if` runs the first branch whose command succeeds. They can nest and hold chains
+and pipelines, `break` leaves the innermost loop and `continue` starts its next
+turn, and `true` and `false` are built in. A newline works like `;`, so a block
+can be typed over several lines: the shell asks for more (`>> `) until `done` or
+`fi`. `Ctrl+C` stops a loop. A failing condition is not an error, so its message
+is not shown. `case`, functions, `break 2`, and redirections on a whole loop
+(`done > file`) are not available, and `test` or `[` are the system programs.
+
 ## Brace expansion
 
 `{a,b,c}` in a word gives one word per alternative, and `{1..5}` or `{a..e}` a
