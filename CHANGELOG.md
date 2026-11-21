@@ -7,6 +7,10 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Parameter expansion in `${…}`: `${NAME:-default}`, `${NAME-default}`,
+  `${NAME:+alternative}`, `${NAME:?message}` and `${#NAME}`, with nested words,
+  quotes and variables. `${NAME:=word}` and the trimming forms are refused with a
+  clear message.
 - `type` and `which` say what a name runs: keyword, built-in, alias, custom
   command, plugin, or the program found in `PATH` with its path (a missing name is
   reported and gives status 1).

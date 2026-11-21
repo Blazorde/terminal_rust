@@ -41,6 +41,12 @@ process environment.
    applied to every process the shell starts (external programs, Git, editors,
    `fastfetch`, `man`, custom process commands). The process environment of the
    shell itself is never modified.
+8. Inside `${...}`: `NAME:-word` and `NAME-word` (default), `NAME:+word` and
+   `NAME+word` (alternative), `NAME:?word` and `NAME?word` (error, and the command
+   does not run), and `#NAME` (length in characters). The colon makes an empty value
+   count as unset. The word is expanded (variables, quotes, nested `${...}`) but never
+   split or matched against files. `NAME:=word` and the trimming and replacing forms
+   are rejected with an explicit message. (Added in 1.7.0.)
 
 ## Options considered
 

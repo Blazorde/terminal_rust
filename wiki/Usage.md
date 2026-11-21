@@ -79,6 +79,27 @@ set variables for that command only (`LANG=C sort names.txt`, `PORT=8080 node
 app.js`): the program sees them, the shell does not keep them, and the previous
 value comes back afterwards.
 
+Inside `${…}` you can give a default, test for a value, or take a length. With a
+colon an empty value counts as unset; without it only an unset variable does:
+
+| Form | Result |
+| --- | --- |
+| `${NAME:-word}` / `${NAME-word}` | the value, or `word` when unset (or empty, with the colon) |
+| `${NAME:+word}` / `${NAME+word}` | `word` when set (and not empty, with the colon), else nothing |
+| `${NAME:?message}` / `${NAME?message}` | the value, or an error `NAME: message` and nothing runs |
+| `${#NAME}` | the number of characters of the value |
+
+```text
+echo ${EDITOR:-nano}          # nano when EDITOR is not set
+cd ${PROJECT:-.}/src
+echo "${#PATH} characters in PATH"
+```
+
+The `word` may hold variables, quotes and another `${…}`. It is never split into
+several arguments or matched against files. `${NAME:=word}` (assigning while
+expanding) and the trimming forms (`${NAME%x}`, `${NAME#x}`, `${NAME/a/b}`) are
+not available: write `NAME=value` instead.
+
 ## Leaving the shell
 
 `exit` closes the shell with the status of the last command. `exit 3` closes it
