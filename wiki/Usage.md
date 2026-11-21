@@ -144,8 +144,26 @@ and pipelines, `break` leaves the innermost loop and `continue` starts its next
 turn, and `true` and `false` are built in. A newline works like `;`, so a block
 can be typed over several lines: the shell asks for more (`>> `) until `done` or
 `fi`. `Ctrl+C` stops a loop. A failing condition is not an error, so its message
-is not shown. `case`, functions, `break 2`, and redirections on a whole loop
+is not shown. Functions, `break 2`, and redirections on a whole loop
 (`done > file`) are not available.
+
+`case` runs the first arm whose pattern matches a word:
+
+```text
+case $file in
+  *.rs)         echo Rust ;;
+  *.md | *.txt) echo text ;;
+  [0-9]*)       echo starts with a digit ;;
+  *)            echo something else ;;
+esac
+```
+
+The patterns use `*`, `?` and `[...]`; unlike file names, `*` also matches `/` and a
+leading `.`. Several patterns are separated by `|`, an arm ends with `;;` (optional for
+the last one), and the whole `case` can be written on one line. Quote a pattern to match
+it literally: the value of a variable used as a pattern is also literal. The word is not
+split or matched against files. When no arm matches, the status is `0`. `;&` and `;;&`
+are not available.
 
 `test` and `[ … ]` are built in, so conditions work on every system:
 

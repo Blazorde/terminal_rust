@@ -44,7 +44,7 @@ have.
    typed or pasted over several lines. A syntax error (a missing `do`, `done`,
    `then` or `fi`, or a stray keyword) rejects the whole input before anything
    runs.
-7. **Not included**: `case`, functions, `select`, `break N`, `[[ ]]`, arithmetic
+7. **Not included**: functions, `select`, `break N`, `[[ ]]`, arithmetic
    `for ((...))`, redirections or pipes on a whole compound (`done > file`,
    `done | cat`), and keywords written inside a word. Conditions use the built-in
    `test` and `[ ... ]` (files, strings, integers, `!`, `-a`, `-o`; no parentheses).
@@ -81,3 +81,23 @@ have.
   status after a loop, an interrupted loop, scripts and piped multi-line input.
 - Mutation checks: ignoring `break`, running the wrong branch, and not stopping a
   loop on interrupt make tests fail.
+
+## Amendment: `case` (1.8.0)
+
+`case WORD in PATTERN [| PATTERN]... ) LIST ;; ... esac` is a compound command like the
+others, recognised at the start of a command and checked as a whole before anything runs.
+
+1. The word is expanded (variables, `$(...)`, quotes) but never split or matched against
+   files. Patterns are tried in order, and the first arm with a matching pattern runs; its
+   last status is the status of the `case`, and `0` when no arm matches.
+2. Patterns use `*`, `?` and `[...]` and are matched against the **whole** word. Unlike
+   file names, `*` and `?` also match `/` and a leading `.`. What is typed unquoted is a
+   wildcard; what is quoted, escaped or comes from a variable stands for itself. A pattern
+   with an unquoted blank is an error.
+3. `;;` ends an arm (the last one may omit it), an arm may be empty, a `(` may open the
+   patterns, and arms may sit on the line of `case x in` or on the following lines. The
+   interactive prompt and scripts keep reading until `esac`. A `)` inside quotes does not
+   end the patterns.
+4. `;;` becomes a segment of its own in the line splitter, and is a syntax error outside a
+   `case`. **Not included**: `;&`, `;;&`, `case` as a pipeline stage and redirections on a
+   whole `case`.

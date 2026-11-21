@@ -7,6 +7,10 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- `case WORD in PATTERN|PATTERN) …;; … esac` (ADR-0016 amended): patterns with `*`
+  `?` `[...]`, several patterns per arm, arms on one line or several, nesting, and the
+  `>> ` prompt until `esac`. A pattern also matches `/` and a leading `.`; quoted or
+  variable patterns are literal.
 - Recursive patterns (ADR-0020): a path segment `**` goes through any number of
   directories, so `ls **/*.rs` and `for f in **/*.log` work, and a trailing `**` lists
   everything below. Hidden directories are skipped, links are not followed, and the

@@ -558,6 +558,33 @@ fn expand_words(text: &str, state: &mut ShellState) -> Result<Vec<String>, Strin
     parse_args(&expanded, &|name| state.variable(name))
 }
 
+/// The word a `case` looks at: expanded like an argument, but never matched against
+/// file names and never split.
+fn expand_case_word(text: &str, state: &mut ShellState) -> Result<String, String> {
+    let expanded = substitution::expand(text, state)?;
+    let words = crate::app::parser::parse_words(&expanded, &|name| state.variable(name))?;
+    Ok(words
+        .into_iter()
+        .map(|word| word.text)
+        .collect::<Vec<_>>()
+        .join(" "))
+}
+
+/// A pattern of a `case` arm: what was typed as a wildcard matches, and what was
+/// quoted, escaped or comes from a variable stands for itself.
+fn expand_case_pattern(text: &str, state: &mut ShellState) -> Result<String, String> {
+    let expanded = substitution::expand(text, state)?;
+    let words = crate::app::parser::parse_words(&expanded, &|name| state.variable(name))?;
+    match words.as_slice() {
+        [] => Ok(String::new()),
+        [word] => Ok(word
+            .pattern
+            .clone()
+            .unwrap_or_else(|| crate::utils::glob::escape(&word.text))),
+        _ => Err(format!("case: invalid pattern '{}'", text.trim())),
+    }
+}
+
 /// A line that cannot be parsed fails without running anything.
 fn syntax_error(message: String, state: &mut ShellState) -> CommandResult {
     state.record_status(true);
@@ -1529,7 +1556,7 @@ mod tests {
         use std::sync::mpsc::{self, RecvTimeoutError};
         use std::time::Duration;
 
-        const PIECES: [&str; 38] = [
+        const PIECES: [&str; 42] = [
             "echo ",
             "true",
             "false",
@@ -1568,6 +1595,10 @@ mod tests {
             "x=",
             "$((",
             "))",
+            "case x in ",
+            "a) ",
+            ";; ",
+            "esac",
         ];
         let guard = crate::test_support::cwd_lock()
             .lock()
