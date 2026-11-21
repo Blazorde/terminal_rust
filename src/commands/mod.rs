@@ -19,6 +19,7 @@ pub mod plugins;
 pub mod printenv;
 pub mod pwd;
 pub mod rm;
+pub mod test_command;
 pub mod theme;
 pub mod touch;
 pub mod uptime;
