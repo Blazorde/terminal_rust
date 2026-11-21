@@ -124,6 +124,7 @@ impl ShellEngine {
         &mut self,
         run: impl FnOnce(&mut ShellState) -> CommandResult,
     ) -> ExecutionResult {
+        crate::commands::external::clear_interrupt();
         let previous_dir = env::current_dir().ok();
         let (command_result, output) = render::capture_output(|| run(&mut self.state));
         let current_dir = env::current_dir().ok();

@@ -146,6 +146,11 @@ fn execute_contents(content: &str, script_path: &Path, state: &mut ShellState) -
             continue;
         }
         pending.push_str(line);
+        // A block that is not closed goes on over the next line.
+        if super::input_is_incomplete(&pending) {
+            pending.push('\n');
+            continue;
+        }
         let result = super::run_line(&pending, state);
         pending.clear();
         match result {
@@ -161,7 +166,7 @@ fn execute_contents(content: &str, script_path: &Path, state: &mut ShellState) -
     }
     if !pending.is_empty() {
         return CommandResult::Error(format!(
-            "script: {} ends after a continuation marker",
+            "script: {} ends inside an unfinished command",
             script_path.display()
         ));
     }

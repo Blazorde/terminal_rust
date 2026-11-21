@@ -21,6 +21,8 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0012](0012-filename-patterns.md) | Accepted | File name patterns `*`, `?` and `[...]` |
 | [0013](0013-background-jobs.md) | Accepted | Background jobs with `&`, `jobs`, `fg`, `wait` and `kill` |
 | [0014](0014-command-substitution.md) | Accepted | Command substitution `$(...)` |
+| [0015](0015-brace-expansion.md) | Accepted | Brace expansion `{a,b}` and `{1..5}` |
+| [0016](0016-control-flow.md) | Accepted | Control flow: `for`, `while`, `until`, `if`, `break`, `continue` |
 
 ## Lifecycle
 

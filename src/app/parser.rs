@@ -267,6 +267,14 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
                 finish_segment(&mut segments, &mut current, connector, ";")?;
                 connector = Connector::Then;
             }
+            // A newline ends a command like `;`, and is ignored when there is none
+            // (a blank line, or a line break after `&&`, `||` or `&`).
+            (None, '\n') => {
+                if !current.trim().is_empty() {
+                    finish_segment(&mut segments, &mut current, connector, "newline")?;
+                    connector = Connector::Then;
+                }
+            }
             (None, '&') if characters.peek() == Some(&'&') => {
                 characters.next();
                 finish_segment(&mut segments, &mut current, connector, "&&")?;
@@ -1417,6 +1425,31 @@ mod tests {
                     }
                 ]
             )])
+        );
+    }
+
+    #[test]
+    fn a_newline_ends_a_command_like_a_semicolon() {
+        assert_eq!(
+            chain("echo a\necho b\n\n  \necho c"),
+            Ok(vec![
+                (Connector::Then, "echo a".into()),
+                (Connector::Then, "echo b".into()),
+                (Connector::Then, "echo c".into()),
+            ])
+        );
+        assert_eq!(
+            chain("a &&\n b ||\n c"),
+            Ok(vec![
+                (Connector::Then, "a".into()),
+                (Connector::And, "b".into()),
+                (Connector::Or, "c".into()),
+            ])
+        );
+        // Inside quotes or a substitution a newline is ordinary text.
+        assert_eq!(
+            chain("echo 'a\nb' \"c\nd\" $(x\ny)").map(|s| s.len()),
+            Ok(1)
         );
     }
 }

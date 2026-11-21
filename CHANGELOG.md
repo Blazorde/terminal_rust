@@ -5,6 +5,37 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-21
+
+### Added
+
+- Control flow ([ADR-0016](docs/decisions/0016-control-flow.md)): `for NAME in
+  WORDS; do …; done`, `while` and `until` loops, and `if … then … elif … else …
+  fi`, which nest and hold chains and pipelines. New built-in commands `break`,
+  `continue`, `true` and `false`. A newline now works like `;`, a block can be
+  typed or pasted over several lines (the shell asks for more with `>> ` until
+  `done` or `fi`) and used in `.trs` scripts, and `Ctrl+C` stops a loop between
+  two commands. A failing condition is not reported as an error. The structure
+  is checked before anything runs.
+- Brace expansion ([ADR-0015](docs/decisions/0015-brace-expansion.md)):
+  `{a,b,c}`, nested groups and several groups per word, and sequences `{1..5}`,
+  `{a..e}`, `{01..10}`, `{1..10..3}`. Quotes and `${NAME}` keep braces literal.
+- `mkdir` and `touch` accept several targets and keep going after a failure, and
+  `mkdir -p` creates the missing parents (and accepts an existing directory).
+  They accepted a single argument before, which made them unusable with `*` and
+  `{...}`.
+
+### Changed
+
+- `Ctrl+C` during a line now also abandons the commands that were still to run on
+  that line, as in other shells.
+
+### Fixed
+
+- `cat` accepts several files (it read only the first one, so `cat *.txt` was
+  wrong), prints those it can read and names each one it cannot, and `-` stands
+  for the input of the pipeline: `echo x | cat a.txt - b.txt`.
+
 ## [1.5.0] - 2026-11-21
 
 ### Added
