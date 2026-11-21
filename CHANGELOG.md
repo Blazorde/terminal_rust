@@ -5,6 +5,13 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Changed
+
+- The release workflow retries the downloads of the bundled runtime (Nano sources and
+  binary, Git licenses) up to 6 times on Linux and macOS and 8 times on Windows, 20
+  seconds apart. A host that was unreachable for a minute made the last releases fail and
+  need a manual re-run.
+
 ## [1.9.1] - 2026-11-22
 
 ### Fixed
