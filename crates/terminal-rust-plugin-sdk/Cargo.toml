@@ -2,6 +2,7 @@
 name = "terminal-rust-plugin-sdk"
 version = "1.2.2"
 edition = "2024"
+rust-version = "1.95"
 description = "Runtime-independent DTOs for Terminal Rust plugins"
 license = "MIT"
 repository = "https://github.com/Blazorde/terminal_rust"
