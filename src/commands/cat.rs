@@ -15,7 +15,11 @@ pub fn cat(target: Option<&str>) -> Result<String, CatError> {
         return Err(CatError::NotAFile(path));
     }
 
-    fs::read_to_string(&path).map_err(|source| CatError::ReadFailed { path, source })
+    // Bytes that are not valid UTF-8 (a binary file, a Latin-1 text) are shown as
+    // U+FFFD instead of making the whole command fail.
+    fs::read(&path)
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        .map_err(|source| CatError::ReadFailed { path, source })
 }
 
 fn resolve_target(target: Option<&str>) -> Result<PathBuf, CatError> {
@@ -38,6 +42,18 @@ mod tests {
             .expect("cat should read file content");
 
         assert_eq!(content, "hello");
+        fs::remove_file(path).expect("test file should be removed");
+    }
+
+    #[test]
+    fn cat_shows_a_file_that_is_not_valid_utf8() {
+        let path = temp_path("cat", "binary");
+        fs::write(&path, b"caf\xe9 ok\xff\n").expect("test file should be written");
+
+        let content = cat(Some(path.to_str().expect("test path should be UTF-8")))
+            .expect("cat should not fail on invalid UTF-8");
+
+        assert_eq!(content, "caf\u{fffd} ok\u{fffd}\n");
         fs::remove_file(path).expect("test file should be removed");
     }
 
