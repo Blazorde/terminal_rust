@@ -61,6 +61,9 @@ jobs:
       - name: Build desktop frontend
         run: npm run build --prefix desktop
 
+      - name: Run desktop frontend tests
+        run: npm test --prefix desktop
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
