@@ -474,18 +474,22 @@ fn interactive_pty_keeps_history_directory_changes_and_long_line_edits() {
         &mut cursor_answered,
     );
 
+    // On Unix the command output starts a line, whereas the line being edited
+    // is prefixed by "echo ", so the text alone is not proof that it has run.
+    let output_marker = if cfg!(windows) {
+        expected.clone()
+    } else {
+        format!("\n{expected}")
+    };
     wait_for_prompt_after(
         &receiver,
         &mut output,
-        &expected,
+        &output_marker,
         writer.as_mut(),
         &mut cursor_answered,
     );
-    writer
-        .write_all(b"exit\r")
-        .and_then(|()| writer.flush())
-        .expect("interactive PTY should exit");
     let deadline = Instant::now() + Duration::from_secs(10);
+    let mut next_exit = Instant::now();
     let status = loop {
         if let Some(status) = child.try_wait().expect("shell status should be readable") {
             break status;
@@ -496,6 +500,13 @@ fn interactive_pty_keeps_history_directory_changes_and_long_line_edits() {
                 "interactive PTY did not exit: {}",
                 String::from_utf8_lossy(&output)
             );
+        }
+        if Instant::now() >= next_exit {
+            // Input typed while the line editor re-arms the terminal is
+            // discarded, so type `exit` again until the shell has quit. The
+            // shell may quit between the status check and the write.
+            let _ = writer.write_all(b"exit\r").and_then(|()| writer.flush());
+            next_exit = Instant::now() + Duration::from_millis(500);
         }
         thread::sleep(Duration::from_millis(20));
     };
