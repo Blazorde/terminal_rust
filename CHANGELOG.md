@@ -7,6 +7,10 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Recursive patterns (ADR-0020): a path segment `**` goes through any number of
+  directories, so `ls **/*.rs` and `for f in **/*.log` work, and a trailing `**` lists
+  everything below. Hidden directories are skipped, links are not followed, and the
+  walk is bounded (32 levels, 50 000 paths). A lone `**` used to act like `*`.
 - `alias name=value`, the form most people type (`alias ll="ls -la"`), next to
   `alias name command...`; one `alias` can define several names, and the value is
   read like a command line.

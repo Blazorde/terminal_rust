@@ -2966,3 +2966,52 @@ fn pwd_accepts_the_logical_and_physical_options_and_refuses_others() {
     assert!(errors.contains("pwd: invalid option: -x"), "{errors}");
     assert!(errors.contains("too many arguments"), "{errors}");
 }
+
+#[test]
+fn a_double_star_matches_files_at_any_depth() {
+    let directory = TestDirectory::new("globstar");
+    for folder in ["sub/deeper", ".hidden"] {
+        fs::create_dir_all(directory.path().join(folder)).expect("fixture");
+    }
+    for file in [
+        "a.rs",
+        "sub/b.rs",
+        "sub/deeper/c.rs",
+        ".hidden/x.rs",
+        "sub/note.txt",
+    ] {
+        fs::write(directory.path().join(file), "").expect("fixture");
+    }
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo **/*.rs",
+            "echo sub/**/*.rs",
+            "for f in **/*.rs; do echo item=$f; done",
+            "echo **/*.zip",
+            "echo \"**/*.rs\"",
+            "cat **/*.txt",
+            "echo sub/**",
+        ],
+    );
+
+    for expected in [
+        // Sorted, every depth, no hidden directory.
+        "a.rs sub/b.rs sub/deeper/c.rs\n",
+        "sub/b.rs sub/deeper/c.rs\n",
+        "item=a.rs\nitem=sub/b.rs\nitem=sub/deeper/c.rs\n",
+        // No match stays as written, and quotes keep the stars literal.
+        "**/*.zip\n",
+        "**/*.rs\n",
+        // A trailing `**` lists everything below.
+        "sub/b.rs sub/deeper sub/deeper/c.rs sub/note.txt\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains(".hidden"), "{printed}");
+    assert!(errors.is_empty(), "{errors}");
+}
