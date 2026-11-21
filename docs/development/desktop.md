@@ -6,7 +6,7 @@ does not reimplement input, history, commands or prompt behavior.
 
 ## Prerequisites
 
-- stable Rust;
+- Rust 1.95 or newer (`rust-version` in `Cargo.toml`: the `sysinfo` dependency needs it);
 - Node.js 24 and npm;
 - Tauri 2 platform dependencies.
 

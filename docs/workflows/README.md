@@ -47,6 +47,12 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
 
+The workflows are reproducible: every action is pinned to a commit SHA (Dependabot
+proposes the updates), the Rust toolchain is fixed to 1.95.0, the same version as
+the validation image used by `scripts/ci-local.sh`, and cargo runs with
+`--locked` so `Cargo.lock` decides the dependency versions. Raise the toolchain
+and `rust-version` together.
+
 Open the PR into `develop`. Stable promotion uses a `develop` to `main` PR.
 Required checks should be bypassed only under the documented maintainer policy,
 with local evidence recorded when hosted jobs cannot execute: run

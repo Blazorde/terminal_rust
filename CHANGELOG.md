@@ -5,6 +5,13 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Changed
+
+- Builds are reproducible: the crates declare `rust-version = "1.95"`, the lowest
+  version that compiles (the `sysinfo` dependency requires it), the CI uses the
+  fixed toolchain 1.95.0 instead of `stable`, cargo runs with `--locked`, and
+  every GitHub Action is pinned to a commit SHA.
+
 ### Fixed
 
 - Desktop: `Ctrl+W` (delete a word) and `Ctrl+T` (swap two characters) no longer
