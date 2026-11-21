@@ -66,7 +66,7 @@ process environment.
   unique to the test.
 - No word splitting and no globbing: `echo $LIST` passes one argument.
 - A command that fails inside the shell is always `1`.
-- `NAME=value command` was added in 1.3.1: the variables are exported for that
+- `NAME=value command` was added after 1.3.0: the variables are exported for that
   command only (a program or a pipeline stage) and the previous values are
   restored. A built-in command sees them through the same table. `exit [code]`
   leaves with that code, or with the last status. File name patterns were added
