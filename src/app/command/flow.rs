@@ -1,4 +1,5 @@
-//! Control flow: `for`, `while`, `until` and `if` (see ADR-0016).
+//! Control flow: `for`, `while`, `until`, `if`, `case`, groups and function
+//! definitions (see ADR-0016 and ADR-0021).
 //!
 //! The segments of a line (`split_chain` makes one per command, and one per
 //! keyword that starts a part of a compound command) are turned into a tree
@@ -11,8 +12,9 @@ use crate::commands::external;
 use crate::render;
 use crate::utils::shell_env;
 
-const KEYWORDS: [&str; 10] = [
-    "for", "while", "until", "if", "then", "elif", "else", "fi", "do", "done",
+const KEYWORDS: [&str; 15] = [
+    "for", "while", "until", "if", "then", "elif", "else", "fi", "do", "done", "case", "esac",
+    ";;", "{", "}",
 ];
 
 /// What `break` and `continue` leave for the loop that runs the command.
@@ -46,6 +48,24 @@ pub(super) enum Node {
         branches: Vec<(Vec<Node>, Vec<Node>)>,
         otherwise: Vec<Node>,
     },
+    Case {
+        connector: Connector,
+        /// The raw word that is matched, expanded when the `case` runs.
+        word: String,
+        /// For each arm, its raw patterns and its commands.
+        arms: Vec<(Vec<String>, Vec<Node>)>,
+    },
+    /// `{ LIST; }`: commands run together.
+    Group {
+        connector: Connector,
+        body: Vec<Node>,
+    },
+    /// `name() { LIST; }`: running it records the function.
+    Function {
+        connector: Connector,
+        name: String,
+        body: super::functions::Body,
+    },
 }
 
 impl Node {
@@ -54,7 +74,10 @@ impl Node {
             Self::Simple { segment, .. } => segment.connector,
             Self::For { connector, .. }
             | Self::While { connector, .. }
-            | Self::If { connector, .. } => *connector,
+            | Self::If { connector, .. }
+            | Self::Case { connector, .. }
+            | Self::Group { connector, .. }
+            | Self::Function { connector, .. } => *connector,
         }
     }
 }
@@ -75,26 +98,263 @@ fn keyword(text: &str) -> Option<(&'static str, &str)> {
         .map(|candidate| (*candidate, trimmed[end..].trim_start()))
 }
 
-/// Whether `line` opens a `for`, `while`, `until` or `if` that is not closed yet:
-/// the input must go on over the next line.
+/// Whether `line` opens a `for`, `while`, `until`, `if` or `case` that is not
+/// closed yet: the input must go on over the next line.
 pub(super) fn is_incomplete(line: &str) -> bool {
     let Ok(segments) = split_chain(line) else {
         return false;
     };
     let mut depth = 0_i32;
+    // How many `case` are open: only inside one does a segment start with `pattern)`.
+    let mut cases = 0_i32;
+    // After `name()` on a line of its own, the `{` is still to come.
+    let mut awaiting_brace = false;
     for segment in segments {
         let mut text = segment.text.as_str();
-        // `do for ...` and `then if ...` open a block in the same command.
-        while let Some(("do" | "then" | "else", rest)) = keyword(text) {
-            text = rest;
+        if awaiting_brace {
+            awaiting_brace = false;
         }
-        match keyword(text) {
-            Some(("for" | "while" | "until" | "if", _)) => depth += 1,
-            Some(("done" | "fi", _)) => depth -= 1,
+        // A segment can hold several openers in a row: `case x in a) for ...`.
+        loop {
+            if cases > 0
+                && keyword(text).is_none()
+                && let Some((_, rest)) = split_arm(text)
+            {
+                text = rest;
+            }
+            // `do for ...` and `then if ...` open a block in the same command.
+            while let Some(("do" | "then" | "else", rest)) = keyword(text) {
+                text = rest;
+            }
+            // `name() {` opens a block like `{` does.
+            if keyword(text).is_none()
+                && let Ok(Some(header)) = function_header(text)
+            {
+                if header.opens {
+                    depth += 1;
+                    if !header.rest.is_empty() {
+                        text = header.rest;
+                        continue;
+                    }
+                } else {
+                    awaiting_brace = true;
+                }
+                break;
+            }
+            match keyword(text) {
+                Some(("for" | "while" | "until" | "if", _)) => depth += 1,
+                Some(("{", rest)) => {
+                    depth += 1;
+                    if !rest.is_empty() {
+                        text = rest;
+                        continue;
+                    }
+                }
+                Some(("case", rest)) => {
+                    depth += 1;
+                    cases += 1;
+                    // What follows `case WORD in` may be the first arm.
+                    let (_, after_word) = split_word(rest);
+                    if let ("in", arm) = split_first_word(after_word)
+                        && !arm.is_empty()
+                    {
+                        text = arm;
+                        continue;
+                    }
+                }
+                Some(("done" | "fi" | "}", _)) => depth -= 1,
+                Some(("esac", _)) => {
+                    depth -= 1;
+                    cases -= 1;
+                }
+                _ => {}
+            }
+            break;
+        }
+    }
+    depth > 0 || awaiting_brace
+}
+
+/// A function definition at the start of a command: `name() {`, `name ()`,
+/// `function name {` or `function name()`.
+struct FunctionHeader<'a> {
+    name: String,
+    /// Whether the `{` that opens the body is already there; if not, it is the
+    /// next command.
+    opens: bool,
+    /// What follows the `{` in the same command.
+    rest: &'a str,
+}
+
+/// Whether a function name is allowed: letters, digits, `_` and `-`, not starting
+/// with a digit or a dash, and no keyword.
+fn is_function_name(name: &str) -> bool {
+    name.chars()
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+        && name
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
+        && !KEYWORDS.contains(&name)
+}
+
+/// Read a function header from the start of `text`. `Ok(None)` when it is not
+/// one, an error when it starts like one and is wrong.
+fn function_header(text: &str) -> Result<Option<FunctionHeader<'_>>, String> {
+    let text = text.trim_start();
+    let long_form = text
+        .strip_prefix("function")
+        .filter(|rest| rest.starts_with(char::is_whitespace))
+        .map(str::trim_start);
+    let (name, after) = match long_form {
+        Some(rest) => {
+            let end = rest
+                .find(|character: char| character.is_whitespace() || character == '(')
+                .unwrap_or(rest.len());
+            let (name, mut after) = (&rest[..end], rest[end..].trim_start());
+            if let Some(inner) = after.strip_prefix('(') {
+                let Some(closed) = inner.trim_start().strip_prefix(')') else {
+                    return Err("syntax error: expected ')' after 'function NAME ('".to_string());
+                };
+                after = closed.trim_start();
+            }
+            if !is_function_name(name) {
+                return Err(format!("function: '{name}' is not a valid function name"));
+            }
+            (name, after)
+        }
+        None => {
+            let end = text
+                .find(|character: char| {
+                    !(character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
+                })
+                .unwrap_or(text.len());
+            let (name, after) = (&text[..end], text[end..].trim_start());
+            let Some(inner) = after.strip_prefix('(') else {
+                return Ok(None);
+            };
+            let Some(closed) = inner.trim_start().strip_prefix(')') else {
+                return Ok(None);
+            };
+            if !is_function_name(name) {
+                return if name.is_empty() {
+                    Ok(None)
+                } else {
+                    Err(format!(
+                        "syntax error: '{name}' is not a valid function name"
+                    ))
+                };
+            }
+            (name, closed.trim_start())
+        }
+    };
+    if after.is_empty() {
+        return Ok(Some(FunctionHeader {
+            name: name.to_string(),
+            opens: false,
+            rest: "",
+        }));
+    }
+    match after.strip_prefix('{') {
+        Some(rest) if rest.is_empty() || rest.starts_with(char::is_whitespace) => {
+            Ok(Some(FunctionHeader {
+                name: name.to_string(),
+                opens: true,
+                rest: rest.trim_start(),
+            }))
+        }
+        _ => Err(format!("syntax error: expected '{{' after '{name}()'")),
+    }
+}
+
+/// The first word of `text`, quotes and `$(...)` included, and what follows it.
+fn split_word(text: &str) -> (&str, &str) {
+    let text = text.trim_start();
+    let mut quote: Option<char> = None;
+    let mut substitution = 0_usize;
+    let mut previous = '\0';
+    let mut escaped = false;
+    for (index, character) in text.char_indices() {
+        if escaped {
+            escaped = false;
+            previous = character;
+            continue;
+        }
+        match (quote, character) {
+            (_, '\\') if quote != Some('\'') => escaped = true,
+            (Some(open), close) if open == close => quote = None,
+            (Some(_), _) => {}
+            (None, '\'' | '"') => quote = Some(character),
+            (None, '(') if previous == '$' || substitution > 0 => substitution += 1,
+            (None, ')') if substitution > 0 => substitution -= 1,
+            (None, blank) if blank.is_whitespace() && substitution == 0 => {
+                return (&text[..index], text[index..].trim_start());
+            }
+            _ => {}
+        }
+        previous = character;
+    }
+    (text, "")
+}
+
+/// An arm of a `case`: the patterns before the first `)` that is not quoted, and
+/// what follows it. A `(` before the patterns is allowed and dropped.
+fn split_arm(text: &str) -> Option<(&str, &str)> {
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for (index, character) in text.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match (quote, character) {
+            (_, '\\') if quote != Some('\'') => escaped = true,
+            (Some(open), close) if open == close => quote = None,
+            (Some(_), _) => {}
+            (None, '\'' | '"') => quote = Some(character),
+            (None, ')') => {
+                let patterns = text[..index].trim();
+                let patterns = patterns.strip_prefix('(').unwrap_or(patterns).trim();
+                return Some((patterns, text[index + 1..].trim_start()));
+            }
             _ => {}
         }
     }
-    depth > 0
+    None
+}
+
+/// The patterns of an arm, split at the `|` that are not quoted.
+fn split_patterns(patterns: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for character in patterns.chars() {
+        if escaped {
+            escaped = false;
+            current.push(character);
+            continue;
+        }
+        match (quote, character) {
+            (_, '\\') if quote != Some('\'') => {
+                escaped = true;
+                current.push(character);
+            }
+            (Some(open), close) if open == close => {
+                quote = None;
+                current.push(character);
+            }
+            (Some(_), _) => current.push(character),
+            (None, '\'' | '"') => {
+                quote = Some(character);
+                current.push(character);
+            }
+            (None, '|') => parts.push(std::mem::take(&mut current).trim().to_string()),
+            (None, _) => current.push(character),
+        }
+    }
+    parts.push(current.trim().to_string());
+    parts
 }
 
 struct Parser {
@@ -167,8 +427,16 @@ impl Parser {
                 Some(("while", _)) => nodes.push(self.while_loop(false)?),
                 Some(("until", _)) => nodes.push(self.while_loop(true)?),
                 Some(("if", _)) => nodes.push(self.conditional()?),
+                Some(("case", _)) => nodes.push(self.case_statement()?),
+                Some(("{", _)) => nodes.push(self.group()?),
                 Some((word, _)) => return Err(unexpected(word)),
                 None => {
+                    if let Some(header) = function_header(&self.segments[self.position].text)? {
+                        let (name, opens, rest) =
+                            (header.name, header.opens, header.rest.to_string());
+                        nodes.push(self.function_definition(name, opens, rest)?);
+                        continue;
+                    }
                     let segment = Segment {
                         connector: self.segments[self.position].connector,
                         text: self.segments[self.position].text.clone(),
@@ -252,6 +520,106 @@ impl Parser {
         })
     }
 
+    /// `{ LIST; }`.
+    fn group(&mut self) -> Result<Node, String> {
+        let connector = self.segments[self.position].connector;
+        self.consume_keyword();
+        let body = self.list(&["}"])?;
+        self.finish("}")?;
+        Ok(Node::Group { connector, body })
+    }
+
+    /// `name() { LIST; }`: the header was read, and `opens` says whether the `{` is
+    /// already consumed (`rest` is what followed it) or comes next.
+    fn function_definition(
+        &mut self,
+        name: String,
+        opens: bool,
+        rest: String,
+    ) -> Result<Node, String> {
+        let connector = self.segments[self.position].connector;
+        if opens {
+            if rest.is_empty() {
+                self.position += 1;
+            } else {
+                self.segments[self.position].text = rest;
+            }
+        } else {
+            self.position += 1;
+            self.expect("{")?;
+        }
+        let body = self.list(&["}"])?;
+        self.finish("}")?;
+        Ok(Node::Function {
+            connector,
+            name,
+            body: std::sync::Arc::new(body),
+        })
+    }
+
+    /// `case WORD in PATTERN) LIST ;; ... esac`.
+    fn case_statement(&mut self) -> Result<Node, String> {
+        let connector = self.segments[self.position].connector;
+        let (_, header) = self
+            .current_keyword()
+            .ok_or_else(|| "syntax error: expected 'case'".to_string())?;
+        let (word, after) = split_word(&header);
+        if word.is_empty() {
+            return Err("syntax error: expected a word after 'case'".to_string());
+        }
+        let (in_word, rest) = split_first_word(after);
+        if in_word != "in" {
+            return Err("syntax error: expected 'in' after 'case WORD'".to_string());
+        }
+        let (word, rest) = (word.to_string(), rest.to_string());
+        if rest.is_empty() {
+            self.position += 1;
+        } else {
+            self.segments[self.position].text = rest;
+        }
+
+        let mut arms = Vec::new();
+        loop {
+            match self.current_keyword() {
+                Some(("esac", _)) => {
+                    self.finish("esac")?;
+                    break;
+                }
+                // An empty arm, or a stray `;;` right after another.
+                Some((";;", _)) => self.position += 1,
+                Some((other, _)) => return Err(unexpected(other)),
+                None if self.position >= self.segments.len() => {
+                    return Err("syntax error: expected 'esac'".to_string());
+                }
+                None => {
+                    let text = self.segments[self.position].text.clone();
+                    let Some((patterns, rest)) = split_arm(&text) else {
+                        return Err("syntax error: expected 'PATTERN)' in 'case'".to_string());
+                    };
+                    let patterns = split_patterns(patterns);
+                    if patterns.iter().any(String::is_empty) {
+                        return Err("syntax error: empty pattern in 'case'".to_string());
+                    }
+                    if rest.is_empty() {
+                        self.position += 1;
+                    } else {
+                        self.segments[self.position].text = rest.to_string();
+                    }
+                    let body = self.list(&[";;", "esac"])?;
+                    arms.push((patterns, body));
+                    if matches!(self.current_keyword(), Some((";;", _))) {
+                        self.position += 1;
+                    }
+                }
+            }
+        }
+        Ok(Node::Case {
+            connector,
+            word,
+            arms,
+        })
+    }
+
     /// The keyword that closes a compound command, with nothing after it.
     fn finish(&mut self, wanted: &'static str) -> Result<(), String> {
         match self.current_keyword() {
@@ -277,7 +645,7 @@ fn interrupted_result() -> CommandResult {
 pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult {
     let mut last = CommandResult::Continue;
     for node in nodes {
-        if state.loop_signal.is_some() {
+        if state.loop_signal.is_some() || state.returning.is_some() {
             break;
         }
         if external::interrupt_requested() {
@@ -317,6 +685,15 @@ pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult
                 otherwise,
                 ..
             } => run_if(branches, otherwise, state),
+            Node::Case { word, arms, .. } => run_case(word, arms, state),
+            Node::Group { body, .. } => run_nodes(body, state),
+            Node::Function { name, body, .. } => {
+                state
+                    .functions
+                    .insert(name.clone(), std::sync::Arc::clone(body));
+                state.record_status(false);
+                CommandResult::Continue
+            }
         };
         if last == CommandResult::Exit {
             break;
@@ -404,7 +781,8 @@ fn run_while(
 /// Whether the loop is over after a turn: `break`, or `exit`. `continue` is
 /// consumed here, so the next turn starts clean.
 fn finished(last: &CommandResult, state: &mut ShellState) -> bool {
-    if *last == CommandResult::Exit {
+    // `return` ends every loop of the function; the flag is left for the call.
+    if *last == CommandResult::Exit || state.returning.is_some() {
         return true;
     }
     matches!(state.loop_signal.take(), Some(LoopSignal::Break))
@@ -449,6 +827,31 @@ fn run_if(
     run_nodes(otherwise, state)
 }
 
+fn run_case(
+    word: &str,
+    arms: &[(Vec<String>, Vec<Node>)],
+    state: &mut ShellState,
+) -> CommandResult {
+    let subject = match super::expand_case_word(word, state) {
+        Ok(subject) => subject,
+        Err(error) => return CommandResult::Error(error),
+    };
+    for (patterns, body) in arms {
+        for pattern in patterns {
+            let pattern = match super::expand_case_pattern(pattern, state) {
+                Ok(pattern) => pattern,
+                Err(error) => return CommandResult::Error(error),
+            };
+            if crate::utils::glob::matches_text(&pattern, &subject) {
+                return run_nodes(body, state);
+            }
+        }
+    }
+    // No arm matched: the status is 0.
+    state.record_status(false);
+    CommandResult::Continue
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -491,6 +894,17 @@ mod tests {
                         })
                         .collect();
                     format!("if {} else ({})", parts.join(" elif "), shape(otherwise))
+                }
+                Node::Group { body, .. } => format!("group ({})", shape(body)),
+                Node::Function { name, body, .. } => format!("function {name} ({})", shape(body)),
+                Node::Case { word, arms, .. } => {
+                    let parts: Vec<String> = arms
+                        .iter()
+                        .map(|(patterns, body)| {
+                            format!("{} => ({})", patterns.join("|"), shape(body))
+                        })
+                        .collect();
+                    format!("case {word} [{}]", parts.join("; "))
                 }
             })
             .collect::<Vec<_>>()
@@ -594,6 +1008,171 @@ mod tests {
                 .unwrap_or_else(|| panic!("{line} should fail"));
             assert!(error.contains(expected), "{line}: {error}");
         }
+    }
+
+    #[test]
+    fn a_case_is_parsed_with_its_arms_on_one_line_or_several() {
+        assert_eq!(
+            shape(&tree("case $x in a) echo A;; b|c) echo B;; *) echo other;; esac").unwrap()),
+            "case $x [a => (echo A); b|c => (echo B); * => (echo other)]"
+        );
+        assert_eq!(
+            shape(&tree("case $x in\n a)\n echo A\n echo A2\n ;;\n *) echo other\nesac").unwrap()),
+            "case $x [a => (echo A ; echo A2); * => (echo other)]"
+        );
+        // The last `;;` is optional, an arm may be empty, and `(` may open the patterns.
+        assert_eq!(
+            shape(&tree("case x in (a) echo A ;; b) ;; esac").unwrap()),
+            "case x [a => (echo A); b => ()]"
+        );
+        assert_eq!(shape(&tree("case x in esac").unwrap()), "case x []");
+    }
+
+    #[test]
+    fn a_case_nests_and_holds_other_blocks() {
+        assert_eq!(
+            shape(
+                &tree("case a in a) for i in 1 2; do echo $i; done ;; b) if true; then echo y; fi ;; esac")
+                    .unwrap()
+            ),
+            "case a [a => (for i in [1 2] do (echo $i)); b => (if (true) then (echo y) else ())]"
+        );
+        assert_eq!(
+            shape(&tree("case a in a) case b in b) echo deep ;; esac ;; esac").unwrap()),
+            "case a [a => (case b [b => (echo deep)])]"
+        );
+        // A quoted word with blanks, and a substitution, are one word.
+        assert_eq!(
+            shape(&tree("case \"a b\" in *) echo x;; esac").unwrap()),
+            "case \"a b\" [* => (echo x)]"
+        );
+        assert_eq!(
+            shape(&tree("case $(echo a b) in *) echo x;; esac").unwrap()),
+            "case $(echo a b) [* => (echo x)]"
+        );
+        // A `)` inside quotes does not end the patterns.
+        assert_eq!(
+            shape(&tree("case x in \")\") echo p;; esac").unwrap()),
+            "case x [\")\" => (echo p)]"
+        );
+    }
+
+    #[test]
+    fn a_malformed_case_is_rejected() {
+        for line in [
+            "case x esac",
+            "case in a) echo;; esac",
+            "case x in a) echo A",
+            "case x in echo A;; esac",
+            "case x in a|) echo;; esac",
+            "case x in |a) echo;; esac",
+            "echo a ;; echo b",
+            "esac",
+            "case x in a) echo;; fi esac",
+        ] {
+            assert!(tree(line).is_err(), "{line:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn an_unfinished_case_asks_for_more_input() {
+        assert!(is_incomplete("case x in"));
+        assert!(is_incomplete("case x in\n a) echo A ;;"));
+        assert!(is_incomplete("case x in a) for i in 1; do echo $i"));
+        assert!(is_incomplete("case x in a) if true; then echo y"));
+        assert!(!is_incomplete("case x in a) echo A ;; esac"));
+        assert!(!is_incomplete(
+            "case x in a) for i in 1; do echo $i; done ;; esac"
+        ));
+        assert!(is_incomplete(
+            "for i in 1; do case $i in 1) echo one ;; esac"
+        ));
+        assert!(!is_incomplete("echo done"));
+        // A block opened in an arm and never closed keeps the input open even
+        // when the `esac` is there.
+        assert!(is_incomplete("case x in a) for i in 1; do echo $i ;; esac"));
+        assert!(is_incomplete("case x in a) if true; then echo y ;; esac"));
+    }
+
+    #[test]
+    fn a_function_is_parsed_in_all_its_forms() {
+        let expected = "function greet (echo hi)";
+        for line in [
+            "greet() { echo hi; }",
+            "greet () { echo hi; }",
+            "greet(){ echo hi; }",
+            "function greet { echo hi; }",
+            "function greet() { echo hi; }",
+            "function greet ( ) { echo hi; }",
+            "greet()\n{\n  echo hi\n}",
+            "greet() {\n  echo hi\n}",
+            "function greet\n{\n echo hi\n}",
+        ] {
+            assert_eq!(shape(&tree(line).unwrap()), expected, "{line:?}");
+        }
+        assert_eq!(
+            shape(&tree("my-func_2() { echo a; echo b; }").unwrap()),
+            "function my-func_2 (echo a ; echo b)"
+        );
+        assert_eq!(shape(&tree("f() { }").unwrap()), "function f ()");
+    }
+
+    #[test]
+    fn a_group_and_nested_blocks_are_parsed() {
+        assert_eq!(
+            shape(&tree("{ echo a; echo b; } && echo c").unwrap()),
+            "group (echo a ; echo b) ; echo c"
+        );
+        assert_eq!(
+            shape(&tree("f() { g() { echo inner; }; g; }").unwrap()),
+            "function f (function g (echo inner) ; g)"
+        );
+        assert_eq!(
+            shape(&tree("f() { for i in 1 2; do case $i in 1) echo one;; esac; done; }").unwrap()),
+            "function f (for i in [1 2] do (case $i [1 => (echo one)]))"
+        );
+        // A word that only looks like a header stays a command.
+        assert_eq!(shape(&tree("foo(bar)").unwrap()), "foo(bar)");
+        // `echo ( )` is a header with no body, as in other shells: an error.
+        assert!(tree("echo ( )").is_err());
+    }
+
+    #[test]
+    fn a_malformed_function_is_rejected() {
+        for line in [
+            "f() echo hi",
+            "f() { echo hi",
+            "f()",
+            "function 1bad { echo; }",
+            "function for { echo; }",
+            "function { echo; }",
+            "1f() { echo; }",
+            "for() { echo; }",
+            "f() { echo; } extra",
+            "function f ( { echo; }",
+            "}",
+            "{ echo",
+            "{echo hi; }",
+        ] {
+            assert!(tree(line).is_err(), "{line:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn an_unfinished_function_or_group_asks_for_more_input() {
+        assert!(is_incomplete("f() {"));
+        assert!(is_incomplete("f() { echo hi"));
+        assert!(is_incomplete("function f {"));
+        assert!(is_incomplete("{ echo hi"));
+        assert!(is_incomplete("f()"));
+        assert!(is_incomplete("f()\n{"));
+        assert!(is_incomplete("f() { for i in 1; do echo $i; done"));
+        assert!(is_incomplete("f() { if true; then echo y; fi"));
+        assert!(!is_incomplete("f() { echo hi; }"));
+        assert!(!is_incomplete("f()\n{\n echo hi\n}"));
+        assert!(!is_incomplete("{ echo hi; }"));
+        assert!(!is_incomplete("f() { g() { echo x; }; }"));
+        assert!(!is_incomplete("echo }"));
     }
 
     #[test]

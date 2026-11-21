@@ -208,7 +208,27 @@ impl Completer for ShellHelper {
             return Ok((command_start, candidates));
         }
 
-        self.filename_completer.complete(line, pos, context)
+        // `git ch<Tab>` and `git checkout fe<Tab>`: subcommands and references.
+        if let Ok(directory) = std::env::current_dir()
+            && let Some(candidates) = super::git_completion::complete(
+                &before_cursor[..command_start],
+                current_word,
+                &directory,
+            )
+        {
+            return Ok((command_start, candidates));
+        }
+
+        let (start, mut candidates) = self.filename_completer.complete(line, pos, context)?;
+        // Hidden files are offered only when the name being typed starts with a dot.
+        let typed_name = line[start..pos]
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or_default();
+        if !typed_name.starts_with('.') {
+            candidates.retain(|candidate| !candidate.display.starts_with('.'));
+        }
+        Ok((start, candidates))
     }
 }
 
@@ -532,6 +552,92 @@ mod tests {
             complete_at(&helper, "echo hi && gz"),
             (11, vec!["gzip ".to_string()])
         );
+    }
+
+    #[test]
+    fn git_subcommands_and_references_complete_through_the_helper() {
+        let guard = crate::test_support::cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should follow the Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "terminal-rust-gitcompletion-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(root.join(".git/refs/heads")).expect("fixture");
+        fs::write(root.join(".git/refs/heads/feature-login"), "0\n").expect("fixture");
+        fs::write(root.join("feature-file.txt"), "x").expect("fixture");
+        let original = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(&root).expect("enter the fixture");
+
+        let helper = helper_with_programs(&["git", "echo"], &[]);
+        let subcommand = complete_at(&helper, "git sta");
+        let reference = complete_at(&helper, "git checkout feature-l");
+        let file = complete_at(&helper, "git add feature-f");
+        let other = complete_at(&helper, "echo feature-l");
+
+        // Leave the fixture and release the lock before asserting.
+        std::env::set_current_dir(original).expect("restore cwd");
+        fs::remove_dir_all(root).expect("fixture should be removed");
+        drop(guard);
+
+        assert_eq!(
+            subcommand,
+            (4, vec!["stash ".to_string(), "status ".to_string()])
+        );
+        assert_eq!(reference, (13, vec!["feature-login ".to_string()]));
+        // `git add` takes files, and so does any other command.
+        assert_eq!(file.1, vec!["feature-file.txt".to_string()]);
+        assert!(other.1.is_empty(), "{other:?}");
+    }
+
+    #[test]
+    fn hidden_files_are_offered_only_after_a_dot() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should follow the Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "terminal-rust-hidden-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(root.join(".config")).expect("fixture");
+        fs::write(root.join(".hidden"), "x").expect("fixture");
+        fs::write(root.join("visible.txt"), "x").expect("fixture");
+        let helper = helper_with_programs(&["cat"], &[]);
+        let base = format!("{}{}", root.display(), MAIN_SEPARATOR);
+        let names =
+            |typed: &str| -> Vec<String> { complete_at(&helper, &format!("cat {base}{typed}")).1 };
+
+        // Nothing typed: the visible file only.
+        let all = names("");
+        assert!(
+            all.iter().any(|name| name.ends_with("visible.txt")),
+            "{all:?}"
+        );
+        assert!(!all.iter().any(|name| name.contains(".hidden")), "{all:?}");
+        assert!(!all.iter().any(|name| name.contains(".config")), "{all:?}");
+        // A dot asks for them, and a prefix of a visible name still works.
+        let dotted = names(".");
+        assert!(
+            dotted.iter().any(|name| name.contains(".hidden")),
+            "{dotted:?}"
+        );
+        assert!(
+            dotted.iter().any(|name| name.contains(".config")),
+            "{dotted:?}"
+        );
+        assert!(
+            !dotted.iter().any(|name| name.ends_with("visible.txt")),
+            "{dotted:?}"
+        );
+        let visible = names("vis");
+        assert_eq!(visible.len(), 1, "{visible:?}");
+
+        fs::remove_dir_all(root).expect("fixture should be removed");
     }
 
     #[test]

@@ -5,6 +5,43 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-21
+
+### Added
+
+- Functions and positional parameters (ADR-0021): `name() { …; }`, `function name { … }`
+  and `{ …; }` groups; `$1`…`$9`, `${1:-x}`, `$#`, `$*`, `$@` and `"$@"` (one word per
+  argument); `shift`, `return [N]` and `local`; recursion limited to 64 calls;
+  `unset -f`, `type` and completion know functions; `source file args` passes `$1`….
+  `$(( … ))` now runs substitutions inside the expression first, and substitutions may
+  nest 24 deep (they were 8).
+- `case WORD in PATTERN|PATTERN) …;; … esac` (ADR-0016 amended): patterns with `*`
+  `?` `[...]`, several patterns per arm, arms on one line or several, nesting, and the
+  `>> ` prompt until `esac`. A pattern also matches `/` and a leading `.`; quoted or
+  variable patterns are literal.
+- Recursive patterns (ADR-0020): a path segment `**` goes through any number of
+  directories, so `ls **/*.rs` and `for f in **/*.log` work, and a trailing `**` lists
+  everything below. Hidden directories are skipped, links are not followed, and the
+  walk is bounded (32 levels, 50 000 paths). A lone `**` used to act like `*`.
+- `alias name=value`, the form most people type (`alias ll="ls -la"`), next to
+  `alias name command...`; one `alias` can define several names, and the value is
+  read like a command line.
+- `echo` reads escapes with `-e` (`\n`, `\t`, `\e`, `\xHH`, `\0NNN`, `\uHHHH`,
+  `\c`), accepts grouped options (`-ne`) and `-E`, and `pwd` accepts `-L` and `-P`.
+- Git completion (ADR-0019): `Tab` after `git ` completes the subcommands, and after
+  `checkout`, `switch`, `merge`, `rebase`, `branch`, `diff`, `log`, `push`, `pull`
+  and a few more it completes branches, remote branches and tags, read from the
+  repository files without starting Git.
+
+### Fixed
+
+- `PWD` and `OLDPWD` follow `cd`. They kept the value of the parent process, so
+  `$PWD` and the programs the shell started saw a stale directory after a `cd`. A
+  stale `PWD` is replaced at start-up, and `cd -` now prints the directory it goes
+  to.
+- File name completion no longer offers hidden entries (`.git/`, `.cache`) unless the
+  name being typed starts with a dot.
+
 ## [1.7.0] - 2026-11-21
 
 ### Added

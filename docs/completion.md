@@ -25,6 +25,15 @@ extension on Windows). Programs are only offered once you have typed a first
 character, and the list is reread every ten seconds or when `PATH` changes. A
 word that looks like a path (`./run`, `~/bin/x`) completes as a file.
 
+After `git `, `Tab` completes the everyday subcommands, and after `git checkout`,
+`switch`, `merge`, `rebase`, `branch`, `cherry-pick`, `diff`, `log`, `show`,
+`reset`, `revert`, `push`, `pull` or `fetch` it completes the local branches, the
+remote branches (`origin/main`) and the tags. They are read from the repository
+files, so Git is not started. When nothing matches, the file names are completed.
+
+Hidden files and directories (`.git`, `.cache`) are offered only when the name
+being typed starts with a dot.
+
 After a `$`, `Tab` completes the names of the environment variables, with the
 closing brace in the `${NAME}` form. Variables that were set but not exported are
 not listed.

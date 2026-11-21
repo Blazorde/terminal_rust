@@ -14,14 +14,47 @@ pub(super) fn run(args: &[String], state: &mut ShellState) -> CommandResult {
             render::stdout(state.user_commands.render_aliases()),
         );
     }
+    // `alias name=value ...`: one definition per argument, the value read as the
+    // words of a command line.
+    if args.first().is_some_and(|arg| definition(arg).is_some()) {
+        let mut last = CommandResult::Continue;
+        for argument in args {
+            let Some((name, value)) = definition(argument) else {
+                return CommandResult::Error(format!("alias: {argument}: expected name=value"));
+            };
+            let words = match crate::app::parser::parse_words(value, &|variable| {
+                state.variable(variable)
+            }) {
+                Ok(words) => words.into_iter().map(|word| word.text).collect::<Vec<_>>(),
+                Err(error) => return CommandResult::Error(format!("alias: {name}: {error}")),
+            };
+            if words.is_empty() {
+                return CommandResult::Error(format!("alias: {name}: the definition is empty"));
+            }
+            last = define(name, &words, persistent, state);
+            if matches!(last, CommandResult::Error(_)) {
+                return last;
+            }
+        }
+        return last;
+    }
     if args.len() < 2 {
         return CommandResult::Error(
-            "alias: expected [--save] <name> <command> [arguments...]".into(),
+            "alias: expected [--save] <name> <command> [arguments...] or <name>=<command>".into(),
         );
     }
+    define(&args[0], &args[1..], persistent, state)
+}
 
-    let name = &args[0];
-    let target = &args[1];
+/// `name=value` with a non-empty name that holds no blank.
+fn definition(argument: &str) -> Option<(&str, &str)> {
+    let (name, value) = argument.split_once('=')?;
+    (!name.is_empty() && !name.contains(char::is_whitespace)).then_some((name, value))
+}
+
+/// Create the alias `name` for the command made of `words`.
+fn define(name: &str, words: &[String], persistent: bool, state: &mut ShellState) -> CommandResult {
+    let target = &words[0];
     let command = UserCommandConfig {
         kind: if find_command(target).is_some() {
             UserCommandKind::Builtin
@@ -29,14 +62,14 @@ pub(super) fn run(args: &[String], state: &mut ShellState) -> CommandResult {
             UserCommandKind::Process
         },
         target: target.clone(),
-        args: args[2..].to_vec(),
+        args: words[1..].to_vec(),
         append_args: true,
         description: String::new(),
     };
     let native_names = reserved_names(state);
     if persistent {
         let mut aliases = state.user_commands.persistent_aliases().clone();
-        aliases.insert(name.clone(), command);
+        aliases.insert(name.to_string(), command);
         if let Err(error) = validate_aliases(&aliases, &native_names, &state.user_commands) {
             return CommandResult::Error(format!("alias: {error}"));
         }
@@ -52,7 +85,7 @@ pub(super) fn run(args: &[String], state: &mut ShellState) -> CommandResult {
     } else if let Err(error) =
         state
             .user_commands
-            .set_session_alias(name.clone(), command, &native_names)
+            .set_session_alias(name.to_string(), command, &native_names)
     {
         return CommandResult::Error(format!("alias: {error}"));
     }

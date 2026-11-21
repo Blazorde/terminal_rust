@@ -19,6 +19,7 @@ mod aliases;
 mod arithmetic;
 mod braces;
 mod flow;
+mod functions;
 mod jobs;
 mod pipeline;
 mod scripts;
@@ -41,6 +42,13 @@ pub struct ShellState {
     loop_signal: Option<flow::LoopSignal>,
     /// The lines typed at the prompt, oldest first (see `history`).
     history: Vec<String>,
+    /// The functions defined so far (see ADR-0021).
+    functions: HashMap<String, functions::Body>,
+    /// The calls that are open, the innermost last: they hold `$1`, `$@` and the
+    /// variables that are `local`.
+    frames: Vec<functions::Frame>,
+    /// Set by `return`: the status to leave the running function with.
+    returning: Option<i32>,
 }
 
 impl ShellState {
@@ -62,7 +70,15 @@ impl ShellState {
             loop_depth: 0,
             loop_signal: None,
             history: Vec::new(),
+            functions: HashMap::new(),
+            frames: Vec::new(),
+            returning: None,
         }
+    }
+
+    /// The names of the functions, for completion.
+    pub(crate) fn function_names(&self) -> impl Iterator<Item = &str> {
+        self.functions.keys().map(String::as_str)
     }
 
     /// The lines typed at the prompt so far, oldest first.
@@ -85,6 +101,28 @@ impl ShellState {
     pub(crate) fn variable(&self, name: &str) -> Option<String> {
         if name == "?" {
             return Some(self.last_status.to_string());
+        }
+        // The positional parameters of the running function, or of the file that
+        // `source` is reading. Outside any: none, and `$#` is 0.
+        let positional = self
+            .frames
+            .last()
+            .map(|frame| frame.positional.as_slice())
+            .unwrap_or_default();
+        match name {
+            "#" => return Some(positional.len().to_string()),
+            "*" => return Some(positional.join(" ")),
+            "@" => {
+                return Some(positional.join(&crate::app::parser::PARAMETER_SEPARATOR.to_string()));
+            }
+            "0" => return Some("terminal_rust".to_string()),
+            digits if digits.bytes().all(|byte| byte.is_ascii_digit()) && !digits.is_empty() => {
+                return digits
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|number| positional.get(number.checked_sub(1)?).cloned());
+            }
+            _ => {}
         }
         self.variables
             .get(name)
@@ -179,9 +217,9 @@ const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "pwd",
-        usage: "pwd",
+        usage: "pwd [-L|-P]",
         summary: "print current directory",
-        max_args: Some(0),
+        max_args: Some(1),
         handler: run_pwd,
     },
     CommandSpec {
@@ -358,6 +396,27 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "alias for nvim",
         max_args: None,
         handler: run_neovim,
+    },
+    CommandSpec {
+        name: "return",
+        usage: "return [status]",
+        summary: "leave the running function with a status",
+        max_args: None,
+        handler: functions::run_return,
+    },
+    CommandSpec {
+        name: "shift",
+        usage: "shift [count]",
+        summary: "drop the first positional parameters ($1, $2, ...)",
+        max_args: None,
+        handler: functions::run_shift,
+    },
+    CommandSpec {
+        name: "local",
+        usage: "local NAME[=value]...",
+        summary: "make variables local to the running function",
+        max_args: None,
+        handler: functions::run_local,
     },
     CommandSpec {
         name: "history",
@@ -558,6 +617,33 @@ fn expand_words(text: &str, state: &mut ShellState) -> Result<Vec<String>, Strin
     parse_args(&expanded, &|name| state.variable(name))
 }
 
+/// The word a `case` looks at: expanded like an argument, but never matched against
+/// file names and never split.
+fn expand_case_word(text: &str, state: &mut ShellState) -> Result<String, String> {
+    let expanded = substitution::expand(text, state)?;
+    let words = crate::app::parser::parse_words(&expanded, &|name| state.variable(name))?;
+    Ok(words
+        .into_iter()
+        .map(|word| word.text)
+        .collect::<Vec<_>>()
+        .join(" "))
+}
+
+/// A pattern of a `case` arm: what was typed as a wildcard matches, and what was
+/// quoted, escaped or comes from a variable stands for itself.
+fn expand_case_pattern(text: &str, state: &mut ShellState) -> Result<String, String> {
+    let expanded = substitution::expand(text, state)?;
+    let words = crate::app::parser::parse_words(&expanded, &|name| state.variable(name))?;
+    match words.as_slice() {
+        [] => Ok(String::new()),
+        [word] => Ok(word
+            .pattern
+            .clone()
+            .unwrap_or_else(|| crate::utils::glob::escape(&word.text))),
+        _ => Err(format!("case: invalid pattern '{}'", text.trim())),
+    }
+}
+
 /// A line that cannot be parsed fails without running anything.
 fn syntax_error(message: String, state: &mut ShellState) -> CommandResult {
     state.record_status(true);
@@ -631,6 +717,10 @@ fn classify(args: &[String], state: &ShellState) -> Result<StageKind, String> {
     {
         return Ok(StageKind::InProcess);
     }
+    // A function takes the place of any command of the same name.
+    if state.functions.contains_key(name) {
+        return Ok(StageKind::InProcess);
+    }
     // Git runs as a program, so its output can go through a pipe or a redirection.
     if name == "git" {
         return Ok(StageKind::Git {
@@ -689,6 +779,10 @@ pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
         && let Some((name, value)) = split_assignment(single)
     {
         return assign_variable(name, value, state);
+    }
+
+    if let Some(body) = state.functions.get(command_name).cloned() {
+        return functions::call(command_name, &body, &args[1..], state);
     }
 
     if let Some(command) = find_command(command_name) {
@@ -828,15 +922,24 @@ fn run_whoami(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("whoami", whoami::whoami())
 }
 
-fn run_pwd(_args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_prefixed_error("pwd", pwd::pwd())
+fn run_pwd(args: &[String], _state: &mut ShellState) -> CommandResult {
+    match args.first().map(String::as_str) {
+        None | Some("-L" | "-P" | "--") => map_prefixed_error("pwd", pwd::pwd()),
+        Some(option) => CommandResult::Error(format!("pwd: invalid option: {option}")),
+    }
 }
 
 fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
+    let to_previous = optional_arg(args).map(str::trim) == Some("-");
     match cd::cd(optional_arg(args), state.previous_dir.as_deref()) {
         Ok(previous_dir) => {
             if previous_dir.is_some() {
                 state.previous_dir = previous_dir;
+            }
+            cd::record_change(state.previous_dir.as_deref());
+            // `cd -` says where it went, as other shells do.
+            if to_previous && let Ok(now) = std::env::current_dir() {
+                return map_prefixed_error("cd", render::stdout_line(now.display()));
             }
             CommandResult::Continue
         }
@@ -987,6 +1090,13 @@ fn run_unset(args: &[String], state: &mut ShellState) -> CommandResult {
     if args.is_empty() {
         return CommandResult::Error("unset: expected at least one name".into());
     }
+    // `unset -f name`: forget functions instead of variables.
+    if args.first().map(String::as_str) == Some("-f") {
+        for name in &args[1..] {
+            state.functions.remove(name.as_str());
+        }
+        return CommandResult::Continue;
+    }
     for name in args {
         if !shell_env::is_valid_name(name) {
             return CommandResult::Error(format!("unset: not a valid name: {name}"));
@@ -1023,11 +1133,14 @@ fn run_history(args: &[String], state: &mut ShellState) -> CommandResult {
 }
 
 fn run_source(args: &[String], state: &mut ShellState) -> CommandResult {
-    match args {
-        [path] => scripts::run_file("source", path, state, false),
-        [] => CommandResult::Error("source: expected a file".to_string()),
-        _ => CommandResult::Error("source: arguments for the file are not supported".to_string()),
-    }
+    let Some((path, arguments)) = args.split_first() else {
+        return CommandResult::Error("source: expected a file".to_string());
+    };
+    // The arguments are `$1`, `$2`, ... for the length of the file.
+    state.frames.push(functions::Frame::for_file(arguments));
+    let result = scripts::run_file("source", path, state, false);
+    state.frames.pop();
+    result
 }
 
 fn run_read(args: &[String], state: &mut ShellState) -> CommandResult {
@@ -1065,6 +1178,9 @@ fn run_read(args: &[String], state: &mut ShellState) -> CommandResult {
 fn describe_name(name: &str, state: &ShellState) -> Option<String> {
     if flow::is_keyword(name) {
         return Some(format!("{name} is a shell keyword"));
+    }
+    if state.functions.contains_key(name) {
+        return Some(format!("{name} is a function"));
     }
     if find_command(name).is_some() {
         return Some(format!("{name} is a shell builtin"));
@@ -1276,6 +1392,11 @@ mod tests {
 
     #[test]
     fn session_aliases_are_created_and_executed() {
+        // `pwd` and the expected value must see the same directory: other tests
+        // change it while they hold this lock.
+        let _guard = crate::test_support::cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut state = test_state();
         let (result, _) = render::capture_output(|| {
             execute(&string_args(&["alias", "where", "pwd"]), &mut state)
@@ -1293,6 +1414,81 @@ mod tests {
                     .to_string()
             )
         );
+    }
+
+    #[test]
+    fn an_alias_can_be_defined_as_name_equals_value() {
+        let mut state = test_state();
+        state
+            .variables
+            .insert("TR_ALIAS_VAR".to_string(), "expanded".to_string());
+        let mut define = |arguments: &[&str]| {
+            let mut line = vec!["alias"];
+            line.extend_from_slice(arguments);
+            render::capture_output(|| execute(&string_args(&line), &mut state)).0
+        };
+
+        assert!(matches!(define(&["ll=ls -l"]), CommandResult::Continue));
+        assert!(matches!(
+            define(&["say=echo 'two words' \"q r\""]),
+            CommandResult::Continue
+        ));
+        assert!(matches!(
+            define(&["first=echo $TR_ALIAS_VAR", "second=pwd"]),
+            CommandResult::Continue
+        ));
+        assert!(matches!(
+            define(&["pat=echo *.rs"]),
+            CommandResult::Continue
+        ));
+
+        let get = |name: &str| {
+            state
+                .user_commands
+                .get(name)
+                .map(|alias| (alias.target.clone(), alias.args.clone()))
+        };
+        assert_eq!(get("ll"), Some(("ls".to_string(), string_args(&["-l"]))));
+        assert_eq!(
+            get("say"),
+            Some(("echo".to_string(), string_args(&["two words", "q r"])))
+        );
+        // Variables are expanded when the alias is defined; patterns are not.
+        assert_eq!(
+            get("first"),
+            Some(("echo".to_string(), string_args(&["expanded"])))
+        );
+        assert_eq!(get("second"), Some(("pwd".to_string(), Vec::new())));
+        assert_eq!(
+            get("pat"),
+            Some(("echo".to_string(), string_args(&["*.rs"])))
+        );
+    }
+
+    #[test]
+    fn a_bad_alias_definition_is_reported_and_stops_the_list() {
+        let mut state = test_state();
+        let mut run = |arguments: &[&str]| {
+            let mut line = vec!["alias"];
+            line.extend_from_slice(arguments);
+            match render::capture_output(|| execute(&string_args(&line), &mut state)).0 {
+                CommandResult::Error(message) => message,
+                _ => String::new(),
+            }
+        };
+
+        assert!(run(&["empty="]).contains("the definition is empty"));
+        assert!(run(&["ok=pwd", "oops"]).contains("oops: expected name=value"));
+        assert!(run(&["BadName=pwd"]).contains("alias"));
+        assert!(run(&["quote=echo 'open"]).contains("missing closing quote"));
+        // An `=` inside the command of the original form is not a definition.
+        assert_eq!(run(&["envy", "env", "FOO=bar"]), "");
+        assert!(run(&["only"]).contains("expected"));
+        // A definition needs a name: this is not one, so the usage is shown.
+        assert!(run(&["=x"]).contains("or <name>=<command>"));
+        // The first definition before the mistake was kept, the one after was not.
+        assert!(state.user_commands.get("ok").is_some());
+        assert!(state.user_commands.get("envy").is_some());
     }
 
     #[test]
@@ -1440,7 +1636,7 @@ mod tests {
         use std::sync::mpsc::{self, RecvTimeoutError};
         use std::time::Duration;
 
-        const PIECES: [&str; 38] = [
+        const PIECES: [&str; 49] = [
             "echo ",
             "true",
             "false",
@@ -1479,6 +1675,17 @@ mod tests {
             "x=",
             "$((",
             "))",
+            "case x in ",
+            "a) ",
+            ";; ",
+            "esac",
+            "f() { ",
+            "}",
+            "; return ",
+            "$1",
+            "\"$@\"",
+            "local x=1",
+            "f ",
         ];
         let guard = crate::test_support::cwd_lock()
             .lock()

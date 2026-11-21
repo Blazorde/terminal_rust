@@ -14,7 +14,7 @@ Run `help` inside Terminal Rust for the authoritative command list.
 | `plugins help`, `plugin help` | Explain what plugins support and how to inspect them |
 | `commands list` | Inspect configured custom commands |
 | `commands help` | Explain custom commands and where to configure them |
-| `echo [-n] [text...]` | Print text, without a trailing newline with `-n` |
+| `echo [-n] [-e\|-E] [text...]` | Print text; `-n` leaves out the newline, `-e` reads escapes (`\n`, `\t`, `\e`, `\xHH`, `\0NNN`, `\uHHHH`, `\c`), `-E` turns them off |
 | `whoami` | Prints the username of the current user. |
 | `arch` | Prints the system architecture. |
 | `nproc` | Prints the number of processing units available. |
@@ -79,6 +79,9 @@ set variables for that command only (`LANG=C sort names.txt`, `PORT=8080 node
 app.js`): the program sees them, the shell does not keep them, and the previous
 value comes back afterwards.
 
+`$PWD` is the current directory and `$OLDPWD` the one you left; `cd` keeps them up
+to date for the programs it starts, and `cd -` goes back and prints where it went.
+
 Inside `${…}` you can give a default, test for a value, or take a length. With a
 colon an empty value counts as unset; without it only an unset variable does:
 
@@ -141,8 +144,26 @@ and pipelines, `break` leaves the innermost loop and `continue` starts its next
 turn, and `true` and `false` are built in. A newline works like `;`, so a block
 can be typed over several lines: the shell asks for more (`>> `) until `done` or
 `fi`. `Ctrl+C` stops a loop. A failing condition is not an error, so its message
-is not shown. `case`, functions, `break 2`, and redirections on a whole loop
-(`done > file`) are not available.
+is not shown. `break 2` and redirections on a whole loop (`done > file`) are not
+available.
+
+`case` runs the first arm whose pattern matches a word:
+
+```text
+case $file in
+  *.rs)         echo Rust ;;
+  *.md | *.txt) echo text ;;
+  [0-9]*)       echo starts with a digit ;;
+  *)            echo something else ;;
+esac
+```
+
+The patterns use `*`, `?` and `[...]`; unlike file names, `*` also matches `/` and a
+leading `.`. Several patterns are separated by `|`, an arm ends with `;;` (optional for
+the last one), and the whole `case` can be written on one line. Quote a pattern to match
+it literally: the value of a variable used as a pattern is also literal. The word is not
+split or matched against files. When no arm matches, the status is `0`. `;&` and `;;&`
+are not available.
 
 `test` and `[ … ]` are built in, so conditions work on every system:
 
@@ -154,6 +175,33 @@ is not shown. `case`, functions, `break 2`, and redirections on a whole loop
 
 The status is `0` when true, `1` when false (no message) and `2` for a mistake in
 the expression. Quote variables (`[ "$x" = a ]`) as in other shells.
+
+## Functions
+
+A function names a block of commands and gives it arguments:
+
+```text
+mkcd() { mkdir -p "$1" && cd "$1"; }
+function backup { cp "$1" "$1.bak"; }
+greet() {
+  local who=${1:-world}
+  echo "hello $who ($# arguments)"
+  return 0
+}
+mkcd projects/new
+greet Ada
+```
+
+Inside a function `$1`…`$9` are the arguments, `$#` their number, `$*` all of them in
+one word and `"$@"` all of them as separate words (none at all when there are none).
+`shift` drops the first one, `return N` leaves with status `N` (the status of the last
+command if omitted), and `local NAME=value` makes a variable that disappears when the
+function ends. A function can call itself (up to 64 levels), takes the place of a
+built-in or a program of the same name, works in pipes and lists, and `unset -f name`
+removes it. `type name` tells that it is a function, and Tab completes its name.
+Functions last for the session: put them in the startup script to have them always.
+`{ cmd1; cmd2; }` groups commands; `source file a b` gives `$1` and `$2` to the file.
+`declare`, `export -f`, arrays and redirections on a whole function are not available.
 
 ## Brace expansion
 
@@ -227,7 +275,13 @@ character of a set. A pattern matches within one directory level (`*` never
 matches `/`), and names that start with `.` need a pattern that starts with `.`.
 A pattern that matches nothing stays as written. Quote it (`'*.rs'`) or put a
 backslash before it (`\*`, on Linux and macOS) to use it as text. The value of a
-variable is never a pattern. There is no `**` and no `{a,b}` yet.
+variable is never a pattern.
+
+A segment that is exactly `**` goes through any number of directories, so
+`ls **/*.rs` lists every `.rs` file below the current directory (and in it), and
+`src/**` lists everything under `src`. Hidden directories are not entered, links to
+directories are not followed, and a `**` stops after 32 levels or 50 000 paths.
+`a**` is an ordinary `*`. For `{a,b}` see [Brace expansion](#brace-expansion).
 
 ## Pipes and redirections
 

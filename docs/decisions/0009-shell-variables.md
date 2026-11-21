@@ -47,6 +47,14 @@ process environment.
    count as unset. The word is expanded (variables, quotes, nested `${...}`) but never
    split or matched against files. `NAME:=word` and the trimming and replacing forms
    are rejected with an explicit message. (Added in 1.7.0.)
+9. `PWD` and `OLDPWD` follow the working directory: `cd` exports the directory it
+   entered as `PWD` and the one it left as `OLDPWD`, so programs and scripts see
+   them. When the shell starts, a `PWD` inherited from the parent is replaced if it
+   does not name the current directory (a parent that changed directory leaves a
+   stale one) and kept if it is another path to it (a symbolic link); the inherited
+   `OLDPWD` is dropped, since there is no previous directory yet. After a `cd` the
+   value is the physical path, with symbolic links resolved. `cd -` prints the
+   directory it goes to. (Added in 1.8.0.)
 
 ## Options considered
 
