@@ -7,6 +7,15 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Background jobs ([ADR-0013](docs/decisions/0013-background-jobs.md)): a trailing
+  `&` runs a command or a pipeline in the background and prints `[1] pid`. New
+  commands `jobs`, `fg [%n]`, `wait [%n]` and `kill %n`; a finished job is
+  reported once before the next prompt (`[1]+  Done  command`, `Exit 3`). A
+  background program reads no input. There is no `Ctrl+Z` or `bg`, and
+  `a && b &` is rejected.
+
+### Added
+
 - `NAME=value command`: variables set for a single command (and for one stage of
   a pipeline), restored afterwards.
 - `exit [code]`: the shell leaves with the given code (modulo 256), or with the

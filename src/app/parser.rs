@@ -215,6 +215,8 @@ pub enum Connector {
 pub struct Segment {
     pub connector: Connector,
     pub text: String,
+    /// Ended by `&`: the pipeline runs as a background job.
+    pub background: bool,
 }
 
 /// Split a line at the `;`, `&&` and `||` that are neither quoted nor escaped.
@@ -269,7 +271,24 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
             }
             // `>&` belongs to a redirection (`2>&1`), a lone `&` is a background job.
             (None, '&') if current.ends_with('>') => current.push(character),
-            (None, '&') => return Err("background jobs (&) are not supported yet".to_string()),
+            // A lone `&` ends a command and runs it in the background.
+            (None, '&') => {
+                if current.trim().is_empty() {
+                    return Err("syntax error near unexpected token '&'".to_string());
+                }
+                if connector != Connector::Then {
+                    return Err(
+                        "a background job cannot follow && or ||: only a single command can run in the background"
+                            .to_string(),
+                    );
+                }
+                segments.push(Segment {
+                    connector,
+                    text: std::mem::take(&mut current),
+                    background: true,
+                });
+                connector = Connector::Then;
+            }
             // Pipes and redirections stay in the text: `split_stages` reads them.
             (None, character) => current.push(character),
         }
@@ -282,6 +301,7 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
         segments.push(Segment {
             connector,
             text: current,
+            background: false,
         });
     } else if connector != Connector::Then {
         let operator = if connector == Connector::And {
@@ -514,6 +534,7 @@ fn finish_segment(
     segments.push(Segment {
         connector,
         text: std::mem::take(current),
+        background: false,
     });
     Ok(())
 }
@@ -678,21 +699,59 @@ mod tests {
         );
     }
 
+    fn background(input: &str) -> Result<Vec<(String, bool)>, String> {
+        split_chain(input).map(|segments| {
+            segments
+                .into_iter()
+                .map(|segment| (segment.text.trim().to_string(), segment.background))
+                .collect()
+        })
+    }
+
     #[test]
-    fn a_background_job_is_rejected() {
+    fn a_lone_ampersand_runs_the_command_in_the_background() {
+        assert_eq!(background("sleep 5 &"), Ok(vec![("sleep 5".into(), true)]));
         assert_eq!(
-            chain("a &"),
-            Err("background jobs (&) are not supported yet".to_string())
+            background("build & test"),
+            Ok(vec![("build".into(), true), ("test".into(), false)])
+        );
+        assert_eq!(background("a | b &"), Ok(vec![("a | b".into(), true)]));
+        assert_eq!(
+            background("a & b &"),
+            Ok(vec![("a".into(), true), ("b".into(), true)])
         );
         assert_eq!(
-            chain("a & b"),
-            Err("background jobs (&) are not supported yet".to_string())
+            background("a & ; b"),
+            Err("syntax error near unexpected token ';'".to_string())
         );
-        // `&` is only accepted right after `>`.
+    }
+
+    #[test]
+    fn a_background_job_cannot_follow_an_and_or_list() {
+        for line in ["a && b &", "a || b &"] {
+            assert!(
+                background(line).is_err_and(|error| error.contains("cannot follow")),
+                "{line}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_misplaced_ampersand_is_a_syntax_error() {
         assert_eq!(
-            chain("a 2> &1"),
-            Err("background jobs (&) are not supported yet".to_string())
+            background("& a"),
+            Err("syntax error near unexpected token '&'".to_string())
         );
+        assert_eq!(
+            background("a && & b"),
+            Err("syntax error near unexpected token '&'".to_string())
+        );
+    }
+
+    #[test]
+    fn an_ampersand_in_a_redirection_is_not_a_background_job() {
+        assert_eq!(background("a 2>&1 &"), Ok(vec![("a 2>&1".into(), true)]));
+        assert_eq!(background("a >&2"), Ok(vec![("a >&2".into(), false)]));
     }
 
     fn stages(input: &str) -> Result<Vec<(String, Vec<Redirect>)>, String> {

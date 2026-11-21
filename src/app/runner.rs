@@ -99,6 +99,7 @@ fn run_interactive_editor() -> ExitCode {
     }
 
     let exit_code = loop {
+        show_job_notices(&mut engine);
         let (prompt, styled_prompt) = match shell_prompt.render_for_editor() {
             Ok(prompt) => prompt,
             Err(error) => {
@@ -149,11 +150,19 @@ fn history_path() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// Say which background jobs ended, once, before the next prompt.
+fn show_job_notices(engine: &mut ShellEngine) {
+    for notice in engine.job_notices() {
+        let _ = render::stdout_line(notice);
+    }
+}
+
 fn run_interactive_plain() -> ExitCode {
     let mut input = String::new();
     let (mut engine, mut shell_prompt) = load_interactive_shell();
 
     loop {
+        show_job_notices(&mut engine);
         if let Err(error) = shell_prompt.print() {
             let _ = render::stderr_line(format_args!("prompt: {error}"));
             return ExitCode::FAILURE;

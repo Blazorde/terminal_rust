@@ -61,7 +61,12 @@ struct Opened {
     files: Vec<File>,
 }
 
-pub(super) fn run(stages: &[Stage], state: &mut ShellState) -> CommandResult {
+/// `background` is the text of the command when the pipeline runs as a job.
+pub(super) fn run(
+    stages: &[Stage],
+    state: &mut ShellState,
+    background: Option<&str>,
+) -> CommandResult {
     // Everything is expanded before anything runs, so a bad line changes nothing.
     let mut plans = Vec::with_capacity(stages.len());
     for stage in stages {
@@ -72,7 +77,12 @@ pub(super) fn run(stages: &[Stage], state: &mut ShellState) -> CommandResult {
     }
 
     let count = plans.len();
-    let mut input = Input::Inherit;
+    // A background program must not compete with the shell for the terminal.
+    let mut input = if background.is_some() {
+        Input::Empty
+    } else {
+        Input::Inherit
+    };
     let mut children: Vec<(String, Child)> = Vec::new();
     let mut feeders: Vec<JoinHandle<()>> = Vec::new();
     // The outcome of the last stage when it is not a program that was started.
@@ -130,6 +140,19 @@ pub(super) fn run(stages: &[Stage], state: &mut ShellState) -> CommandResult {
                 }
             }
         }
+    }
+
+    // A background pipeline is not waited for: its programs become a job.
+    if let Some(text) = background {
+        if !children.is_empty() {
+            let programs = children.into_iter().map(|(_, child)| child).collect();
+            let (number, pid) = state.jobs.add(text, programs);
+            let _ = render::stderr_line(format!("[{number}] {pid}"));
+        }
+        if exit_requested {
+            return CommandResult::Exit;
+        }
+        return last_result.unwrap_or(CommandResult::Continue);
     }
 
     // Wait for the programs. The status of the pipeline is the one of its last

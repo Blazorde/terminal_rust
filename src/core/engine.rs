@@ -89,6 +89,12 @@ impl ShellEngine {
             .collect()
     }
 
+    /// The notices for the background jobs that ended since the last call
+    /// (`[1]+  Done  command`), for a front end to show before the next prompt.
+    pub fn job_notices(&mut self) -> Vec<String> {
+        self.state.finished_job_notices()
+    }
+
     /// The code a front end should exit with: the one given to `exit`, or the
     /// status of the last command.
     pub fn exit_code(&self) -> u8 {
