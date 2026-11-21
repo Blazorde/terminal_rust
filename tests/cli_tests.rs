@@ -1827,7 +1827,8 @@ fn an_unclosed_substitution_rejects_the_whole_line() {
 
     assert!(!printed.contains("first"), "{printed}");
     assert!(errors.contains("missing closing parenthesis"), "{errors}");
-    assert!(errors.contains("arithmetic expansion"), "{errors}");
+    // The line after the rejected one still runs, arithmetic included.
+    assert!(printed.contains("3\n"), "{printed}");
     assert!(printed.contains("still-here\n"), "{printed}");
 }
 
@@ -2333,4 +2334,376 @@ fn a_script_can_hold_a_loop_over_several_lines() {
         printed.contains("script-1\nscript-2\nscript-3\nscript-end\n"),
         "{printed}\n{errors}"
     );
+}
+
+#[test]
+fn test_and_brackets_decide_if_and_while_without_any_system_program() {
+    let directory = TestDirectory::new("test builtin");
+    fs::write(directory.path().join("data.txt"), "x").expect("fixture");
+    fs::create_dir(directory.path().join("sub")).expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "if [ -f data.txt ]; then echo file; fi",
+            "if [ -d sub ] && [ ! -e missing.txt ]; then echo dir-and-absent; fi",
+            "if test -s data.txt -a -d sub; then echo both; fi",
+            "if [ \"a b\" = \"a b\" ]; then echo equal; fi",
+            "if [ 10 -gt 9 ]; then echo numeric; fi",
+            "if [ -z \"\" ]; then echo empty; fi",
+            "if [ -f nothing ]; then echo no; else echo not-a-file; fi",
+            "for n in 1 2 3 4; do if [ $n -eq 2 ]; then continue; fi; echo n=$n; done",
+            "while [ ! -f stop.txt ]; do touch stop.txt; echo once; done",
+        ],
+    );
+
+    for expected in [
+        "file\n",
+        "dir-and-absent\n",
+        "both\n",
+        "equal\n",
+        "numeric\n",
+        "empty\n",
+        "not-a-file\n",
+        "n=1\nn=3\nn=4\n",
+        "once\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("no\n"), "{printed}");
+    assert!(
+        errors.is_empty(),
+        "a false condition must be silent: {errors}"
+    );
+}
+
+#[test]
+fn test_reports_its_status_and_its_mistakes() {
+    let directory = TestDirectory::new("test status");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "[ 1 -eq 1 ]",
+            "echo true=$?",
+            "[ 1 -eq 2 ]",
+            "echo false=$?",
+            "[ x -eq 1 ]",
+            "echo wrong=$?",
+            "[ a = a",
+            "echo unclosed=$?",
+            "test",
+            "echo none=$?",
+        ],
+    );
+
+    assert!(printed.contains("true=0\n"), "{printed}\n{errors}");
+    assert!(printed.contains("false=1\n"), "{printed}");
+    assert!(printed.contains("wrong=2\n"), "{printed}");
+    assert!(printed.contains("unclosed=2\n"), "{printed}");
+    assert!(printed.contains("none=1\n"), "{printed}");
+    assert!(
+        errors.contains("integer expression expected: 'x'"),
+        "{errors}"
+    );
+    assert!(errors.contains("[: missing ']'"), "{errors}");
+    // A false condition (`[ 1 -eq 2 ]`, `test`) says nothing: only the two mistakes.
+    assert_eq!(errors.lines().count(), 2, "{errors}");
+}
+
+#[test]
+fn type_says_what_each_name_runs() {
+    let directory = TestDirectory::new("type names");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "alias where pwd",
+            "type for echo where which",
+            "type terminal-rust-no-such-program",
+            "echo status=$?",
+            "type echo terminal-rust-no-such-program",
+            "which cat",
+        ],
+    );
+
+    assert!(
+        printed.contains("for is a shell keyword\n"),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("echo is a shell builtin\n"), "{printed}");
+    assert!(
+        printed.contains("where is an alias for 'pwd'\n"),
+        "{printed}"
+    );
+    assert!(printed.contains("which is a shell builtin\n"), "{printed}");
+    assert!(printed.contains("status=1\n"), "{printed}");
+    assert!(
+        errors
+            .matches("type: terminal-rust-no-such-program: not found")
+            .count()
+            == 2,
+        "{errors}"
+    );
+    // `echo` is found even when another name in the list is not.
+    assert!(
+        printed.matches("echo is a shell builtin").count() >= 2,
+        "{printed}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn type_gives_the_path_of_a_program() {
+    let directory = TestDirectory::new("type path");
+
+    let (printed, errors) = shell_lines(&directory, &["type sh", "type /bin/sh"]);
+
+    assert!(
+        printed.contains("sh is /") && printed.contains("/sh\n"),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("/bin/sh is /bin/sh\n"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn type_only_finds_executable_files_that_exist() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = TestDirectory::new("type executable");
+    let bin = directory.path().join("bin");
+    fs::create_dir(&bin).expect("fixture");
+    fs::write(bin.join("runme"), "#!/bin/sh\n").expect("fixture");
+    fs::write(bin.join("plainfile"), "data").expect("fixture");
+    fs::set_permissions(bin.join("runme"), fs::Permissions::from_mode(0o755)).expect("chmod");
+    fs::set_permissions(bin.join("plainfile"), fs::Permissions::from_mode(0o644)).expect("chmod");
+
+    let export = format!("export PATH=\"{}:$PATH\"", bin.display());
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            &export,
+            "type runme",
+            "type plainfile",
+            "type /terminal-rust/no/such/program",
+        ],
+    );
+
+    assert!(
+        printed.contains(&format!("runme is {}/runme\n", bin.display())),
+        "{printed}\n{errors}"
+    );
+    assert!(errors.contains("type: plainfile: not found"), "{errors}");
+    assert!(
+        errors.contains("type: /terminal-rust/no/such/program: not found"),
+        "{errors}"
+    );
+    assert!(!printed.contains("plainfile is"), "{printed}");
+}
+
+#[test]
+fn parameter_expansion_gives_defaults_alternatives_and_lengths() {
+    let directory = TestDirectory::new("parameter expansion");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo default=${TR_UNSET:-fallback}",
+            "TR_SET=value",
+            "echo kept=${TR_SET:-fallback} alt=${TR_SET:+yes} none=[${TR_UNSET:+yes}]",
+            "TR_EMPTY=",
+            "echo empty=${TR_EMPTY:-fallback} bare=${TR_EMPTY-fallback}end",
+            "echo length=${#TR_SET}",
+            "echo nested=${TR_UNSET:-${TR_SET}}",
+            "echo quoted=\"${TR_UNSET:-two words}\"",
+            "echo before ${TR_UNSET:?missing value} after",
+            "echo status=$?",
+            "echo ${TR_UNSET:=x}",
+        ],
+    );
+
+    for expected in [
+        "default=fallback\n",
+        "kept=value alt=yes none=[]\n",
+        "empty=fallback bare=end\n",
+        "length=5\n",
+        "nested=value\n",
+        "quoted=two words\n",
+        "status=1\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(
+        !printed.contains("before"),
+        "a failed expansion must not run the command: {printed}"
+    );
+    assert!(errors.contains("TR_UNSET: missing value"), "{errors}");
+    assert!(
+        errors.contains("assigning in an expansion is not supported"),
+        "{errors}"
+    );
+}
+
+#[test]
+fn arithmetic_expansion_computes_in_lines_loops_and_assignments() {
+    let directory = TestDirectory::new("arithmetic");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo sum=$((1+2)) product=$(( 6 * 7 )) group=$(( (1+2)*3 ))",
+            "n=5",
+            "echo double=$((n*2)) dollar=$(($n+1)) glued=$((2+2))abc",
+            "total=$((10-3))",
+            "echo total=$total",
+            "echo \"quoted=$((7%4))\" single='$((1+1))'",
+            "echo cmp=$((3>2)) eq=$((2==3)) logic=$((1&&0))",
+            "i=0",
+            "while [ $i -lt 3 ]; do echo i=$i; i=$((i+1)); done",
+            "echo status=$((1+1))$?",
+            "echo before $((1/0)) after",
+            "echo failed=$?",
+            "echo $((9223372036854775807+1))",
+            "echo $((1+",
+        ],
+    );
+
+    for expected in [
+        "sum=3 product=42 group=9\n",
+        "double=10 dollar=6 glued=4abc\n",
+        "total=7\n",
+        "quoted=3 single=$((1+1))\n",
+        "cmp=1 eq=0 logic=0\n",
+        "i=0\ni=1\ni=2\n",
+        "failed=1\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(
+        !printed.contains("before"),
+        "a failed expansion must not run the command: {printed}"
+    );
+    assert!(errors.contains("arithmetic: division by 0"), "{errors}");
+    assert!(
+        errors.contains("arithmetic: result out of range"),
+        "{errors}"
+    );
+}
+
+#[test]
+fn source_runs_a_file_in_the_current_shell_and_reports_its_errors() {
+    let directory = TestDirectory::new("source file");
+    fs::write(
+        directory.path().join("lib.sh"),
+        "# a helper file\nTR_GREETING=hello\necho from-file $TR_GREETING\nfor n in 1 2; do\n  echo n=$n\ndone\n",
+    )
+    .expect("fixture");
+    fs::write(
+        directory.path().join("broken.sh"),
+        "echo before-error\nterminal-rust-no-such-command\necho after-error\n",
+    )
+    .expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "source lib.sh",
+            "echo kept=$TR_GREETING",
+            ". ./lib.sh",
+            "source broken.sh",
+            "source missing.sh",
+            "source lib.sh extra",
+            "source",
+        ],
+    );
+
+    assert!(
+        printed.matches("from-file hello\n").count() == 2,
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("n=1\nn=2\n"), "{printed}");
+    assert!(
+        printed.contains("kept=hello\n"),
+        "variables stay in the shell: {printed}"
+    );
+    assert!(printed.contains("before-error\n"), "{printed}");
+    assert!(
+        !printed.contains("after-error"),
+        "an error stops the file: {printed}"
+    );
+    assert!(errors.contains("source: broken.sh:2:"), "{errors}");
+    assert!(errors.contains("source: missing.sh:"), "{errors}");
+    assert!(
+        errors.contains("arguments for the file are not supported"),
+        "{errors}"
+    );
+    assert!(errors.contains("source: expected a file"), "{errors}");
+}
+
+#[test]
+fn read_stores_a_line_from_a_pipe_a_redirection_or_the_next_input_line() {
+    let directory = TestDirectory::new("read line");
+    fs::write(directory.path().join("empty.txt"), "").expect("fixture");
+    fs::write(directory.path().join("one.txt"), "alpha beta gamma\n").expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo hello big world | read first rest",
+            "echo first=$first rest=$rest",
+            "read a b < one.txt",
+            "echo a=$a b=$b",
+            "read single < one.txt",
+            "echo single=$single",
+            "read < one.txt",
+            "echo reply=$REPLY",
+            "gone=old",
+            "read gone < empty.txt",
+            "echo eof-status=$? gone=[$gone]",
+            "echo piped | read -p 'HIDDEN-PROMPT ' quiet",
+            "echo quiet=$quiet",
+            "read -p 'Name: ' who",
+            "Alice",
+            "echo typed=$who",
+            "read bad-name < one.txt",
+            "read -s x",
+        ],
+    );
+
+    for expected in [
+        "first=hello rest=big world\n",
+        "a=alpha b=beta gamma\n",
+        "single=alpha beta gamma\n",
+        "reply=alpha beta gamma\n",
+        "eof-status=1 gone=[]\n",
+        "typed=Alice\n",
+        "quiet=piped\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(
+        errors.contains("Name: "),
+        "the prompt goes to the error stream: {errors}"
+    );
+    assert!(
+        !errors.contains("HIDDEN-PROMPT"),
+        "a pipe does not see the prompt: {errors}"
+    );
+    assert!(
+        errors.contains("read: not a valid name: bad-name"),
+        "{errors}"
+    );
+    assert!(errors.contains("read: unsupported option '-s'"), "{errors}");
 }

@@ -17,6 +17,11 @@ pub(crate) fn provide(input: Option<Vec<u8>>) {
     INPUT.with(|slot| *slot.borrow_mut() = input);
 }
 
+/// Whether the current command has an input from a pipeline or a redirection.
+pub(crate) fn is_provided() -> bool {
+    INPUT.with(|slot| slot.borrow().is_some())
+}
+
 /// Take the input of the current command. It can only be read once.
 pub(crate) fn take() -> Option<Vec<u8>> {
     INPUT.with(|slot| slot.borrow_mut().take())
@@ -32,6 +37,16 @@ mod tests {
 
         assert_eq!(take(), Some(b"data".to_vec()));
         assert_eq!(take(), None);
+    }
+
+    #[test]
+    fn the_presence_of_an_input_can_be_checked_without_taking_it() {
+        provide(None);
+        assert!(!is_provided());
+        provide(Some(Vec::new()));
+        assert!(is_provided());
+        assert_eq!(take(), Some(Vec::new()));
+        assert!(!is_provided());
     }
 
     #[test]

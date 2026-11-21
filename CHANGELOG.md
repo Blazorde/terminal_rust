@@ -5,6 +5,31 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-21
+
+### Added
+
+- History: `history [N]` lists the lines typed at the prompt, and `!!`, `!$`, `!^`,
+  `!N`, `!-N` and `!prefix` stand for earlier lines (ADR-0018). The expanded line
+  is shown and recorded; a missing event runs nothing.
+- `source file` and `. file` run a file in the current shell (any file name, stops
+  at the first error and names the line); `read [-r] [-p prompt] [name...]` reads
+  a line from a pipe, a redirection or the terminal into variables.
+- Arithmetic expansion `$((…))` on 64-bit integers (ADR-0017): `+ - * / %`,
+  parentheses, signs, comparisons and `&&` `||`, variables by name, hexadecimal
+  numbers. Overflow and division by zero are errors, never wrapped values.
+- Parameter expansion in `${…}`: `${NAME:-default}`, `${NAME-default}`,
+  `${NAME:+alternative}`, `${NAME:?message}` and `${#NAME}`, with nested words,
+  quotes and variables. `${NAME:=word}` and the trimming forms are refused with a
+  clear message.
+- `type` and `which` say what a name runs: keyword, built-in, alias, custom
+  command, plugin, or the program found in `PATH` with its path (a missing name is
+  reported and gives status 1).
+- `test` and `[ … ]` are built in (ADR-0016): `-e -f -d -s -r -w -x -L`, `-z -n`,
+  `= == !=`, `-eq -ne -lt -le -gt -ge`, `!`, `-a` and `-o`. Status 0 when true, 1
+  when false without a message, 2 for a mistake. Conditions in `if` and `while`
+  now work on Windows, where there is no `test` program.
+
 ## [1.6.0] - 2026-11-21
 
 ### Added

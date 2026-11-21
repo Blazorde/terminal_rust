@@ -101,6 +101,19 @@ impl ShellEngine {
         self.state.exit_code()
     }
 
+    /// The lines typed at the prompt, oldest first.
+    pub(crate) fn history(&self) -> &[String] {
+        self.state.history()
+    }
+
+    pub(crate) fn set_history(&mut self, entries: Vec<String>) {
+        self.state.set_history(entries);
+    }
+
+    pub(crate) fn record_history(&mut self, line: &str) {
+        self.state.record_history(line);
+    }
+
     pub(crate) fn startup_script(&self) -> Option<&str> {
         self.state.startup_script()
     }

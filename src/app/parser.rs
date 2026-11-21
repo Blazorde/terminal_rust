@@ -162,18 +162,26 @@ fn expand_variable(
     let name = match characters.peek().copied() {
         Some('{') => {
             characters.next();
-            let mut name = String::new();
+            let mut content = String::new();
+            let mut depth = 1_usize;
             loop {
                 match characters.next() {
-                    Some('}') => break,
-                    Some(character) => name.push(character),
+                    Some('{') => {
+                        depth += 1;
+                        content.push('{');
+                    }
+                    Some('}') => {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                        content.push('}');
+                    }
+                    Some(character) => content.push(character),
                     None => return Err("missing closing brace in variable expansion".to_string()),
                 }
             }
-            if !crate::utils::shell_env::is_valid_name(&name) && name != "?" {
-                return Err(format!("invalid variable name: {name}"));
-            }
-            name
+            return expand_braced(&content, lookup, output);
         }
         Some('?') => {
             characters.next();
@@ -199,6 +207,90 @@ fn expand_variable(
     let value = lookup(&name).unwrap_or_default();
     output.push_str(&value);
     Ok(!value.is_empty())
+}
+
+/// Expand the inside of `${...}`: `NAME`, `#NAME` (length), and the forms with a
+/// word, `NAME:-w` and `NAME-w` (default), `NAME:+w` and `NAME+w` (alternative),
+/// `NAME:?w` and `NAME?w` (error). With a colon, an empty value counts as unset.
+fn expand_braced(content: &str, lookup: Lookup, output: &mut String) -> Result<bool, String> {
+    let valid = |name: &str| crate::utils::shell_env::is_valid_name(name) || name == "?";
+    if let Some(name) = content.strip_prefix('#')
+        && valid(name)
+    {
+        output.push_str(&lookup(name).unwrap_or_default().chars().count().to_string());
+        return Ok(true);
+    }
+    let name_end = if content.starts_with('?') {
+        1
+    } else {
+        content
+            .find(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+            .unwrap_or(content.len())
+    };
+    let (name, operation) = content.split_at(name_end);
+    if !valid(name) {
+        return Err(format!("invalid variable name: {name}"));
+    }
+    let value = lookup(name);
+    let (colon, operation) = match operation.strip_prefix(':') {
+        Some(rest) => (true, rest),
+        None => (false, operation),
+    };
+    // With a colon an empty value is treated as unset.
+    let set = value
+        .as_ref()
+        .is_some_and(|value| !colon || !value.is_empty());
+    let text = match operation.chars().next() {
+        None if colon => return Err(format!("bad substitution: ${{{content}}}")),
+        None => value.unwrap_or_default(),
+        Some('-') if set => value.unwrap_or_default(),
+        Some('-') => expand_word(&operation[1..], lookup)?,
+        Some('+') if set => expand_word(&operation[1..], lookup)?,
+        Some('+') => String::new(),
+        Some('?') if set => value.unwrap_or_default(),
+        Some('?') => {
+            let message = expand_word(&operation[1..], lookup)?;
+            return Err(if message.is_empty() {
+                format!("{name}: parameter null or not set")
+            } else {
+                format!("{name}: {message}")
+            });
+        }
+        Some('=') => {
+            return Err(format!(
+                "${{{content}}}: assigning in an expansion is not supported, use {name}=value"
+            ));
+        }
+        Some(_) => return Err(format!("bad substitution: ${{{content}}}")),
+    };
+    output.push_str(&text);
+    Ok(!text.is_empty())
+}
+
+/// Expand the word of a `${NAME:-word}`: variables, quotes and escapes, but no
+/// splitting and no patterns.
+fn expand_word(word: &str, lookup: Lookup) -> Result<String, String> {
+    let mut output = String::new();
+    let mut characters = word.chars().peekable();
+    let mut quote: Option<Quote> = None;
+    while let Some(character) = characters.next() {
+        match (quote, character) {
+            (Some(Quote::Single), '\'') | (Some(Quote::Double), '"') => quote = None,
+            (Some(Quote::Single), character) => output.push(character),
+            (None, '\'') => quote = Some(Quote::Single),
+            (None, '"') => quote = Some(Quote::Double),
+            (_, '$') => {
+                expand_variable(&mut characters, lookup, &mut output)?;
+            }
+            (_, '\\') => {
+                if let Some(escaped) = characters.next() {
+                    output.push(escaped);
+                }
+            }
+            (_, character) => output.push(character),
+        }
+    }
+    Ok(output)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1045,6 +1137,7 @@ mod tests {
             "HOME" => Some("/home/test".to_string()),
             "?" => Some("1".to_string()),
             "PATH_LIKE" => Some("a b".to_string()),
+            "ACCENT" => Some("été".to_string()),
             _ => None,
         }
     }
@@ -1096,6 +1189,98 @@ mod tests {
         assert_eq!(
             expanded("echo pre${MISSING}post"),
             words(&["echo", "prepost"])
+        );
+    }
+
+    #[test]
+    fn a_default_replaces_an_unset_or_empty_variable() {
+        assert_eq!(expanded("echo ${MISSING:-d}"), words(&["echo", "d"]));
+        assert_eq!(expanded("echo ${EMPTY:-d}"), words(&["echo", "d"]));
+        assert_eq!(expanded("echo ${NAME:-d}"), words(&["echo", "world"]));
+        // Without a colon only an unset variable takes the default.
+        assert_eq!(expanded("echo ${MISSING-d}"), words(&["echo", "d"]));
+        assert_eq!(expanded("echo ${EMPTY-d} end"), words(&["echo", "end"]));
+        assert_eq!(expanded("echo ${NAME-d}"), words(&["echo", "world"]));
+    }
+
+    #[test]
+    fn the_word_of_an_expansion_has_variables_quotes_and_nesting() {
+        assert_eq!(
+            expanded("echo ${MISSING:-$NAME}"),
+            words(&["echo", "world"])
+        );
+        assert_eq!(
+            expanded("echo ${MISSING:-\"two words\"}"),
+            words(&["echo", "two words"])
+        );
+        assert_eq!(
+            expanded("echo ${MISSING:-${ALSO_MISSING:-deep}}"),
+            words(&["echo", "deep"])
+        );
+        assert_eq!(
+            expanded("echo ${MISSING:-'$NAME'}"),
+            words(&["echo", "$NAME"])
+        );
+        assert_eq!(expanded("echo ${MISSING:-a}b"), words(&["echo", "ab"]));
+    }
+
+    #[test]
+    fn an_alternative_applies_only_to_a_set_variable() {
+        assert_eq!(expanded("echo ${NAME:+yes}"), words(&["echo", "yes"]));
+        assert_eq!(expanded("echo ${EMPTY:+yes} end"), words(&["echo", "end"]));
+        assert_eq!(expanded("echo ${EMPTY+yes}"), words(&["echo", "yes"]));
+        assert_eq!(
+            expanded("echo ${MISSING:+yes} end"),
+            words(&["echo", "end"])
+        );
+    }
+
+    #[test]
+    fn a_length_counts_characters() {
+        assert_eq!(expanded("echo ${#NAME}"), words(&["echo", "5"]));
+        assert_eq!(expanded("echo ${#MISSING}"), words(&["echo", "0"]));
+        assert_eq!(expanded("echo ${#PATH_LIKE}"), words(&["echo", "3"]));
+        // Characters, not bytes: "été" is 5 bytes.
+        assert_eq!(expanded("echo ${#ACCENT}"), words(&["echo", "3"]));
+    }
+
+    #[test]
+    fn a_required_variable_reports_its_message() {
+        assert_eq!(expanded("echo ${NAME:?needed}"), words(&["echo", "world"]));
+        assert_eq!(
+            expanded("echo ${MISSING:?needed}"),
+            Err("MISSING: needed".to_string())
+        );
+        assert_eq!(
+            expanded("echo ${EMPTY:?}"),
+            Err("EMPTY: parameter null or not set".to_string())
+        );
+    }
+
+    #[test]
+    fn unsupported_forms_are_explained() {
+        let assign = expanded("echo ${MISSING:=x}").unwrap_err();
+        assert!(
+            assign.contains("assigning in an expansion is not supported"),
+            "{assign}"
+        );
+        let bad = expanded("echo ${NAME%x}").unwrap_err();
+        assert!(bad.contains("bad substitution"), "{bad}");
+        assert!(
+            expanded("echo ${NAME:}")
+                .unwrap_err()
+                .contains("bad substitution")
+        );
+    }
+
+    #[test]
+    fn the_default_is_literal_text_not_a_pattern_or_a_split() {
+        let words = parse_words("echo ${MISSING:-*.txt}", &variables).expect("parses");
+        assert_eq!(words[1].text, "*.txt");
+        assert_eq!(words[1].pattern, None);
+        assert_eq!(
+            expanded("echo ${MISSING:-a b}"),
+            super::tests::words(&["echo", "a b"])
         );
     }
 

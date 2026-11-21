@@ -11,7 +11,7 @@ pub(super) fn run(args: &[String], state: &mut ShellState) -> CommandResult {
     };
     match action {
         "create" if args.len() == 2 => create(&args[1]),
-        "run" if args.len() == 2 => run_file(&args[1], state),
+        "run" if args.len() == 2 => run_file("script", &args[1], state, true),
         "startup" if args.len() == 2 => set_startup(&args[1], state),
         "list" if args.len() == 1 => list(),
         "create" | "run" | "startup" | "list" => {
@@ -94,45 +94,58 @@ fn list() -> CommandResult {
     map_prefixed_error("script", render::stdout(output))
 }
 
-fn run_file(path: &str, state: &mut ShellState) -> CommandResult {
+/// Run a file in the current shell. `command` names the command in messages, and
+/// `scripts_only` restricts it to `.trs` files (`script run`); `source` takes any
+/// file the user names.
+pub(super) fn run_file(
+    command: &str,
+    path: &str,
+    state: &mut ShellState,
+    scripts_only: bool,
+) -> CommandResult {
     const MAX_SCRIPT_DEPTH: usize = 16;
     const MAX_SCRIPT_BYTES: u64 = 1_048_576;
     if state.script_depth >= MAX_SCRIPT_DEPTH {
-        return CommandResult::Error("script: maximum nesting depth exceeded".into());
+        return CommandResult::Error(format!("{command}: maximum nesting depth exceeded"));
     }
     let script_path = PathBuf::from(path);
     let metadata = match std::fs::metadata(&script_path) {
         Ok(metadata) => metadata,
         Err(error) => {
-            return CommandResult::Error(format!("script: {}: {error}", script_path.display()));
+            return CommandResult::Error(format!("{command}: {}: {error}", script_path.display()));
         }
     };
     if !metadata.is_file() || metadata.len() > MAX_SCRIPT_BYTES {
         return CommandResult::Error(format!(
-            "script: {} must be a file no larger than 1 MiB",
+            "{command}: {} must be a file no larger than 1 MiB",
             script_path.display()
         ));
     }
-    if !is_script_file(&script_path) {
-        return CommandResult::Error("script: expected a .trs file".into());
+    if scripts_only && !is_script_file(&script_path) {
+        return CommandResult::Error(format!("{command}: expected a .trs file"));
     }
     let content = match std::fs::read_to_string(&script_path) {
         Ok(content) => content,
         Err(error) => {
             return CommandResult::Error(format!(
-                "script: cannot read {}: {error}",
+                "{command}: cannot read {}: {error}",
                 script_path.display()
             ));
         }
     };
 
     state.script_depth += 1;
-    let result = execute_contents(&content, &script_path, state);
+    let result = execute_contents(command, &content, &script_path, state);
     state.script_depth -= 1;
     result
 }
 
-fn execute_contents(content: &str, script_path: &Path, state: &mut ShellState) -> CommandResult {
+fn execute_contents(
+    command: &str,
+    content: &str,
+    script_path: &Path,
+    state: &mut ShellState,
+) -> CommandResult {
     let mut pending = String::new();
     for (index, raw_line) in content.lines().enumerate() {
         let line_number = index + 1;
@@ -158,7 +171,7 @@ fn execute_contents(content: &str, script_path: &Path, state: &mut ShellState) -
             CommandResult::Exit => return CommandResult::Exit,
             CommandResult::Error(error) => {
                 return CommandResult::Error(format!(
-                    "script: {}:{line_number}: {error}",
+                    "{command}: {}:{line_number}: {error}",
                     script_path.display()
                 ));
             }
@@ -166,7 +179,7 @@ fn execute_contents(content: &str, script_path: &Path, state: &mut ShellState) -
     }
     if !pending.is_empty() {
         return CommandResult::Error(format!(
-            "script: {} ends inside an unfinished command",
+            "{command}: {} ends inside an unfinished command",
             script_path.display()
         ));
     }

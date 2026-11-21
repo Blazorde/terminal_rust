@@ -44,6 +44,16 @@ The program shares the terminal, the environment and the current directory.
 takes precedence over a program of the same name. See
 [Pipes and redirections](#pipes-and-redirections) and [Variables](#variables).
 
+`type name...` (or `which`) says what a name would run, in the order the shell
+looks it up: a keyword (`for`), a built-in, an alias or custom command, a plugin
+command, then the program found in `PATH` with its full path. A name that is
+none of these prints `type: name: not found` and the status is `1`; the other
+names of the list are still described.
+
+```text
+type for echo ls cargo     # for is a shell keyword ... cargo is /usr/bin/cargo
+```
+
 ## Variables
 
 `$NAME`, `${NAME}` and `$?` (`0` after a success, the exit code of a program
@@ -68,6 +78,27 @@ never split into several arguments. Put `NAME=value` words before a command to
 set variables for that command only (`LANG=C sort names.txt`, `PORT=8080 node
 app.js`): the program sees them, the shell does not keep them, and the previous
 value comes back afterwards.
+
+Inside `${…}` you can give a default, test for a value, or take a length. With a
+colon an empty value counts as unset; without it only an unset variable does:
+
+| Form | Result |
+| --- | --- |
+| `${NAME:-word}` / `${NAME-word}` | the value, or `word` when unset (or empty, with the colon) |
+| `${NAME:+word}` / `${NAME+word}` | `word` when set (and not empty, with the colon), else nothing |
+| `${NAME:?message}` / `${NAME?message}` | the value, or an error `NAME: message` and nothing runs |
+| `${#NAME}` | the number of characters of the value |
+
+```text
+echo ${EDITOR:-nano}          # nano when EDITOR is not set
+cd ${PROJECT:-.}/src
+echo "${#PATH} characters in PATH"
+```
+
+The `word` may hold variables, quotes and another `${…}`. It is never split into
+several arguments or matched against files. `${NAME:=word}` (assigning while
+expanding) and the trimming forms (`${NAME%x}`, `${NAME#x}`, `${NAME/a/b}`) are
+not available: write `NAME=value` instead.
 
 ## Leaving the shell
 
@@ -111,7 +142,18 @@ turn, and `true` and `false` are built in. A newline works like `;`, so a block
 can be typed over several lines: the shell asks for more (`>> `) until `done` or
 `fi`. `Ctrl+C` stops a loop. A failing condition is not an error, so its message
 is not shown. `case`, functions, `break 2`, and redirections on a whole loop
-(`done > file`) are not available, and `test` or `[` are the system programs.
+(`done > file`) are not available.
+
+`test` and `[ … ]` are built in, so conditions work on every system:
+
+```text
+[ -f file ]  [ -d dir ]  [ -e path ]  [ -s file ]  [ -r f ] [ -w f ] [ -x f ]  [ -L link ]
+[ -z "$x" ]  [ -n "$x" ]  [ "$a" = "$b" ]  [ "$a" != "$b" ]
+[ $n -eq 3 ]  -ne  -lt  -le  -gt  -ge        [ ! cond ]  [ c1 -a c2 ]  [ c1 -o c2 ]
+```
+
+The status is `0` when true, `1` when false (no message) and `2` for a mistake in
+the expression. Quote variables (`[ "$x" = a ]`) as in other shells.
 
 ## Brace expansion
 
@@ -147,7 +189,27 @@ assignment (`NAME=$(cmd)`) it is not split. What the command writes on standard
 error still goes to the terminal. A result can never add an operator such as `;`
 or `>` to the line. Single quotes and `\$(` keep it as text. `cd` inside a
 substitution changes the shell's directory (there is no subshell). Backquotes
-and `$((...))` arithmetic are not available.
+are not available.
+
+## Arithmetic
+
+`$((expression))` is replaced by the value of an integer expression, so loops can
+count:
+
+```text
+echo $((6 * 7))                  # 42
+i=0; while [ $i -lt 3 ]; do echo $i; i=$((i + 1)); done
+echo "half: $((total / 2))"
+echo $(( (a + b) % 10 ))
+```
+
+Numbers are 64-bit integers (decimal or `0x` hexadecimal). Available: `+ - * / %`,
+parentheses, the signs `-` `+` and `!`, the comparisons `== != < <= > >=` and the
+logical `&&` `||`, which give `1` or `0`. A variable is written `n` or `$n`; an
+unset or empty one is `0`. A division by zero, an overflow or a bad expression is
+an error and the command does not run. There is no assignment inside the
+expression (`i=$((i+1))` is an ordinary assignment), no `**`, no bit operators and
+no `$(...)` inside it.
 
 ## File name patterns
 
@@ -226,6 +288,53 @@ When a job ends the shell says so once, before the next prompt: `[1]+  Done
 npm run dev` or `[1]+  Exit 3  ...`. A job is one command or one pipeline: `a &&
 b &` is rejected. Programs keep running if you leave the shell. There is no
 `Ctrl+Z` and no `bg`: an interactive program has to run in the foreground.
+
+## History
+
+`history` lists the lines you typed, numbered; `history 10` shows the last ten.
+At the prompt, a few references stand for earlier lines:
+
+| Type | It becomes |
+| --- | --- |
+| `!!` | the previous line (`sudo !!`) |
+| `!$` | the last word of the previous line (`mkdir -p a/b` then `cd !$`) |
+| `!^` | the first argument of the previous line |
+| `!5`, `!-2` | line number 5, or the second line back |
+| `!git` | the most recent line that starts with `git` |
+
+The line that runs is shown first and is recorded as expanded. A line that does
+not exist (`!99`) prints `event not found` and nothing runs. A `!` is left alone
+inside quotes, after a backslash or `$`, at the end of a line and before a blank,
+`=` or `(`, so `echo hi!`, `[ ! -f x ]` and `a != b` keep working. References
+only apply when you type at the prompt: scripts and piped input never expand
+them. `!!:1`, `^a^b`, `!?text?` and `history -c` are not available.
+
+## Running a file and reading input
+
+`source file` (or `. file`) runs the commands of a file in the current shell, so
+the variables and the directory it sets stay afterwards. Unlike `script run`, the
+file can have any name. It runs line by line like a script (blocks over several
+lines, `#` comments), stops at the first error and names the file and the line.
+Arguments for the file (`$1`) are not supported.
+
+```text
+source ~/.config/project/env.sh
+. ./helpers.sh
+```
+
+`read` reads one line into variables. The line comes from a pipe or a
+redirection when there is one, and from the terminal otherwise; blanks separate
+the fields, the last name takes the rest of the line, and with no name the line
+goes to `REPLY`. `-p text` shows a prompt (on the terminal only) and `-r` is
+accepted (a backslash is always literal). The status is `1` at the end of the
+input, which leaves the variables empty.
+
+```text
+read -p "Name: " name
+echo "hello $name"
+echo one two three | read first rest     # first=one rest="two three"
+read line < notes.txt
+```
 
 ## Pasting several lines
 

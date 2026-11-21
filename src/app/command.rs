@@ -5,8 +5,8 @@ use crate::app::help;
 use crate::app::parser::{Stage, parse_args, split_chain, split_stages};
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, external, fastfetch,
-    git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime,
-    user, whoami,
+    git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, read_command, rm,
+    test_command, theme, touch, uptime, user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -16,6 +16,7 @@ use crate::render::printable::printable_multiline;
 use crate::utils::shell_env;
 
 mod aliases;
+mod arithmetic;
 mod braces;
 mod flow;
 mod jobs;
@@ -38,6 +39,8 @@ pub struct ShellState {
     /// How many loops are running, and what `break` or `continue` asked for.
     loop_depth: u32,
     loop_signal: Option<flow::LoopSignal>,
+    /// The lines typed at the prompt, oldest first (see `history`).
+    history: Vec<String>,
 }
 
 impl ShellState {
@@ -58,7 +61,23 @@ impl ShellState {
             jobs: jobs::Jobs::default(),
             loop_depth: 0,
             loop_signal: None,
+            history: Vec::new(),
         }
+    }
+
+    /// The lines typed at the prompt so far, oldest first.
+    pub(crate) fn history(&self) -> &[String] {
+        &self.history
+    }
+
+    /// Replace the history, for example with the lines of the history file.
+    pub(crate) fn set_history(&mut self, entries: Vec<String>) {
+        self.history = entries;
+    }
+
+    /// Remember a line that was typed at the prompt.
+    pub(crate) fn record_history(&mut self, line: &str) {
+        self.history.push(line.to_string());
     }
 
     /// Value of a variable for expansion: `?`, then shell variables, then the
@@ -339,6 +358,62 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "alias for nvim",
         max_args: None,
         handler: run_neovim,
+    },
+    CommandSpec {
+        name: "history",
+        usage: "history [count]",
+        summary: "list the commands typed at the prompt (see !!, !$, !n, !prefix)",
+        max_args: Some(1),
+        handler: run_history,
+    },
+    CommandSpec {
+        name: "source",
+        usage: "source <file>",
+        summary: "run the commands of a file in this shell",
+        max_args: None,
+        handler: run_source,
+    },
+    CommandSpec {
+        name: ".",
+        usage: ". <file>",
+        summary: "same as source",
+        max_args: None,
+        handler: run_source,
+    },
+    CommandSpec {
+        name: "read",
+        usage: "read [-r] [-p prompt] [name...]",
+        summary: "read a line into variables",
+        max_args: None,
+        handler: run_read,
+    },
+    CommandSpec {
+        name: "type",
+        usage: "type <name>...",
+        summary: "say what a name runs: keyword, built-in, alias, plugin or program",
+        max_args: None,
+        handler: run_type,
+    },
+    CommandSpec {
+        name: "which",
+        usage: "which <name>...",
+        summary: "same as type",
+        max_args: None,
+        handler: run_type,
+    },
+    CommandSpec {
+        name: "test",
+        usage: "test <expression>",
+        summary: "check a condition on files, strings or integers (status 0 if true)",
+        max_args: None,
+        handler: run_test,
+    },
+    CommandSpec {
+        name: "[",
+        usage: "[ <expression> ]",
+        summary: "same as test, with a closing ]",
+        max_args: None,
+        handler: run_bracket,
     },
     CommandSpec {
         name: "true",
@@ -928,6 +1003,129 @@ fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
     })
 }
 
+fn run_history(args: &[String], state: &mut ShellState) -> CommandResult {
+    let count = match args.first() {
+        None => state.history.len(),
+        Some(text) => match text.parse::<usize>() {
+            Ok(count) => count,
+            Err(_) => {
+                return CommandResult::Error(format!("history: not a number: {text}"));
+            }
+        },
+    };
+    let first = state.history.len().saturating_sub(count);
+    for (index, line) in state.history.iter().enumerate().skip(first) {
+        if let Err(error) = render::stdout_line(format!("{:>5}  {line}", index + 1)) {
+            return CommandResult::Error(format!("history: {error}"));
+        }
+    }
+    CommandResult::Continue
+}
+
+fn run_source(args: &[String], state: &mut ShellState) -> CommandResult {
+    match args {
+        [path] => scripts::run_file("source", path, state, false),
+        [] => CommandResult::Error("source: expected a file".to_string()),
+        _ => CommandResult::Error("source: arguments for the file are not supported".to_string()),
+    }
+}
+
+fn run_read(args: &[String], state: &mut ShellState) -> CommandResult {
+    let request = match read_command::parse(args) {
+        Ok(request) => request,
+        Err(message) => return CommandResult::Error(message),
+    };
+    // A prompt is for someone typing: a pipe or a redirection does not see it.
+    if let Some(prompt) = &request.prompt
+        && !crate::utils::pipe_input::is_provided()
+    {
+        let _ = render::stderr(prompt);
+    }
+    let line = read_command::next_line(&mut std::io::stdin().lock());
+    let values = match &line {
+        Some(line) => read_command::split_fields(line, &request.names),
+        None => request
+            .names
+            .iter()
+            .map(|name| (name.clone(), String::new()))
+            .collect(),
+    };
+    for (name, value) in values {
+        assign_variable(&name, &value, state);
+    }
+    match line {
+        Some(_) => CommandResult::Continue,
+        // The end of the input is a failure without a message, so that
+        // `while read` style tests can stop on it.
+        None => CommandResult::Error(String::new()),
+    }
+}
+
+/// What running `name` would do, in the order the shell looks it up.
+fn describe_name(name: &str, state: &ShellState) -> Option<String> {
+    if flow::is_keyword(name) {
+        return Some(format!("{name} is a shell keyword"));
+    }
+    if find_command(name).is_some() {
+        return Some(format!("{name} is a shell builtin"));
+    }
+    if let Some(command) = state.user_commands.get(name) {
+        let words = std::iter::once(command.target.as_str())
+            .chain(command.args.iter().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join(" ");
+        return Some(match command.kind {
+            UserCommandKind::Builtin => format!("{name} is an alias for '{words}'"),
+            UserCommandKind::Process => format!("{name} is a custom command running '{words}'"),
+        });
+    }
+    if state.plugin_commands.get(name).is_some() {
+        return Some(format!("{name} is a plugin command"));
+    }
+    external::locate(name).map(|path| format!("{name} is {}", path.display()))
+}
+
+fn run_type(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args.is_empty() {
+        return CommandResult::Error("type: usage: type <name>...".to_string());
+    }
+    let mut missing = Vec::new();
+    for name in args {
+        match describe_name(name, state) {
+            Some(line) => {
+                let _ = render::stdout_line(line);
+            }
+            None => missing.push(format!("type: {name}: not found")),
+        }
+    }
+    if missing.is_empty() {
+        CommandResult::Continue
+    } else {
+        CommandResult::Error(missing.join("\n"))
+    }
+}
+
+/// A condition: success when true, a silent failure (status 1) when false, and a
+/// message with status 2 when the expression is wrong.
+fn condition(outcome: test_command::Outcome) -> CommandResult {
+    match outcome {
+        Ok(true) => CommandResult::Continue,
+        Ok(false) => CommandResult::Error(String::new()),
+        Err(message) => {
+            external::note_exit_code(2);
+            CommandResult::Error(message)
+        }
+    }
+}
+
+fn run_test(args: &[String], _state: &mut ShellState) -> CommandResult {
+    condition(test_command::evaluate(args, false))
+}
+
+fn run_bracket(args: &[String], _state: &mut ShellState) -> CommandResult {
+    condition(test_command::evaluate(args, true))
+}
+
 fn run_true(_args: &[String], _state: &mut ShellState) -> CommandResult {
     CommandResult::Continue
 }
@@ -1098,6 +1296,55 @@ mod tests {
     }
 
     #[test]
+    fn history_lists_numbered_lines_and_the_last_ones() {
+        let mut state = test_state();
+        state.set_history(
+            ["one", "two", "three"]
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+        );
+
+        let (result, output) =
+            render::capture_output(|| execute(&string_args(&["history"]), &mut state));
+        assert!(matches!(result, CommandResult::Continue));
+        assert_eq!(output.stdout, "    1  one\n    2  two\n    3  three\n");
+
+        let (_, output) =
+            render::capture_output(|| execute(&string_args(&["history", "2"]), &mut state));
+        assert_eq!(output.stdout, "    2  two\n    3  three\n");
+
+        let (_, output) =
+            render::capture_output(|| execute(&string_args(&["history", "99"]), &mut state));
+        assert_eq!(output.stdout.lines().count(), 3);
+
+        let (result, _) =
+            render::capture_output(|| execute(&string_args(&["history", "x"]), &mut state));
+        assert!(
+            matches!(result, CommandResult::Error(message) if message.contains("not a number"))
+        );
+
+        state.record_history("four");
+        assert_eq!(state.history().last().map(String::as_str), Some("four"));
+    }
+
+    #[test]
+    fn type_says_what_a_name_runs() {
+        let mut state = test_state();
+        let _ = render::capture_output(|| {
+            execute(&string_args(&["alias", "where", "pwd"]), &mut state)
+        });
+        let say = |name: &str, state: &mut ShellState| {
+            describe_name(name, state).unwrap_or_else(|| "none".to_string())
+        };
+
+        assert_eq!(say("for", &mut state), "for is a shell keyword");
+        assert_eq!(say("echo", &mut state), "echo is a shell builtin");
+        assert_eq!(say("where", &mut state), "where is an alias for 'pwd'");
+        assert_eq!(say("terminal-rust-no-such-program", &mut state), "none");
+    }
+
+    #[test]
     fn scripts_stop_on_the_first_failed_command() {
         let path = std::env::temp_dir().join(format!(
             "terminal-rust-script-{}-{}.trs",
@@ -1148,5 +1395,150 @@ mod tests {
             result,
             CommandResult::Error(message) if message.contains("Usage: man <command>")
         ));
+    }
+
+    /// Random text made of the characters the parsers care about must never make
+    /// one of them panic: a shell that dies on a strange line is a bad shell. A
+    /// fixed seed keeps a failure reproducible.
+    #[test]
+    fn the_parsers_never_panic_on_random_input() {
+        const PIECES: [&str; 40] = [
+            "a", "b", "x", "1", "2", " ", "  ", "\n", "\t", "$", "$(", "${", "(", ")", "{", "}",
+            ",", "..", ";", "&", "&&", "|", "||", "<", ">", ">>", "2>&1", "'", "\"", "\\", "*",
+            "?", "[", "]", "~", "=", "for ", "do ", "done", "if ",
+        ];
+        let mut seed = 0x9E37_79B9_7F4A_7C15_u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for _ in 0..150_000 {
+            let length = 1 + (next() % 20) as usize;
+            let text: String = (0..length)
+                .map(|_| PIECES[(next() % PIECES.len() as u64) as usize])
+                .collect();
+
+            let outcome = std::panic::catch_unwind(|| {
+                let _ = braces::expand(&text);
+                let _ = flow::is_incomplete(&text);
+                let _ = crate::app::parser::parse_words(&text, &|_| None);
+                let _ = split_stages(&text);
+                if let Ok(segments) = split_chain(&text) {
+                    let _ = flow::parse(segments);
+                }
+            });
+            assert!(outcome.is_ok(), "a parser panicked on {text:?}");
+        }
+    }
+
+    /// Run random lines made of harmless commands. Nothing may panic or hang,
+    /// whatever the mix of quotes, loops, substitutions and redirections.
+    #[test]
+    fn random_lines_of_harmless_commands_never_panic_or_hang() {
+        use std::sync::mpsc::{self, RecvTimeoutError};
+        use std::time::Duration;
+
+        const PIECES: [&str; 38] = [
+            "echo ",
+            "true",
+            "false",
+            "test ",
+            "[ ",
+            " ]",
+            "break",
+            "continue",
+            "a",
+            "b",
+            "1",
+            " ",
+            " ",
+            "; ",
+            " && ",
+            " || ",
+            " | ",
+            " > ",
+            " >> ",
+            " 2>&1 ",
+            "$(",
+            ")",
+            "{a,b}",
+            "{1..3}",
+            "'",
+            "\"",
+            "$x",
+            "*",
+            "for x in 1 2; do ",
+            "; done",
+            "if true; then ",
+            "; fi",
+            "if false; then ",
+            "; else ",
+            "\n",
+            "x=",
+            "$((",
+            "))",
+        ];
+        let guard = crate::test_support::cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let root = std::env::temp_dir().join(format!(
+            "terminal-rust-fuzz-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("fixture directory");
+        let original = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(&root).expect("enter the fixture");
+
+        let (sender, receiver) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let mut state = test_state();
+            let mut seed = 0xD1B5_4A32_D192_ED03_u64;
+            let mut next = move || {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                seed
+            };
+            for _ in 0..6_000 {
+                let length = 1 + (next() % 14) as usize;
+                let line: String = (0..length)
+                    .map(|_| PIECES[(next() % PIECES.len() as u64) as usize])
+                    .collect();
+                let _ = sender.send(line.clone());
+                // The output goes nowhere: it is captured and dropped.
+                let _ = render::capture_output(|| run_line(&line, &mut state));
+            }
+        });
+
+        let mut last = String::new();
+        let mut hung = false;
+        loop {
+            match receiver.recv_timeout(Duration::from_secs(20)) {
+                Ok(line) => last = line,
+                Err(RecvTimeoutError::Timeout) => {
+                    hung = true;
+                    break;
+                }
+                // The sender is gone because the worker ended or panicked: it
+                // may not be finished a moment later, so wait for it.
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        }
+        let result = (!hung).then(|| worker.join());
+        // Leave the fixture and release the lock before any assertion: a failure
+        // while holding it would poison it and fail every test that uses it.
+        std::env::set_current_dir(original).expect("restore cwd");
+        let _ = std::fs::remove_dir_all(&root);
+        drop(guard);
+        assert!(!hung, "the shell hung on {last:?}");
+        assert!(
+            result.is_some_and(|result| result.is_ok()),
+            "the shell panicked on {last:?}"
+        );
     }
 }
