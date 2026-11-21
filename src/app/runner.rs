@@ -10,6 +10,7 @@ use rustyline::{ColorMode, CompletionType, Config, Editor};
 
 use crate::app::command::input_is_incomplete;
 use crate::app::completion::ShellHelper;
+use crate::app::history;
 use crate::app::parser::{continuation_prefix, normalize_multiline_input};
 use crate::app::prompt::{GUI_PROMPT_ENV, Prompt};
 use crate::commands::external;
@@ -105,6 +106,8 @@ fn run_interactive_editor() -> ExitCode {
         }
     }
 
+    engine.set_history(editor.history().iter().cloned().collect());
+
     let exit_code = loop {
         show_job_notices(&mut engine);
         let (prompt, styled_prompt) = match shell_prompt.render_for_editor() {
@@ -117,9 +120,22 @@ fn run_interactive_editor() -> ExitCode {
         let editor_prompt = (prompt, styled_prompt);
         match read_editor_command(&mut editor, &editor_prompt) {
             Ok(input) => {
+                // `!!`, `!$`, `!n` and `!prefix` stand for earlier lines. The
+                // line that runs is shown, then recorded as it was expanded.
+                let input = match history::expand(input.trim(), engine.history()) {
+                    Ok(None) => input,
+                    Ok(Some(expanded)) => {
+                        let _ = render::stdout_line(&expanded);
+                        expanded
+                    }
+                    Err(message) => {
+                        let _ = render::stderr_line(message);
+                        continue;
+                    }
+                };
                 let trimmed = input.trim();
-                if !trimmed.is_empty() {
-                    let _ = editor.add_history_entry(trimmed);
+                if !trimmed.is_empty() && editor.add_history_entry(trimmed).unwrap_or(false) {
+                    engine.record_history(trimmed);
                 }
                 if handle_input(&input, &mut engine, &mut shell_prompt) == ExecutionStatus::Exit {
                     break ExitCode::from(engine.exit_code());

@@ -39,6 +39,8 @@ pub struct ShellState {
     /// How many loops are running, and what `break` or `continue` asked for.
     loop_depth: u32,
     loop_signal: Option<flow::LoopSignal>,
+    /// The lines typed at the prompt, oldest first (see `history`).
+    history: Vec<String>,
 }
 
 impl ShellState {
@@ -59,7 +61,23 @@ impl ShellState {
             jobs: jobs::Jobs::default(),
             loop_depth: 0,
             loop_signal: None,
+            history: Vec::new(),
         }
+    }
+
+    /// The lines typed at the prompt so far, oldest first.
+    pub(crate) fn history(&self) -> &[String] {
+        &self.history
+    }
+
+    /// Replace the history, for example with the lines of the history file.
+    pub(crate) fn set_history(&mut self, entries: Vec<String>) {
+        self.history = entries;
+    }
+
+    /// Remember a line that was typed at the prompt.
+    pub(crate) fn record_history(&mut self, line: &str) {
+        self.history.push(line.to_string());
     }
 
     /// Value of a variable for expansion: `?`, then shell variables, then the
@@ -340,6 +358,13 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "alias for nvim",
         max_args: None,
         handler: run_neovim,
+    },
+    CommandSpec {
+        name: "history",
+        usage: "history [count]",
+        summary: "list the commands typed at the prompt (see !!, !$, !n, !prefix)",
+        max_args: Some(1),
+        handler: run_history,
     },
     CommandSpec {
         name: "source",
@@ -978,6 +1003,25 @@ fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
     })
 }
 
+fn run_history(args: &[String], state: &mut ShellState) -> CommandResult {
+    let count = match args.first() {
+        None => state.history.len(),
+        Some(text) => match text.parse::<usize>() {
+            Ok(count) => count,
+            Err(_) => {
+                return CommandResult::Error(format!("history: not a number: {text}"));
+            }
+        },
+    };
+    let first = state.history.len().saturating_sub(count);
+    for (index, line) in state.history.iter().enumerate().skip(first) {
+        if let Err(error) = render::stdout_line(format!("{:>5}  {line}", index + 1)) {
+            return CommandResult::Error(format!("history: {error}"));
+        }
+    }
+    CommandResult::Continue
+}
+
 fn run_source(args: &[String], state: &mut ShellState) -> CommandResult {
     match args {
         [path] => scripts::run_file("source", path, state, false),
@@ -1249,6 +1293,39 @@ mod tests {
                     .to_string()
             )
         );
+    }
+
+    #[test]
+    fn history_lists_numbered_lines_and_the_last_ones() {
+        let mut state = test_state();
+        state.set_history(
+            ["one", "two", "three"]
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+        );
+
+        let (result, output) =
+            render::capture_output(|| execute(&string_args(&["history"]), &mut state));
+        assert!(matches!(result, CommandResult::Continue));
+        assert_eq!(output.stdout, "    1  one\n    2  two\n    3  three\n");
+
+        let (_, output) =
+            render::capture_output(|| execute(&string_args(&["history", "2"]), &mut state));
+        assert_eq!(output.stdout, "    2  two\n    3  three\n");
+
+        let (_, output) =
+            render::capture_output(|| execute(&string_args(&["history", "99"]), &mut state));
+        assert_eq!(output.stdout.lines().count(), 3);
+
+        let (result, _) =
+            render::capture_output(|| execute(&string_args(&["history", "x"]), &mut state));
+        assert!(
+            matches!(result, CommandResult::Error(message) if message.contains("not a number"))
+        );
+
+        state.record_history("four");
+        assert_eq!(state.history().last().map(String::as_str), Some("four"));
     }
 
     #[test]
