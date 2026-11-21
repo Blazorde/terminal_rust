@@ -16,6 +16,7 @@ use crate::render::printable::printable_multiline;
 use crate::utils::shell_env;
 
 mod aliases;
+mod arithmetic;
 mod braces;
 mod flow;
 mod jobs;
@@ -1302,7 +1303,7 @@ mod tests {
         use std::sync::mpsc;
         use std::time::Duration;
 
-        const PIECES: [&str; 36] = [
+        const PIECES: [&str; 38] = [
             "echo ",
             "true",
             "false",
@@ -1339,6 +1340,8 @@ mod tests {
             "; else ",
             "\n",
             "x=",
+            "$((",
+            "))",
         ];
         let _guard = crate::test_support::cwd_lock()
             .lock()
