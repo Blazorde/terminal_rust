@@ -255,6 +255,9 @@ response = "Hello from the official Terminal Rust plugin!\n"
 
     #[test]
     fn reports_parse_errors_as_typed_failures() {
+        // The engine compares the working directory before and after the line, and
+        // another test may change it meanwhile: hold the lock like they do.
+        let _guard = cwd_lock().lock().expect("cwd lock is poisoned");
         let mut engine = ShellEngine::new();
 
         let result = engine.execute_line("cd \"unfinished");
