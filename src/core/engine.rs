@@ -89,6 +89,12 @@ impl ShellEngine {
             .collect()
     }
 
+    /// The code a front end should exit with: the one given to `exit`, or the
+    /// status of the last command.
+    pub fn exit_code(&self) -> u8 {
+        self.state.exit_code()
+    }
+
     pub(crate) fn startup_script(&self) -> Option<&str> {
         self.state.startup_script()
     }

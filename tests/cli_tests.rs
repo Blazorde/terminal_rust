@@ -1397,3 +1397,86 @@ fn and_or_chains_still_follow_success_and_failure_with_exact_codes() {
     assert!(!printed.contains("wrong"), "{printed}");
     assert!(printed.contains("ok"), "{printed}");
 }
+
+#[test]
+fn exit_leaves_with_the_given_code_or_the_last_status() {
+    let directory = TestDirectory::new("exit code");
+
+    for (input, expected) in [
+        ("exit 3\n", 3),
+        ("exit 0\n", 0),
+        ("exit 300\n", 44),
+        ("exit 200\n", 200),
+        ("exit -1\n", 255),
+        ("echo fine\nexit\n", 0),
+        ("cat\nexit\n", 1),
+        ("cat\n", 1),
+        ("echo fine\n", 0),
+    ] {
+        let output = run_interactive(directory.path(), input);
+
+        assert_eq!(
+            output.status.code(),
+            Some(expected),
+            "input {input:?}: {}",
+            stderr(&output)
+        );
+    }
+}
+
+#[test]
+fn exit_rejects_a_code_that_is_not_a_number_and_keeps_the_shell() {
+    let directory = TestDirectory::new("exit invalid");
+
+    let (printed, errors) = shell_lines(&directory, &["exit soon", "echo still-here"]);
+
+    assert!(
+        errors.contains("exit: numeric argument required: 'soon'"),
+        "{errors}"
+    );
+    assert!(printed.contains("still-here\n"), "{printed}");
+}
+
+#[test]
+fn a_variable_prefix_applies_to_one_command_only() {
+    let directory = TestDirectory::new("env prefix");
+    let shell = env!("CARGO_BIN_EXE_terminal_rust");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            &format!("TRS_PREFIX=temporary \"{shell}\" printenv TRS_PREFIX"),
+            "echo after=$TRS_PREFIX",
+            &format!("TRS_PREFIX=temporary \"{shell}\" printenv TRS_PREFIX | cat"),
+            "export TRS_KEPT=original",
+            &format!("TRS_KEPT=changed \"{shell}\" printenv TRS_KEPT"),
+            &format!("\"{shell}\" printenv TRS_KEPT"),
+            "TRS_PLAIN=assigned",
+            "echo plain=$TRS_PLAIN",
+        ],
+    );
+
+    assert_eq!(
+        printed.matches("temporary\n").count(),
+        2,
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("after=\n"), "{printed}");
+    assert!(printed.contains("changed\n"), "{printed}");
+    assert!(printed.contains("original\n"), "{printed}");
+    // Without a command, the words still assign a shell variable.
+    assert!(printed.contains("plain=assigned\n"), "{printed}");
+}
+
+#[test]
+fn several_prefixed_variables_reach_a_built_in_and_a_program() {
+    let directory = TestDirectory::new("env prefixes");
+    let shell = env!("CARGO_BIN_EXE_terminal_rust");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[&format!("TRS_ONE=1 TRS_TWO=2 \"{shell}\" printenv TRS_TWO")],
+    );
+
+    assert!(printed.contains("2\n"), "{printed}\n{errors}");
+}

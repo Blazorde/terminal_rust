@@ -9,11 +9,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
 use std::thread::{self, JoinHandle};
 
-use super::{CommandError, CommandResult, ShellState, StageKind, classify, execute};
+use super::{
+    CommandError, CommandResult, ShellState, StageKind, classify, execute, split_env_prefix,
+};
 use crate::app::parser::{Redirect, Stage, parse_args, parse_with};
 use crate::commands::external::{self, RunError};
 use crate::render;
-use crate::utils::pipe_input;
+use crate::utils::{pipe_input, shell_env};
 
 /// Where one output stream of a stage goes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,6 +36,7 @@ struct Target {
 /// A stage with its words and redirections expanded, ready to run.
 struct Plan {
     args: Vec<String>,
+    env: Vec<(String, String)>,
     kind: StageKind,
     stdin: Option<PathBuf>,
     out: Sink,
@@ -169,10 +172,13 @@ pub(super) fn run(stages: &[Stage], state: &mut ShellState) -> CommandResult {
 
 fn plan(stage: &Stage, state: &ShellState) -> Result<Plan, String> {
     let lookup = |name: &str| state.variable(name);
-    let args = parse_args(&stage.text, &lookup)?;
-    if args.is_empty() {
+    let words = parse_args(&stage.text, &lookup)?;
+    if words.is_empty() {
         return Err("expected a command".to_string());
     }
+    // `NAME=value command`: the variables apply to this stage only.
+    let (env, rest) = split_env_prefix(&words);
+    let (env, args) = (env, rest.to_vec());
     let kind = classify(&args, state)?;
 
     let mut stdin = None;
@@ -216,6 +222,7 @@ fn plan(stage: &Stage, state: &ShellState) -> Result<Plan, String> {
 
     Ok(Plan {
         args,
+        env,
         kind,
         stdin,
         out,
@@ -269,7 +276,9 @@ fn run_in_process(
     state: &mut ShellState,
 ) -> (CommandResult, Input) {
     pipe_input::provide(stdin);
-    let (result, captured) = render::capture_stage(|| execute(&plan.args, state));
+    let (result, captured) = render::capture_stage(|| {
+        shell_env::with_temporary(&plan.env, || execute(&plan.args, state))
+    });
     // Whatever the command left unread is not for the next one.
     pipe_input::provide(None);
     let mut stdout_text = captured.stdout;
@@ -381,6 +390,8 @@ fn start_program(
 ) -> Result<Started, String> {
     let name = plan.args.first().map(String::as_str).unwrap_or(program);
     let mut command = external::command(program, args);
+    // After the exports that `command` applied, so a prefix wins over them.
+    command.envs(plan.env.iter().map(|(name, value)| (name, value)));
 
     let mut feed = None;
     match (opened.stdin, previous) {
