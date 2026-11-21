@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::env;
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::appearance::AppearanceSettings;
 use super::loader::default_config_path;
 use super::schema::UserCommandConfig;
+use crate::utils::atomic::write_atomically;
 
 const CONFIG_ENV: &str = "TERMINAL_RUST_CONFIG";
 const SHELL_STATE_FILE: &str = "shell-state.toml";
@@ -51,46 +52,11 @@ pub(super) fn save_persistent_shell_state(state: &PersistentShellState) -> Resul
     let path = shell_state_path().ok_or_else(|| {
         "cannot determine the user configuration directory; set TERMINAL_RUST_CONFIG".to_string()
     })?;
-    let parent = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
-    let content = toml::to_string_pretty(state)
+    let mut content = toml::to_string_pretty(state)
         .map_err(|error| format!("cannot serialize shell state: {error}"))?;
-    let temporary = path.with_extension("toml.tmp");
-    let mut file = OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(&temporary)
-        .map_err(|error| format!("cannot create {}: {error}", temporary.display()))?;
-    file.write_all(content.as_bytes())
-        .and_then(|()| file.write_all(b"\n"))
-        .and_then(|()| file.sync_all())
-        .map_err(|error| format!("cannot write {}: {error}", temporary.display()))?;
-    drop(file);
-    replace_file(&temporary, &path)
+    content.push('\n');
+    write_atomically(&path, content.as_bytes())
         .map_err(|error| format!("cannot save {}: {error}", path.display()))
-}
-
-fn replace_file(temporary: &Path, path: &Path) -> io::Result<()> {
-    if !path.exists() {
-        return fs::rename(temporary, path);
-    }
-
-    let backup = path.with_extension("toml.bak");
-    if backup.exists() {
-        fs::remove_file(&backup)?;
-    }
-    fs::rename(path, &backup)?;
-    if let Err(error) = fs::rename(temporary, path) {
-        let _ = fs::rename(&backup, path);
-        return Err(error);
-    }
-    let _ = fs::remove_file(backup);
-    Ok(())
 }
 
 pub(super) fn shell_state_path() -> Option<PathBuf> {

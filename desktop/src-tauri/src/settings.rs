@@ -1,5 +1,5 @@
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -169,49 +169,10 @@ fn load_from_path(path: &Path) -> SettingsLoad {
 
 fn save_to_path(path: &Path, settings: &DesktopSettings) -> io::Result<()> {
     validate(settings).map_err(|message| io::Error::new(io::ErrorKind::InvalidInput, message))?;
-    let parent = path.parent().ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "desktop settings path has no parent directory",
-        )
-    })?;
-    fs::create_dir_all(parent)?;
-
-    let serialized = serde_json::to_vec_pretty(settings)
+    let mut serialized = serde_json::to_vec_pretty(settings)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    let temporary = path.with_extension("json.tmp");
-    let backup = path.with_extension("json.bak");
-
-    let mut file = OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(&temporary)?;
-    file.write_all(&serialized)?;
-    file.write_all(b"\n")?;
-    file.sync_all()?;
-    drop(file);
-
-    if path.exists() {
-        if backup.exists() {
-            fs::remove_file(&backup)?;
-        }
-        fs::rename(path, &backup)?;
-    }
-
-    if let Err(error) = fs::rename(&temporary, path) {
-        if backup.exists() {
-            let _ = fs::rename(&backup, path);
-        }
-        return Err(error);
-    }
-
-    if backup.exists() {
-        // The new settings are already durable at this point. A stale backup is
-        // harmless and must not turn a successful save into an error response.
-        let _ = fs::remove_file(backup);
-    }
-    Ok(())
+    serialized.push(b'\n');
+    terminal_rust::write_atomically(path, &serialized)
 }
 
 fn validate(settings: &DesktopSettings) -> Result<(), String> {
@@ -291,8 +252,10 @@ mod tests {
 
         assert_eq!(loaded.settings, settings);
         assert!(loaded.diagnostic.is_none());
-        assert!(!path.with_extension("json.tmp").exists());
-        assert!(!path.with_extension("json.bak").exists());
+        let leftovers = fs::read_dir(path.parent().expect("fixture has a parent"))
+            .expect("fixture directory should be readable")
+            .count();
+        assert_eq!(leftovers, 1, "only the settings file should remain");
     }
 
     #[test]
