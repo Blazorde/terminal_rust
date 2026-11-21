@@ -71,6 +71,15 @@ impl Prompt {
         })
     }
 
+    /// The Git branch and state, only when a configured segment will show it:
+    /// `git status` is the slowest thing the prompt can do.
+    fn git_info(&mut self, current_dir: &Path) -> Option<git::PromptGitInfo> {
+        if !self.config.prompt.uses_segment("git") {
+            return None;
+        }
+        self.git_cache.get_or_refresh(current_dir, git::prompt_info)
+    }
+
     pub fn record_execution(&mut self, status: ExecutionStatus, duration: Duration) {
         self.last_status = Some(status);
         self.last_duration = Some(duration);
@@ -78,9 +87,7 @@ impl Prompt {
 
     pub fn render(&mut self) -> io::Result<String> {
         let current_dir = env::current_dir()?;
-        let git = self
-            .git_cache
-            .get_or_refresh(&current_dir, git::prompt_info);
+        let git = self.git_info(&current_dir);
         let is_terminal = io::stdout().is_terminal();
         let color = ansi::color_enabled(is_terminal);
         let icons = self.icon_mode.enabled(is_terminal);
@@ -113,9 +120,7 @@ impl Prompt {
 
     fn render_for_editor_mode(&mut self, gui: bool) -> io::Result<(String, String)> {
         let current_dir = env::current_dir()?;
-        let git = self
-            .git_cache
-            .get_or_refresh(&current_dir, git::prompt_info);
+        let git = self.git_info(&current_dir);
         let is_terminal = io::stdout().is_terminal();
         let color = ansi::color_enabled(is_terminal);
         let icons = self.icon_mode.enabled(is_terminal);
@@ -227,6 +232,30 @@ fn gui_metadata(layout: &builder::PromptLayout) -> io::Result<String> {
 mod tests {
     use super::*;
     use crate::prompt::segment::SegmentKind;
+
+    #[test]
+    fn git_is_only_queried_when_a_configured_segment_shows_it() {
+        let directory =
+            std::env::temp_dir().join(format!("terminal-rust-prompt-git-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).expect("fixture directory should be created");
+        let initialized = std::process::Command::new("git")
+            .arg("init")
+            .arg("--quiet")
+            .arg(&directory)
+            .status()
+            .is_ok_and(|status| status.success());
+
+        if initialized {
+            let mut with_git = Prompt::default();
+            assert!(with_git.git_info(&directory).is_some());
+
+            let mut without_git = Prompt::default();
+            without_git.config.prompt.segments = vec!["path".into(), "symbol".into()];
+            without_git.config.prompt.right_segments = vec!["time".into()];
+            assert!(without_git.git_info(&directory).is_none());
+        }
+        std::fs::remove_dir_all(directory).expect("fixture directory should be removed");
+    }
 
     #[test]
     fn editor_prompt_keeps_gui_metadata_out_of_visible_width() {

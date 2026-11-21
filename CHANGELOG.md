@@ -5,6 +5,13 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Fixed
+
+- The prompt no longer freezes in a very large repository or on a slow disk:
+  `git status` is stopped after 1.5 seconds and the Git segment is left out for
+  that prompt. Git is not queried at all when no configured prompt segment shows
+  it (`prompt.segments` and `prompt.right_segments`).
+
 ## [1.2.2] - 2026-11-21
 
 ### Security
