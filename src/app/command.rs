@@ -19,6 +19,7 @@ mod aliases;
 mod jobs;
 mod pipeline;
 mod scripts;
+mod substitution;
 
 pub struct ShellState {
     previous_dir: Option<PathBuf>,
@@ -473,9 +474,32 @@ fn run_segment(
     background: bool,
     state: &mut ShellState,
 ) -> CommandResult {
+    // Command substitutions run now, then the rewritten text is split again.
+    if text.contains("$(") {
+        let expanded = match substitution::expand(text, state) {
+            Ok(expanded) => expanded,
+            Err(error) => return CommandResult::Error(error),
+        };
+        return match split_stages(&expanded) {
+            Ok(stages) => run_expanded(&expanded, &stages, background, state),
+            Err(error) => CommandResult::Error(error),
+        };
+    }
+    run_expanded(text, stages, background, state)
+}
+
+fn run_expanded(
+    text: &str,
+    stages: &[Stage],
+    background: bool,
+    state: &mut ShellState,
+) -> CommandResult {
+    // Inside a substitution the output of programs is collected: only the
+    // pipeline code does that.
     if let [stage] = stages
         && stage.redirects.is_empty()
         && !background
+        && !render::programs_captured()
     {
         return match parse_args(text, &|name| state.variable(name)) {
             Ok(args) if args.is_empty() => CommandResult::Continue,

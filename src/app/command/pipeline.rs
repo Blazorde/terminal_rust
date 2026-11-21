@@ -86,6 +86,9 @@ pub(super) fn run(
     };
     let mut children: Vec<(String, Child)> = Vec::new();
     let mut feeders: Vec<JoinHandle<()>> = Vec::new();
+    // In a command substitution, what the last program writes is collected.
+    let capturing = background.is_none() && render::programs_captured();
+    let mut collector: Option<JoinHandle<Vec<u8>>> = None;
     // The outcome of the last stage when it is not a program that was started.
     let mut last_result: Option<CommandResult> = None;
     let mut exit_requested = false;
@@ -125,6 +128,17 @@ pub(super) fn run(
                 match start_program(&plan, opened, previous, is_last) {
                     Ok(started) => {
                         input = started.next_input;
+                        if is_last
+                            && capturing
+                            && let Input::Pipe(mut reader) =
+                                std::mem::replace(&mut input, Input::Empty)
+                        {
+                            collector = Some(thread::spawn(move || {
+                                let mut bytes = Vec::new();
+                                let _ = reader.read_to_end(&mut bytes);
+                                bytes
+                            }));
+                        }
                         feeders.extend(started.feeder);
                         children.push((name.clone(), started.child));
                         if is_last {
@@ -178,6 +192,13 @@ pub(super) fn run(
     }
     for feeder in feeders {
         let _ = feeder.join();
+    }
+    // The programs are over, so their output is complete: add it to the capture.
+    if let Some(collector) = collector
+        && let Ok(bytes) = collector.join()
+        && !bytes.is_empty()
+    {
+        let _ = render::stdout(String::from_utf8_lossy(&bytes));
     }
 
     if exit_requested {
@@ -411,6 +432,7 @@ fn start_program(
     is_last: bool,
 ) -> Result<Started, String> {
     let name = plan.args.first().map(String::as_str).unwrap_or_default();
+    let capture_last = render::programs_captured();
     let mut command = match &plan.kind {
         StageKind::Program { program, args } => external::command(program, args),
         StageKind::Git { args } => git::native_command(args),
@@ -446,7 +468,7 @@ fn start_program(
         Sink::OtherDefault => {
             command.stdout(Stdio::from(io::stderr()));
         }
-        Sink::Default if !is_last => {
+        Sink::Default if !is_last || capture_last => {
             let (reader, writer) = io::pipe().map_err(|error| format!("{name}: {error}"))?;
             command.stdout(Stdio::from(
                 writer

@@ -242,6 +242,14 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
                 current.push(character);
                 current.extend(characters.next());
             }
+            // A substitution is opaque: its operators belong to its own line.
+            (Some(Quote::Double) | None, '$') if characters.peek() == Some(&'(') => {
+                current.push(character);
+                current.extend(characters.next());
+                let mut inner = String::new();
+                scan_substitution(|| characters.next(), |c| inner.push(c))?;
+                current.push_str(&inner);
+            }
             (Some(_), character) => current.push(character),
             (None, '\'') => {
                 quote = Some(Quote::Single);
@@ -315,6 +323,42 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
     Ok(segments)
 }
 
+/// Read the rest of a `$(...)` whose `$(` was already consumed, up to and
+/// including the matching `)`. Parentheses inside quotes do not count, and the
+/// substitution has its own quoting: `"$(echo ")")"` is one substitution. `next`
+/// supplies the characters, `keep` receives each one that was read.
+pub(crate) fn scan_substitution(
+    mut next: impl FnMut() -> Option<char>,
+    mut keep: impl FnMut(char),
+) -> Result<(), String> {
+    let mut depth = 1_usize;
+    let mut quote: Option<Quote> = None;
+    while let Some(character) = next() {
+        keep(character);
+        match (quote, character) {
+            (Some(Quote::Single), '\'') | (Some(Quote::Double), '"') => quote = None,
+            (Some(Quote::Single), _) => {}
+            (Some(Quote::Double), '\\') | (None, '\\') => {
+                if let Some(escaped) = next() {
+                    keep(escaped);
+                }
+            }
+            (Some(Quote::Double), _) => {}
+            (None, '\'') => quote = Some(Quote::Single),
+            (None, '"') => quote = Some(Quote::Double),
+            (None, '(') => depth += 1,
+            (None, ')') => {
+                depth -= 1;
+                if depth == 0 {
+                    return Ok(());
+                }
+            }
+            (None, _) => {}
+        }
+    }
+    Err("missing closing parenthesis".to_string())
+}
+
 /// One redirection of a pipeline stage. Targets are raw text: quotes and
 /// variables are expanded right before the stage runs.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -363,6 +407,20 @@ pub fn split_stages(input: &str) -> Result<Vec<Stage>, String> {
                 text.push(character);
                 text.push(characters[position + 1]);
                 position += 2;
+            }
+            (Some(Quote::Double) | None, '$') if characters.get(position + 1) == Some(&'(') => {
+                text.push_str("$(");
+                position += 2;
+                let mut inner = String::new();
+                scan_substitution(
+                    || {
+                        let next = characters.get(position).copied();
+                        position += 1;
+                        next
+                    },
+                    |c| inner.push(c),
+                )?;
+                text.push_str(&inner);
             }
             (Some(_), _) => {
                 text.push(character);
@@ -494,6 +552,23 @@ fn read_target(
                 *position += 1;
                 target.push(characters[*position]);
                 *position += 1;
+                continue;
+            }
+            (Some(Quote::Double) | None, '$') if characters.get(*position + 1) == Some(&'(') => {
+                target.push_str("$(");
+                *position += 2;
+                let mut index = *position;
+                let mut inner = String::new();
+                scan_substitution(
+                    || {
+                        let next = characters.get(index).copied();
+                        index += 1;
+                        next
+                    },
+                    |c| inner.push(c),
+                )?;
+                *position = index;
+                target.push_str(&inner);
                 continue;
             }
             (Some(_), _) => {}
@@ -1266,6 +1341,82 @@ mod tests {
         assert_eq!(
             parse_with("ls *.rs", &|_| None),
             Ok(vec!["ls".to_string(), "*.rs".to_string()])
+        );
+    }
+
+    #[test]
+    fn operators_inside_a_substitution_do_not_split_the_line() {
+        assert_eq!(
+            chain("echo $(a ; b && c | d) ; e"),
+            Ok(vec![
+                (Connector::Then, "echo $(a ; b && c | d)".into()),
+                (Connector::Then, "e".into()),
+            ])
+        );
+        assert_eq!(
+            chain("echo $(a & b)"),
+            Ok(vec![(Connector::Then, "echo $(a & b)".into())])
+        );
+    }
+
+    #[test]
+    fn quotes_and_parentheses_inside_a_substitution_are_balanced() {
+        assert_eq!(
+            chain("echo $(echo \")\" ; echo '(') ; x"),
+            Ok(vec![
+                (Connector::Then, "echo $(echo \")\" ; echo '(')".into()),
+                (Connector::Then, "x".into()),
+            ])
+        );
+        assert_eq!(
+            chain("echo \"$(echo \")\")\" ; x"),
+            Ok(vec![
+                (Connector::Then, "echo \"$(echo \")\")\"".into()),
+                (Connector::Then, "x".into()),
+            ])
+        );
+        assert_eq!(chain("echo $(a $(b ; c) d) ; x").map(|s| s.len()), Ok(2));
+    }
+
+    #[test]
+    fn a_substitution_that_is_never_closed_is_a_syntax_error() {
+        assert_eq!(
+            chain("echo $(a ; b"),
+            Err("missing closing parenthesis".to_string())
+        );
+        assert_eq!(
+            stages("echo $(a | b"),
+            Err("missing closing parenthesis".to_string())
+        );
+    }
+
+    #[test]
+    fn a_literal_dollar_paren_does_not_open_a_substitution() {
+        assert_eq!(chain("echo '$(a ; b' ; x").map(|s| s.len()), Ok(2));
+        assert_eq!(chain("echo \\$(a ; b) ; x").map(|s| s.len()), Ok(3));
+    }
+
+    #[test]
+    fn pipes_and_redirections_inside_a_substitution_stay_in_it() {
+        assert_eq!(
+            stages("echo $(a | b > c) | cat"),
+            Ok(vec![
+                ("echo $(a | b > c) ".into(), vec![]),
+                (" cat".into(), vec![]),
+            ])
+        );
+        assert_eq!(
+            stages("cmd > $(echo a b) 2> err"),
+            Ok(vec![(
+                "cmd  ".into(),
+                vec![
+                    write("$(echo a b)"),
+                    Redirect::Stderr {
+                        target: "err".into(),
+                        append: false
+                    }
+                ]
+            )])
         );
     }
 }
