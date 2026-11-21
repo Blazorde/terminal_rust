@@ -3920,3 +3920,25 @@ fn an_alias_defined_in_a_file_is_silent_and_one_typed_at_the_prompt_confirms() {
         "{printed}"
     );
 }
+
+#[test]
+fn ls_accepts_the_color_option_of_the_usual_alias() {
+    let directory = TestDirectory::new("ls color");
+    fs::write(directory.path().join("visible.txt"), "x").expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "alias ls2=\"ls --color=auto\"",
+            "ls2",
+            "ls --color=never",
+            "ls --color=sparkly",
+        ],
+    );
+
+    assert!(
+        printed.matches("visible.txt\n").count() >= 2,
+        "{printed}\n{errors}"
+    );
+    assert!(errors.contains("--color=sparkly"), "{errors}");
+}
