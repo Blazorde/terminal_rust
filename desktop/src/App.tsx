@@ -12,9 +12,12 @@ import {
 import logoUrl from '../icon.svg'
 import PromptSegments, { emptyPromptLayout, type PromptLayout } from './PromptSegments'
 import SettingsDrawer from './SettingsDrawer'
+import { isMacPlatform, shortcutAction, shortcutLabel } from './shortcuts'
 import { defaultSettings, type DesktopSettings, type SettingsLoad } from './settings'
 import TerminalPane, { type TerminalTabPatch } from './TerminalPane'
 import type { ConnectionState } from './terminal-types'
+
+const macPlatform = isMacPlatform(navigator.platform)
 
 interface TerminalTab {
   connection: ConnectionState
@@ -197,22 +200,19 @@ export default function App() {
 
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
-      const modifier = event.ctrlKey || event.metaKey
-      if (modifier && event.key === ',') {
-        event.preventDefault()
-        setDetailsOpen((open) => !open)
-      } else if (modifier && event.key.toLowerCase() === 't') {
-        event.preventDefault()
-        addTab()
-      } else if (modifier && event.key.toLowerCase() === 'w') {
-        event.preventDefault()
-        closeTab(activeTabId)
-      } else if (event.ctrlKey && event.key === 'Tab') {
-        event.preventDefault()
-        cycleTab(event.shiftKey ? -1 : 1)
-      } else if (event.key === 'Escape') {
+      const action = shortcutAction(event, macPlatform)
+      if (action === null) return
+      if (action === 'close-settings') {
         setDetailsOpen(false)
+        return
       }
+      // Handled here: the terminal must not also receive the key.
+      event.preventDefault()
+      event.stopPropagation()
+      if (action === 'toggle-settings') setDetailsOpen((open) => !open)
+      else if (action === 'new-tab') addTab()
+      else if (action === 'close-tab') closeTab(activeTabId)
+      else cycleTab(action === 'previous-tab' ? -1 : 1)
     }
     window.addEventListener('keydown', onShortcut, true)
     return () => window.removeEventListener('keydown', onShortcut, true)
@@ -332,7 +332,7 @@ export default function App() {
                 </button>
               </div>
             ))}
-            <button type="button" className="tab-add" onClick={addTab} aria-label="Nouvel onglet" title="Nouvel onglet (Ctrl/⌘+T)">
+            <button type="button" className="tab-add" onClick={addTab} aria-label="Nouvel onglet" title={`Nouvel onglet (${shortcutLabel('new-tab', macPlatform)})`}>
               <WindowIcon name="plus" />
             </button>
           </div>
@@ -348,7 +348,7 @@ export default function App() {
             >
               <WindowIcon name="settings" />
               <span>Réglages</span>
-              <kbd>Ctrl/⌘ ,</kbd>
+              <kbd>{shortcutLabel('toggle-settings', macPlatform)}</kbd>
             </button>
           </div>
         </div>

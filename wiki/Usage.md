@@ -128,9 +128,10 @@ shows their status and requested permissions; `plugin` is an alias for
 See [custom commands](../docs/custom-commands.md) and the
 [plugin tutorial](../docs/plugins/getting-started.md) for setup details.
 
-Desktop sessions are isolated per tab. Use `Ctrl/Command+T` to create a tab,
-`Ctrl/Command+W` to close it, `Ctrl+Tab` to switch tabs and `Ctrl/Command+,` to
-open settings.
+Desktop sessions are isolated per tab. Use `Ctrl+Shift+T` (`Command+T` on macOS)
+to create a tab, `Ctrl+Shift+W` (`Command+W`) to close it, `Ctrl+Tab` to switch
+tabs and `Ctrl+,` (`Command+,`) to open settings. Plain `Ctrl+T` and `Ctrl+W`
+are left to the shell, where they swap two characters and delete a word.
 
 More detail: [dashboard](https://github.com/Blazorde/terminal_rust/blob/main/docs/dashboard.md)
 and [completion](https://github.com/Blazorde/terminal_rust/blob/main/docs/completion.md).

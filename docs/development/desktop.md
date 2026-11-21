@@ -29,7 +29,8 @@ command stops before a window appears, confirm the platform prerequisites above
 and use the [troubleshooting guide](../troubleshooting.md).
 
 Verify real `pwd`, history, `dashboard`, `clear`, safe Git, `Ctrl+C`, resize,
-settings (`Ctrl/⌘+,`, `Escape`) and tabs (`Ctrl/⌘+T`, `Ctrl/⌘+W`, `Ctrl+Tab`).
+settings (`Ctrl/⌘+,`, `Escape`) and tabs (`Ctrl+Shift+T`/`⌘T`, `Ctrl+Shift+W`/`⌘W`,
+`Ctrl+Tab`). Check that plain `Ctrl+W` and `Ctrl+T` still edit the line.
 Open two tabs, change directory in one, and confirm the other keeps independent
 directory, history and prompt context. Keyboard tab-list navigation supports
 arrows, `Home`, `End` and `Delete`.
