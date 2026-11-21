@@ -16,6 +16,7 @@ use crate::render::printable::printable_multiline;
 use crate::utils::shell_env;
 
 mod aliases;
+mod braces;
 mod jobs;
 mod pipeline;
 mod scripts;
@@ -174,16 +175,16 @@ const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "mkdir",
-        usage: "mkdir [directory]",
-        summary: "create a new directory",
-        max_args: Some(1),
+        usage: "mkdir [-p] <directory>...",
+        summary: "create new directories (-p: also the missing parents)",
+        max_args: None,
         handler: run_mkdir,
     },
     CommandSpec {
         name: "touch",
-        usage: "touch [file]",
-        summary: "create an empty file",
-        max_args: Some(1),
+        usage: "touch <file>...",
+        summary: "create empty files, or update their modification time",
+        max_args: None,
         handler: run_touch,
     },
     CommandSpec {
@@ -474,9 +475,14 @@ fn run_segment(
     background: bool,
     state: &mut ShellState,
 ) -> CommandResult {
-    // Command substitutions run now, then the rewritten text is split again.
-    if text.contains("$(") {
-        let expanded = match substitution::expand(text, state) {
+    // Braces first, then command substitutions, which run now: each rewrites the
+    // text, which is then split again.
+    let braced = match braces::expand(text) {
+        Ok(braced) => braced,
+        Err(error) => return CommandResult::Error(error),
+    };
+    if braced.contains("$(") || braced != text {
+        let expanded = match substitution::expand(&braced, state) {
             Ok(expanded) => expanded,
             Err(error) => return CommandResult::Error(error),
         };
@@ -750,12 +756,21 @@ fn run_ls(args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("ls", ls::ls(args))
 }
 
+/// One message for every failure of a command that handles several targets.
+fn failures<E: std::fmt::Display>(errors: Vec<E>) -> CommandResult {
+    if errors.is_empty() {
+        return CommandResult::Continue;
+    }
+    let messages: Vec<String> = errors.iter().map(ToString::to_string).collect();
+    CommandResult::Error(messages.join("\n"))
+}
+
 fn run_mkdir(args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_display_error(mkdir::mkdir(optional_arg(args)))
+    failures(mkdir::mkdir_all(args))
 }
 
 fn run_touch(args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_display_error(touch::touch(optional_arg(args)))
+    failures(touch::touch_all(args))
 }
 
 fn run_cat(args: &[String], _state: &mut ShellState) -> CommandResult {

@@ -1885,3 +1885,112 @@ fn the_output_of_git_is_collected() {
         "{printed}\n{errors}"
     );
 }
+
+#[test]
+fn braces_give_one_word_per_alternative_and_sequence_value() {
+    let directory = TestDirectory::new("braces words");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo {a,b,c}",
+            "echo file{.txt,.md}",
+            "echo {1..5} {a..c} {01..03}",
+            "echo {a,b}{1,2}",
+            "echo '{kept,literal}' \"{also,literal}\"",
+        ],
+    );
+
+    assert!(printed.contains("a b c\n"), "{printed}\n{errors}");
+    assert!(printed.contains("file.txt file.md\n"), "{printed}");
+    assert!(printed.contains("1 2 3 4 5 a b c 01 02 03\n"), "{printed}");
+    assert!(printed.contains("a1 a2 b1 b2\n"), "{printed}");
+    assert!(
+        printed.contains("{kept,literal} {also,literal}\n"),
+        "{printed}"
+    );
+}
+
+#[test]
+fn braces_build_paths_for_everyday_commands() {
+    let directory = TestDirectory::new("braces paths");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "mkdir -p project/{src,tests,docs/{a,b}}",
+            "touch project/{src,tests}/mod.txt",
+            "cp project/src/mod.txt{,.bak}",
+            "ls project/src",
+        ],
+    );
+
+    let root = directory.path().join("project");
+    assert!(
+        root.join("docs/a").is_dir() && root.join("docs/b").is_dir(),
+        "{errors}"
+    );
+    assert!(root.join("tests/mod.txt").exists(), "{errors}");
+    assert!(root.join("src/mod.txt.bak").exists(), "{errors}");
+    assert!(printed.contains("mod.txt.bak"), "{printed}\n{errors}");
+}
+
+#[test]
+fn braces_combine_with_variables_substitutions_and_patterns() {
+    let directory = TestDirectory::new("braces combine");
+    fs::write(directory.path().join("a.txt"), "").expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "NAME=report",
+            "echo ${NAME}/{x,y}",
+            "echo {$(echo one),two}",
+            "echo {a,b}.txt *.txt",
+            "echo {a,b}>out.txt",
+            "cat out.txt",
+        ],
+    );
+
+    assert!(
+        printed.contains("report/x report/y\n"),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("one two\n"), "{printed}");
+    assert!(printed.contains("a.txt b.txt a.txt\n"), "{printed}");
+}
+
+#[test]
+fn a_huge_brace_product_is_refused_without_freezing() {
+    let directory = TestDirectory::new("braces huge");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["echo {1..100}{1..100}{1..2}", "echo still-here"],
+    );
+
+    assert!(errors.contains("too many words"), "{errors}");
+    assert!(printed.contains("still-here\n"), "{printed}");
+}
+
+#[test]
+fn mkdir_and_touch_take_several_targets_and_report_each_failure() {
+    let directory = TestDirectory::new("several targets");
+    fs::create_dir(directory.path().join("exists")).expect("fixture");
+
+    let (_, errors) = shell_lines(
+        &directory,
+        &[
+            "mkdir one exists two",
+            "touch f1 f2 f3",
+            "mkdir -p deep/er/still",
+        ],
+    );
+
+    assert!(directory.path().join("one").is_dir() && directory.path().join("two").is_dir());
+    assert!(errors.contains("'exists' already exists"), "{errors}");
+    for file in ["f1", "f2", "f3"] {
+        assert!(directory.path().join(file).is_file(), "{file}");
+    }
+    assert!(directory.path().join("deep/er/still").is_dir());
+}

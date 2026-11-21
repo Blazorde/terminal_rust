@@ -5,6 +5,16 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- Brace expansion ([ADR-0015](docs/decisions/0015-brace-expansion.md)):
+  `{a,b,c}`, nested groups and several groups per word, and sequences `{1..5}`,
+  `{a..e}`, `{01..10}`, `{1..10..3}`. Quotes and `${NAME}` keep braces literal.
+- `mkdir` and `touch` accept several targets and keep going after a failure, and
+  `mkdir -p` creates the missing parents (and accepts an existing directory).
+  They accepted a single argument before, which made them unusable with `*` and
+  `{...}`.
+
 ## [1.5.0] - 2026-11-21
 
 ### Added

@@ -26,6 +26,17 @@ pub fn touch(target: Option<&str>) -> Result<(), TouchError> {
     Ok(())
 }
 
+/// Touch every file of `targets`, even after a failure; return the failures.
+pub fn touch_all(targets: &[String]) -> Vec<TouchError> {
+    if targets.is_empty() {
+        return vec![TouchError::MissingFileName];
+    }
+    targets
+        .iter()
+        .filter_map(|target| touch(Some(target)).err())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
