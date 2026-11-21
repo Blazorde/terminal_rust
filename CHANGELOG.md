@@ -17,6 +17,10 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Here-documents `<<WORD` and `<<-WORD` (quoted words keep the body literal) and
+  here-strings `<<<` (ADR-0023): the prompt asks for more until the delimiter, in the
+  terminal, in piped input, in scripts and in `source`d files, and the body expands
+  variables and `$(…)` like double-quoted text.
 - Redirections and pipes on whole blocks (ADR-0022): `while read line; do …; done <
   file`, `cmd | while read x; do …; done`, `for … done > file`, `{ a; b; } | sort`,
   `if … fi | cmd`, `case … esac >> log`. `read` takes one line at a time from the

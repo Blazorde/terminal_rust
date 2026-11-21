@@ -44,6 +44,8 @@ struct Plan {
     env: Vec<(String, String)>,
     kind: StageKind,
     stdin: Option<PathBuf>,
+    /// The text of a here-string, which is the input instead of `stdin`.
+    here_text: Option<Vec<u8>>,
     out: Sink,
     err: Sink,
     files: Vec<Target>,
@@ -101,7 +103,11 @@ pub(super) fn run(
 
     for (index, plan) in plans.into_iter().enumerate() {
         let is_last = index + 1 == count;
-        let previous = std::mem::replace(&mut input, Input::Empty);
+        let mut previous = std::mem::replace(&mut input, Input::Empty);
+        // A here-string is the whole input of its stage.
+        if let Some(text) = plan.here_text.clone() {
+            previous = Input::Text(text);
+        }
         let name = plan.args.first().cloned().unwrap_or_default();
 
         let mut opened = match open(&plan) {
@@ -243,6 +249,7 @@ fn plan(stage: &Stage, state: &ShellState) -> Result<Plan, String> {
     };
 
     let mut stdin = None;
+    let mut here_text = None;
     let mut out = Sink::Default;
     let mut err = Sink::Default;
     let mut files = Vec::new();
@@ -256,7 +263,17 @@ fn plan(stage: &Stage, state: &ShellState) -> Result<Plan, String> {
 
     for redirect in &stage.redirects {
         match redirect {
-            Redirect::Stdin(target) => stdin = Some(expand_target(target, &lookup)?),
+            // The last of `<` and `<<<` is the input.
+            Redirect::Stdin(target) => {
+                stdin = Some(expand_target(target, &lookup)?);
+                here_text = None;
+            }
+            Redirect::HereString(word) => {
+                let mut text = parse_with(word, &lookup)?.join(" ");
+                text.push('\n');
+                here_text = Some(text.into_bytes());
+                stdin = None;
+            }
             Redirect::Stdout { target, append } => out = Sink::File(add_file(target, *append)?),
             Redirect::Stderr { target, append } => err = Sink::File(add_file(target, *append)?),
             Redirect::StderrToStdout => {
@@ -286,6 +303,7 @@ fn plan(stage: &Stage, state: &ShellState) -> Result<Plan, String> {
         env,
         kind,
         stdin,
+        here_text,
         out,
         err,
         files,

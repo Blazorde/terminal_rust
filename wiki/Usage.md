@@ -159,8 +159,37 @@ find_errors | if grep -q fatal; then echo failed; fi
 `read` reads the next line of the block's input, and `cat` with no file takes all that is
 left. The block runs inside the shell (variables it sets stay), and what it prints is
 sent to its redirection or the next command when it ends. A function body cannot be
-redirected (redirect the call), a pipeline holds one block, and `<<` here-documents are
-not available.
+redirected (redirect the call) and a pipeline holds one block.
+
+## Here-documents
+
+`<<WORD` gives a command the lines that follow, up to a line made of `WORD` alone, as its
+input. The shell asks for more (`>> `) until then, also in scripts:
+
+```text
+cat <<EOF > config.toml
+name = "$USER"
+path = $HOME/bin
+EOF
+
+sort <<END
+pear
+apple
+END
+
+while read a b; do echo "$b $a"; done <<EOF
+one two
+three four
+EOF
+
+grep -c x <<< "a single line"
+```
+
+With a bare word the body expands variables and `$(…)` (write `\$` for a literal dollar sign);
+with a quoted word (`<<'EOF'`) it is taken literally. `<<-EOF` removes the leading tabs of the
+body and of the closing line, so a here-document can be indented. `command <<< text` is a
+here-string: the text and a newline are the input. A here-document that is never closed
+runs nothing.
 
 `case` runs the first arm whose pattern matches a word:
 

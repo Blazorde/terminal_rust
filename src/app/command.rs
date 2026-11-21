@@ -20,6 +20,7 @@ mod arithmetic;
 mod braces;
 mod flow;
 mod functions;
+mod heredoc;
 mod jobs;
 mod pipeline;
 mod scripts;
@@ -591,6 +592,12 @@ pub(crate) fn command_help() -> impl Iterator<Item = (&'static str, &'static str
 /// is followed by another one is printed here; the error of the last segment
 /// that ran is returned.
 pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
+    // Here-documents become here-strings before anything is parsed.
+    let rewritten = match heredoc::rewrite(input) {
+        Ok(rewritten) => rewritten,
+        Err(error) => return syntax_error(error, state),
+    };
+    let input = rewritten.as_str();
     let segments = match split_chain(input) {
         Ok(segments) => segments,
         Err(error) => return syntax_error(error, state),
@@ -607,7 +614,20 @@ pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
 /// Whether `input` opens a `for`, `while`, `until` or `if` that is not closed:
 /// the front ends read the next line before running it.
 pub(crate) fn input_is_incomplete(input: &str) -> bool {
-    flow::is_incomplete(input)
+    // A here-document is open until its delimiter line; once closed, the blocks are
+    // counted on the text with the bodies taken out, so a body cannot fool them.
+    if heredoc::is_open(input) {
+        return true;
+    }
+    match heredoc::rewrite(input) {
+        Ok(rewritten) => flow::is_incomplete(&rewritten),
+        Err(_) => false,
+    }
+}
+
+/// Whether a here-document of `text` is still waiting for its delimiter line.
+pub(super) fn heredoc_is_open(text: &str) -> bool {
+    heredoc::is_open(text)
 }
 
 /// The words after `in` of a `for`, expanded like the arguments of a command.
@@ -1525,6 +1545,33 @@ mod tests {
 
         state.record_history("four");
         assert_eq!(state.history().last().map(String::as_str), Some("four"));
+    }
+
+    #[test]
+    fn the_body_of_a_here_document_does_not_open_or_close_blocks() {
+        // Words that start blocks or end them are text inside a body.
+        for body in [
+            "for i in 1",
+            "if true",
+            "while x",
+            "case a in",
+            "{",
+            "f() {",
+            "done",
+            "fi",
+            "esac",
+            "}",
+        ] {
+            let text = format!("cat <<EOF\n{body}\nEOF");
+            assert!(!input_is_incomplete(&text), "{body}");
+        }
+        // The line that follows a closed here-document counts as usual.
+        assert!(input_is_incomplete("cat <<EOF\nx\nEOF\nfor i in 1; do"));
+        assert!(!input_is_incomplete(
+            "cat <<EOF\nx\nEOF\nfor i in 1; do echo; done"
+        ));
+        // Still open without the delimiter, whatever the body holds.
+        assert!(input_is_incomplete("cat <<EOF\ndone"));
     }
 
     #[test]
