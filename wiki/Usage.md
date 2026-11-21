@@ -289,6 +289,33 @@ npm run dev` or `[1]+  Exit 3  ...`. A job is one command or one pipeline: `a &&
 b &` is rejected. Programs keep running if you leave the shell. There is no
 `Ctrl+Z` and no `bg`: an interactive program has to run in the foreground.
 
+## Running a file and reading input
+
+`source file` (or `. file`) runs the commands of a file in the current shell, so
+the variables and the directory it sets stay afterwards. Unlike `script run`, the
+file can have any name. It runs line by line like a script (blocks over several
+lines, `#` comments), stops at the first error and names the file and the line.
+Arguments for the file (`$1`) are not supported.
+
+```text
+source ~/.config/project/env.sh
+. ./helpers.sh
+```
+
+`read` reads one line into variables. The line comes from a pipe or a
+redirection when there is one, and from the terminal otherwise; blanks separate
+the fields, the last name takes the rest of the line, and with no name the line
+goes to `REPLY`. `-p text` shows a prompt (on the terminal only) and `-r` is
+accepted (a backslash is always literal). The status is `1` at the end of the
+input, which leaves the variables empty.
+
+```text
+read -p "Name: " name
+echo "hello $name"
+echo one two three | read first rest     # first=one rest="two three"
+read line < notes.txt
+```
+
 ## Pasting several lines
 
 A block of several lines runs like the same lines typed one after another, in

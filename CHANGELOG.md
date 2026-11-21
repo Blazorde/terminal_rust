@@ -7,6 +7,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- `source file` and `. file` run a file in the current shell (any file name, stops
+  at the first error and names the line); `read [-r] [-p prompt] [name...]` reads
+  a line from a pipe, a redirection or the terminal into variables.
 - Arithmetic expansion `$((…))` on 64-bit integers (ADR-0017): `+ - * / %`,
   parentheses, signs, comparisons and `&&` `||`, variables by name, hexadecimal
   numbers. Overflow and division by zero are errors, never wrapped values.

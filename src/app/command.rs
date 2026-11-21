@@ -5,8 +5,8 @@ use crate::app::help;
 use crate::app::parser::{Stage, parse_args, split_chain, split_stages};
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, external, fastfetch,
-    git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, test_command, theme,
-    touch, uptime, user, whoami,
+    git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, read_command, rm,
+    test_command, theme, touch, uptime, user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -340,6 +340,27 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "alias for nvim",
         max_args: None,
         handler: run_neovim,
+    },
+    CommandSpec {
+        name: "source",
+        usage: "source <file>",
+        summary: "run the commands of a file in this shell",
+        max_args: None,
+        handler: run_source,
+    },
+    CommandSpec {
+        name: ".",
+        usage: ". <file>",
+        summary: "same as source",
+        max_args: None,
+        handler: run_source,
+    },
+    CommandSpec {
+        name: "read",
+        usage: "read [-r] [-p prompt] [name...]",
+        summary: "read a line into variables",
+        max_args: None,
+        handler: run_read,
     },
     CommandSpec {
         name: "type",
@@ -955,6 +976,45 @@ fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_result(help::print_help(command_help()), |error| {
         format!("help: {error}")
     })
+}
+
+fn run_source(args: &[String], state: &mut ShellState) -> CommandResult {
+    match args {
+        [path] => scripts::run_file("source", path, state, false),
+        [] => CommandResult::Error("source: expected a file".to_string()),
+        _ => CommandResult::Error("source: arguments for the file are not supported".to_string()),
+    }
+}
+
+fn run_read(args: &[String], state: &mut ShellState) -> CommandResult {
+    let request = match read_command::parse(args) {
+        Ok(request) => request,
+        Err(message) => return CommandResult::Error(message),
+    };
+    // A prompt is for someone typing: a pipe or a redirection does not see it.
+    if let Some(prompt) = &request.prompt
+        && !crate::utils::pipe_input::is_provided()
+    {
+        let _ = render::stderr(prompt);
+    }
+    let line = read_command::next_line(&mut std::io::stdin().lock());
+    let values = match &line {
+        Some(line) => read_command::split_fields(line, &request.names),
+        None => request
+            .names
+            .iter()
+            .map(|name| (name.clone(), String::new()))
+            .collect(),
+    };
+    for (name, value) in values {
+        assign_variable(&name, &value, state);
+    }
+    match line {
+        Some(_) => CommandResult::Continue,
+        // The end of the input is a failure without a message, so that
+        // `while read` style tests can stop on it.
+        None => CommandResult::Error(String::new()),
+    }
 }
 
 /// What running `name` would do, in the order the shell looks it up.
