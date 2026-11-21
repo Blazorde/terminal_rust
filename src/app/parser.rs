@@ -7,8 +7,64 @@ enum Quote {
 /// Look up the value of a variable name (`?` is the last status).
 pub type Lookup<'a> = &'a dyn Fn(&str) -> Option<String>;
 
+/// One word of a command line. `pattern` is set when it holds an unquoted `*`,
+/// `?` or `[`: it is the text to match against file names, in which every other
+/// `*`, `?`, `[` and `\` is escaped with a backslash.
+#[derive(Debug, Eq, PartialEq)]
+pub struct Word {
+    pub text: String,
+    pub pattern: Option<String>,
+}
+
+/// The pattern for a word: `text` with the characters that were not typed as
+/// wildcards (quoted, escaped, or from a variable) made literal.
+fn pattern_text(text: &str, wildcards: &[usize]) -> String {
+    let mut pattern = String::with_capacity(text.len() + 2);
+    for (offset, character) in text.char_indices() {
+        let literal_wildcard = matches!(character, '*' | '?' | '[') && !wildcards.contains(&offset);
+        if literal_wildcard || (character == '\\' && !cfg!(windows)) {
+            pattern.push('\\');
+        }
+        pattern.push(character);
+    }
+    pattern
+}
+
+/// Split a command line into words, expanding variables and `~`, without
+/// matching patterns against files.
 pub fn parse_with(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
+    parse_words(input, lookup).map(|words| words.into_iter().map(|word| word.text).collect())
+}
+
+/// Split a command line into arguments and replace each pattern by the sorted
+/// names it matches. A pattern that matches nothing stays as written, as in
+/// POSIX shells. Quoted or escaped characters are never patterns, and neither is
+/// the value of a variable.
+pub fn parse_args(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
     let mut args = Vec::new();
+    for word in parse_words(input, lookup)? {
+        if let Some(pattern) = &word.pattern {
+            let matches = crate::utils::glob::expand(pattern);
+            if !matches.is_empty() {
+                args.extend(matches);
+                continue;
+            }
+        }
+        args.push(word.text);
+    }
+    Ok(args)
+}
+
+fn finish_word(text: String, wildcards: &mut Vec<usize>) -> Word {
+    let pattern = (!wildcards.is_empty()).then(|| pattern_text(&text, wildcards));
+    wildcards.clear();
+    Word { text, pattern }
+}
+
+pub fn parse_words(input: &str, lookup: Lookup) -> Result<Vec<Word>, String> {
+    let mut args: Vec<Word> = Vec::new();
+    // Byte offsets in `current` of the wildcards that were typed unquoted.
+    let mut wildcards: Vec<usize> = Vec::new();
     let mut current = String::new();
     let mut quote: Option<Quote> = None;
     let mut started_argument = false;
@@ -37,7 +93,10 @@ pub fn parse_with(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
             }
             (None, '\\')
                 if characters.peek().is_some_and(|next| {
-                    next.is_whitespace() || matches!(next, '\\' | '\'' | '"' | '$')
+                    next.is_whitespace()
+                        || matches!(next, '\\' | '\'' | '"' | '$')
+                        // Where `\` is not a path separator it also protects patterns.
+                        || (!cfg!(windows) && matches!(next, '*' | '?' | '['))
                 }) =>
             {
                 if let Some(escaped) = characters.next() {
@@ -68,11 +127,14 @@ pub fn parse_with(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
             }
             (None, character) if character.is_whitespace() => {
                 if started_argument {
-                    args.push(std::mem::take(&mut current));
+                    args.push(finish_word(std::mem::take(&mut current), &mut wildcards));
                     started_argument = false;
                 }
             }
             (None, character) => {
+                if matches!(character, '*' | '?' | '[') {
+                    wildcards.push(current.len());
+                }
                 current.push(character);
                 started_argument = true;
             }
@@ -84,7 +146,7 @@ pub fn parse_with(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
     }
 
     if started_argument {
-        args.push(current);
+        args.push(finish_word(current, &mut wildcards));
     }
 
     Ok(args)
@@ -1084,5 +1146,67 @@ mod tests {
             parse_input(r#"touch "new_file.txt""#),
             Ok(vec!["touch".into(), "new_file.txt".into()])
         )
+    }
+
+    fn patterns(input: &str) -> Vec<Option<String>> {
+        parse_words(input, &|name| (name == "X").then(|| "*.rs".to_string()))
+            .expect("the line should parse")
+            .into_iter()
+            .map(|word| word.pattern)
+            .collect()
+    }
+
+    #[test]
+    fn an_unquoted_wildcard_makes_a_pattern() {
+        assert_eq!(
+            patterns("ls *.rs a?c [ab]x plain"),
+            [
+                None,
+                Some("*.rs".into()),
+                Some("a?c".into()),
+                Some("[ab]x".into()),
+                None
+            ]
+        );
+    }
+
+    #[test]
+    fn quoted_wildcards_are_literal() {
+        assert_eq!(patterns("echo '*.rs' \"a?c\""), [None, None, None]);
+    }
+
+    #[test]
+    fn a_quoted_wildcard_inside_a_pattern_word_is_escaped() {
+        assert_eq!(
+            patterns("echo \"[draft]\"*.md"),
+            [None, Some("\\[draft]*.md".into())]
+        );
+        assert_eq!(patterns("echo 'a*b'*"), [None, Some("a\\*b*".into())]);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_backslash_protects_a_wildcard_and_stays_literal_elsewhere() {
+        assert_eq!(patterns("echo \\*"), [None, None]);
+        assert_eq!(
+            parse_with("echo \\*", &|_| None),
+            Ok(vec!["echo".to_string(), "*".to_string()])
+        );
+        assert_eq!(patterns("echo a\\*b*"), [None, Some("a\\*b*".into())]);
+    }
+
+    #[test]
+    fn the_value_of_a_variable_is_not_a_pattern() {
+        assert_eq!(patterns("echo $X"), [None, None]);
+        // The variable's own `*` is literal even when the word has a real one.
+        assert_eq!(patterns("echo $X*"), [None, Some("\\*.rs*".into())]);
+    }
+
+    #[test]
+    fn parse_with_never_matches_files() {
+        assert_eq!(
+            parse_with("ls *.rs", &|_| None),
+            Ok(vec!["ls".to_string(), "*.rs".to_string()])
+        );
     }
 }

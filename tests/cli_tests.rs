@@ -1237,3 +1237,87 @@ fn the_shell_survives_the_deletion_of_its_current_directory() {
     );
     assert!(!stderr(&output).contains("prompt:"), "{}", stderr(&output));
 }
+
+fn glob_fixture(directory: &TestDirectory) {
+    for file in ["a.txt", "b.txt", "c.md", ".hidden.txt", "[draft] one.md"] {
+        fs::write(directory.path().join(file), "").expect("fixture file");
+    }
+    fs::create_dir(directory.path().join("sub")).expect("fixture directory");
+    fs::write(directory.path().join("sub").join("d.txt"), "").expect("fixture file");
+}
+
+#[test]
+fn a_pattern_expands_to_the_sorted_matching_names() {
+    let directory = TestDirectory::new("glob expand");
+    glob_fixture(&directory);
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo *.txt",
+            "echo ?.md",
+            "echo [ab].txt",
+            "echo */d.txt",
+            "echo .*.txt",
+        ],
+    );
+
+    assert!(printed.contains("a.txt b.txt\n"), "{printed}\n{errors}");
+    assert!(printed.contains("c.md\n"), "{printed}");
+    assert!(printed.contains("sub/d.txt\n"), "{printed}");
+    assert!(printed.contains(".hidden.txt\n"), "{printed}");
+    // `*.txt` does not list the hidden file.
+    assert!(!printed.contains("a.txt b.txt .hidden"), "{printed}");
+}
+
+#[test]
+fn quoting_or_escaping_keeps_a_pattern_literal() {
+    let directory = TestDirectory::new("glob literal");
+    glob_fixture(&directory);
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["echo \"*.txt\"", "echo '*.txt'", "echo \\*.txt"],
+    );
+
+    assert_eq!(printed.matches("*.txt\n").count(), 3, "{printed}\n{errors}");
+    assert!(!printed.contains("a.txt"), "{printed}");
+}
+
+#[test]
+fn a_pattern_without_a_match_stays_as_written() {
+    let directory = TestDirectory::new("glob nomatch");
+    glob_fixture(&directory);
+
+    let (printed, _) = shell_lines(&directory, &["echo *.zip missing/*.rs"]);
+
+    assert!(printed.contains("*.zip missing/*.rs\n"), "{printed}");
+}
+
+#[test]
+fn a_quoted_bracket_in_a_pattern_word_is_not_a_wildcard() {
+    let directory = TestDirectory::new("glob quoted bracket");
+    glob_fixture(&directory);
+
+    let (printed, errors) = shell_lines(&directory, &["echo \"[draft]\"*.md"]);
+
+    assert!(printed.contains("[draft] one.md\n"), "{printed}\n{errors}");
+    assert!(!printed.contains("c.md"), "{printed}");
+}
+
+#[test]
+fn a_pattern_works_with_commands_and_pipes() {
+    let directory = TestDirectory::new("glob commands");
+    glob_fixture(&directory);
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["rm *.txt", "echo done", "ls | cat", "echo *.md | cat"],
+    );
+
+    assert!(!directory.path().join("a.txt").exists(), "{errors}");
+    assert!(!directory.path().join("b.txt").exists());
+    assert!(directory.path().join(".hidden.txt").exists());
+    assert!(printed.contains("done\n"), "{printed}");
+    assert!(printed.contains("[draft] one.md c.md\n"), "{printed}");
+}

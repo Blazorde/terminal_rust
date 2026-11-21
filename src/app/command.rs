@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::app::help;
-use crate::app::parser::{Connector, Stage, parse_with, split_chain, split_stages};
+use crate::app::parser::{Connector, Stage, parse_args, split_chain, split_stages};
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, external, fastfetch,
     git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime,
@@ -415,7 +415,7 @@ fn run_segment(text: &str, stages: &[Stage], state: &mut ShellState) -> CommandR
     if let [stage] = stages
         && stage.redirects.is_empty()
     {
-        return match parse_with(text, &|name| state.variable(name)) {
+        return match parse_args(text, &|name| state.variable(name)) {
             Ok(args) if args.is_empty() => CommandResult::Continue,
             Ok(args) => execute(&args, state),
             Err(error) => CommandResult::Error(error),

@@ -7,6 +7,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- File name patterns ([ADR-0012](docs/decisions/0012-filename-patterns.md)): `*`,
+  `?`, `[abc]`, `[a-z]` and `[!a-z]` in an argument are replaced by the sorted
+  matching names, one directory level at a time. Hidden names need a leading `.`,
+  a pattern without a match stays as written, and quotes, a backslash (outside
+  Windows) and variable values keep a wildcard literal.
 - Pipes and redirections ([ADR-0011](docs/decisions/0011-pipelines-and-redirections.md)):
   `a | b | c`, `< file`, `> file`, `>> file`, `2> file`, `2>> file`, `2>&1` and
   `>&2`. Programs are connected with real pipes and run together, built-in

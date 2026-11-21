@@ -10,7 +10,7 @@ use std::process::{Child, Stdio};
 use std::thread::{self, JoinHandle};
 
 use super::{CommandError, CommandResult, ShellState, StageKind, classify, execute};
-use crate::app::parser::{Redirect, Stage, parse_with};
+use crate::app::parser::{Redirect, Stage, parse_args, parse_with};
 use crate::commands::external::{self, RunError};
 use crate::render;
 use crate::utils::pipe_input;
@@ -157,7 +157,7 @@ pub(super) fn run(stages: &[Stage], state: &mut ShellState) -> CommandResult {
 
 fn plan(stage: &Stage, state: &ShellState) -> Result<Plan, String> {
     let lookup = |name: &str| state.variable(name);
-    let args = parse_with(&stage.text, &lookup)?;
+    let args = parse_args(&stage.text, &lookup)?;
     if args.is_empty() {
         return Err("expected a command".to_string());
     }

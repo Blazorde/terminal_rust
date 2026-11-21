@@ -64,7 +64,7 @@ unset NAME
 `export NAME=value`) also passes it to the programs you start, and `unset NAME`
 removes it. A variable that is not set expands to nothing, and an expansion is
 never split into several arguments. Setting a variable for a single command
-(`NAME=value command`) and `*` patterns are not available yet.
+(`NAME=value command`) is not available yet.
 
 ## Chaining commands
 
@@ -81,6 +81,24 @@ succeeded, and `||` only if it failed. They are evaluated from left to right and
 `exit` stops the line. Quote an operator to use it as text. Background jobs
 (`&`) are not available yet: the shell says so instead of passing the `&` to a
 program.
+
+## File name patterns
+
+`*`, `?` and `[...]` in an argument are replaced by the sorted names they match:
+
+```text
+ls *.rs
+rm build/*.tmp
+cat logs/2026-*.txt | wc -l
+echo src/*/mod.rs
+```
+
+`*` matches any run of characters, `?` one character and `[a-c]` or `[!a-c]` one
+character of a set. A pattern matches within one directory level (`*` never
+matches `/`), and names that start with `.` need a pattern that starts with `.`.
+A pattern that matches nothing stays as written. Quote it (`'*.rs'`) or put a
+backslash before it (`\*`, on Linux and macOS) to use it as text. The value of a
+variable is never a pattern. There is no `**` and no `{a,b}` yet.
 
 ## Pipes and redirections
 
