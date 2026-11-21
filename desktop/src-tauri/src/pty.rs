@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use portable_pty::{Child, ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde::Serialize;
@@ -20,7 +20,9 @@ pub struct PtyState {
 
 struct PtySession {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    // Shared so a write that blocks on a full terminal does not hold the lock on
+    // every session while it waits.
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
 }
 
@@ -54,14 +56,19 @@ fn pty_size(cols: u16, rows: u16) -> PtySize {
     }
 }
 
+/// A synchronous Tauri command runs on the main thread, which also draws the
+/// window. Starting a session can extract the bundled Git runtime and spawn a
+/// process, so it runs on a blocking worker and the interface stays responsive.
 #[tauri::command]
-pub fn start_session(
-    app: AppHandle,
-    state: State<'_, PtyState>,
-    settings_state: State<'_, crate::settings::SettingsState>,
-    cols: u16,
-    rows: u16,
-) -> Result<u64, String> {
+pub async fn start_session(app: AppHandle, cols: u16, rows: u16) -> Result<u64, String> {
+    tauri::async_runtime::spawn_blocking(move || start_session_blocking(app, cols, rows))
+        .await
+        .map_err(|error| format!("session startup was interrupted: {error}"))?
+}
+
+fn start_session_blocking(app: AppHandle, cols: u16, rows: u16) -> Result<u64, String> {
+    let state = app.state::<PtyState>();
+    let settings_state = app.state::<crate::settings::SettingsState>();
     let settings = crate::settings::load(&settings_state).settings;
     let git_runtime = bundled_git_runtime(&app)?;
     let pair = native_pty_system()
@@ -151,7 +158,7 @@ pub fn start_session(
         session_id,
         PtySession {
             master: pair.master,
-            writer,
+            writer: Arc::new(Mutex::new(writer)),
             killer,
         },
     );
@@ -244,23 +251,31 @@ fn forward_output(session_id: u64, reader: &mut dyn Read, app: &AppHandle) {
     }
 }
 
+/// Asynchronous for the same reason as `start_session`: a write can wait for the
+/// shell to read, and it must never do so on the main thread.
 #[tauri::command]
-pub fn write_session(
+pub async fn write_session(
     state: State<'_, PtyState>,
     session_id: u64,
     data: Vec<u8>,
 ) -> Result<(), String> {
-    let mut sessions = state
-        .sessions
+    let writer = {
+        let sessions = state
+            .sessions
+            .lock()
+            .map_err(|_| "PTY session store is unavailable".to_string())?;
+        sessions
+            .get(&session_id)
+            .ok_or_else(|| "terminal session no longer exists".to_string())?
+            .writer
+            .clone()
+    };
+    let mut writer = writer
         .lock()
-        .map_err(|_| "PTY session store is unavailable".to_string())?;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| "terminal session no longer exists".to_string())?;
-    session
-        .writer
+        .map_err(|_| "terminal input is unavailable".to_string())?;
+    writer
         .write_all(&data)
-        .and_then(|()| session.writer.flush())
+        .and_then(|()| writer.flush())
         .map_err(|error| format!("cannot write terminal input: {error}"))
 }
 
