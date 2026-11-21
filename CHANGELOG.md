@@ -5,11 +5,7 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
-### Added
-
-- Desktop: `Ctrl+Shift+C` (or `Ctrl+Insert`, `Command+C` on macOS) copies the
-  selected text to the clipboard. Without a selection the keys keep their
-  terminal meaning, and `Ctrl+C` is still the interrupt key.
+## [1.5.0] - 2026-11-21
 
 ### Added
 
@@ -20,6 +16,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   a result can never inject an operator. Programs and Git write into the
   substitution like built-in commands do. Backquotes and `$((...))` are not
   supported.
+- Desktop: `Ctrl+Shift+C` (or `Ctrl+Insert`, `Command+C` on macOS) copies the
+  selected text to the clipboard. Without a selection the keys keep their
+  terminal meaning, and `Ctrl+C` is still the interrupt key.
 
 ### Security
 

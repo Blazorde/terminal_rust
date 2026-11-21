@@ -5055,7 +5055,7 @@ dependencies = [
 
 [[package]]
 name = "terminal-rust-desktop"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "flate2",
  "portable-pty",
@@ -5070,14 +5070,14 @@ dependencies = [
 
 [[package]]
 name = "terminal-rust-example-plugin"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "terminal-rust-plugin-sdk",
 ]
 
 [[package]]
 name = "terminal-rust-native-prototype"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "arboard",
  "eframe",
@@ -5088,7 +5088,7 @@ dependencies = [
 
 [[package]]
 name = "terminal-rust-plugin-sdk"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5096,7 +5096,7 @@ dependencies = [
 
 [[package]]
 name = "terminal_rust"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "crossterm",
  "ctrlc",
