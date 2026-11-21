@@ -1607,3 +1607,281 @@ fn kill_stops_a_job_and_an_unknown_job_is_an_error() {
     );
     assert!(printed.contains("checked\n"), "{printed}");
 }
+
+// The shell quotes what you typed and the names it could not find in its error
+// messages. A name holding an escape sequence must not reach the terminal there.
+#[cfg(unix)]
+#[test]
+fn error_messages_neutralize_control_characters_in_quoted_names() {
+    let directory = TestDirectory::new("hostile error");
+    let hostile = "no\u{1b}]0;PWNED\u{7}where";
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            &format!("cd \"{hostile}\""),
+            &format!("cat \"{hostile}\" | cat"),
+            &format!("\"{hostile}\""),
+            "echo still-alive",
+        ],
+    );
+
+    assert!(errors.contains("no?]0;PWNED?where"), "{errors:?}");
+    assert!(
+        !errors.contains('\u{1b}') && !errors.contains('\u{7}'),
+        "{errors:?}"
+    );
+    assert!(printed.contains("still-alive\n"), "{printed}");
+}
+
+fn git_is_installed() -> bool {
+    Command::new("git")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success())
+}
+
+#[test]
+fn the_output_of_git_goes_through_pipes_and_redirections() {
+    if !git_is_installed() {
+        return;
+    }
+    let directory = TestDirectory::new("git pipeline");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "git --version | cat",
+            "git --version > version.txt",
+            "cat version.txt",
+            "echo x | git hash-object --stdin",
+        ],
+    );
+
+    // `git --version` is printed twice: through the pipe and from the file.
+    assert_eq!(
+        printed.matches("git version").count(),
+        2,
+        "{printed}\n{errors}"
+    );
+    let written =
+        fs::read_to_string(directory.path().join("version.txt")).expect("redirected output");
+    assert!(written.starts_with("git version"), "{written}");
+    // The blob id of "x\n": the built-in `echo` fed Git's standard input.
+    assert!(
+        printed.contains("587be6b4c3f93f93c489c0111bba5596147a26cb"),
+        "{printed}\n{errors}"
+    );
+}
+
+#[test]
+fn a_failing_git_in_a_pipeline_sets_its_exit_code() {
+    if !git_is_installed() {
+        return;
+    }
+    let directory = TestDirectory::new("git failure");
+
+    let (printed, _) = shell_lines(
+        &directory,
+        &[
+            "git definitely-not-a-git-command 2> err.txt",
+            "echo code=$?",
+        ],
+    );
+
+    assert!(!printed.contains("code=0"), "{printed}");
+    let logged = fs::read_to_string(directory.path().join("err.txt")).expect("stderr file");
+    assert!(logged.contains("not a git command"), "{logged}");
+}
+
+#[test]
+fn a_substitution_is_replaced_by_the_output_without_trailing_newlines() {
+    let directory = TestDirectory::new("subst basic");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo today is $(echo fine)",
+            "echo [$(echo a ; echo)]",
+            "echo [$(true)]",
+        ],
+    );
+
+    assert!(printed.contains("today is fine\n"), "{printed}\n{errors}");
+    assert!(printed.contains("[a]\n"), "{printed}");
+    assert!(printed.contains("[]\n"), "{printed}");
+}
+
+#[test]
+fn an_unquoted_result_is_split_and_a_quoted_one_is_not() {
+    let directory = TestDirectory::new("subst split");
+    fs::write(directory.path().join("a.txt"), "").expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo [$(echo \"a   b\")]",
+            "echo \"[$(echo \"a   b\")]\"",
+            "NAME=$(echo \"x   y\")",
+            "echo \"<$NAME>\"",
+            // The result is never matched against file names.
+            "echo $(echo '*.txt')",
+        ],
+    );
+
+    assert!(printed.contains("[a b]\n"), "{printed}\n{errors}");
+    assert!(printed.contains("[a   b]\n"), "{printed}");
+    assert!(printed.contains("<x   y>\n"), "{printed}");
+    assert!(printed.contains("*.txt\n"), "{printed}");
+    assert!(!printed.contains("a.txt"), "{printed}");
+}
+
+#[test]
+fn quoting_and_escaping_keep_a_substitution_literal() {
+    let directory = TestDirectory::new("subst literal");
+
+    let (printed, _) = shell_lines(
+        &directory,
+        &[
+            "echo '$(echo no)'",
+            "echo \\$(echo no)",
+            "echo \"\\$(echo no)\"",
+        ],
+    );
+
+    assert_eq!(printed.matches("$(echo no)").count(), 3, "{printed}");
+}
+
+#[test]
+fn a_result_cannot_inject_an_operator() {
+    let directory = TestDirectory::new("subst injection");
+
+    let (printed, _) = shell_lines(
+        &directory,
+        &[
+            "echo $(echo 'x; echo pwned > injected.txt')",
+            "echo $(echo 'a | b > c')",
+        ],
+    );
+
+    assert!(
+        printed.contains("x; echo pwned > injected.txt\n"),
+        "{printed}"
+    );
+    assert!(printed.contains("a | b > c\n"), "{printed}");
+    assert!(!directory.path().join("injected.txt").exists());
+    assert!(!directory.path().join("c").exists());
+}
+
+#[test]
+fn substitutions_nest_and_hold_whole_command_lines() {
+    let directory = TestDirectory::new("subst nesting");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo nested $(echo $(echo deep))",
+            "echo chain $(echo a ; echo b && echo c)",
+            "echo pipe $(echo hello | cat)",
+            "echo \"quoted $(echo \"inner ) paren\")\"",
+        ],
+    );
+
+    assert!(printed.contains("nested deep\n"), "{printed}\n{errors}");
+    assert!(printed.contains("chain a b c\n"), "{printed}");
+    assert!(printed.contains("pipe hello\n"), "{printed}");
+    assert!(printed.contains("quoted inner ) paren\n"), "{printed}");
+}
+
+#[test]
+fn a_substitution_works_in_a_redirection_target_and_for_cd() {
+    let directory = TestDirectory::new("subst targets");
+    fs::create_dir(directory.path().join("sub")).expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo written > $(echo result.txt)",
+            "cat result.txt",
+            "cd $(echo sub)",
+            "pwd",
+        ],
+    );
+
+    assert!(printed.contains("written\n"), "{printed}\n{errors}");
+    assert!(printed.contains("/sub\n"), "{printed}");
+}
+
+#[test]
+fn an_unclosed_substitution_rejects_the_whole_line() {
+    let directory = TestDirectory::new("subst unclosed");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo first ; echo $(echo x",
+            "echo $((1 + 2))",
+            "echo still-here",
+        ],
+    );
+
+    assert!(!printed.contains("first"), "{printed}");
+    assert!(errors.contains("missing closing parenthesis"), "{errors}");
+    assert!(errors.contains("arithmetic expansion"), "{errors}");
+    assert!(printed.contains("still-here\n"), "{printed}");
+}
+
+#[test]
+fn the_standard_error_of_a_substitution_is_not_part_of_its_result() {
+    let directory = TestDirectory::new("subst stderr");
+
+    let (printed, errors) = shell_lines(&directory, &["echo [$(cat missing-input)]"]);
+
+    assert!(printed.contains("[]\n"), "{printed}");
+    assert!(errors.contains("missing-input"), "{errors}");
+}
+
+#[test]
+fn substitutions_nested_too_deeply_are_refused() {
+    let directory = TestDirectory::new("subst depth");
+    let line = format!("echo {}x{}", "$(echo ".repeat(12), ")".repeat(12));
+
+    let (_, errors) = shell_lines(&directory, &[&line]);
+
+    assert!(errors.contains("nested too deeply"), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn the_output_of_programs_is_collected_in_order() {
+    let directory = TestDirectory::new("subst programs");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo [$(echo first ; printf second)]",
+            "echo $(printf 'b\\na\\n' | sort)",
+            "export TRS_SUBST=$(printf 'kept value')",
+            "printenv TRS_SUBST",
+        ],
+    );
+
+    assert!(printed.contains("[first second]\n"), "{printed}\n{errors}");
+    assert!(printed.contains("a b\n"), "{printed}");
+    assert!(printed.contains("kept value\n"), "{printed}");
+}
+
+#[test]
+fn the_output_of_git_is_collected() {
+    if !git_is_installed() {
+        return;
+    }
+    let directory = TestDirectory::new("subst git");
+
+    let (printed, errors) = shell_lines(&directory, &["echo version: $(git --version)"]);
+
+    assert!(
+        printed.contains("version: git version"),
+        "{printed}\n{errors}"
+    );
+}

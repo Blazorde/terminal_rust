@@ -22,6 +22,7 @@ pub(crate) struct CapturedOutput {
 thread_local! {
     static OUTPUT_CAPTURE: RefCell<Option<CapturedOutput>> = const { RefCell::new(None) };
     static STREAM_BEFORE_CHILDREN: Cell<bool> = const { Cell::new(false) };
+    static PROGRAMS_CAPTURED: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Ask for captured output to be written to the terminal before a child process
@@ -62,12 +63,27 @@ pub(crate) fn capture_stage<T>(operation: impl FnOnce() -> T) -> (T, CapturedOut
     (result, stage.unwrap_or_default())
 }
 
+/// Capture everything a command line writes on standard output, in-process
+/// commands and programs alike, for a command substitution (ADR-0014).
+pub(crate) fn capture_substitution<T>(operation: impl FnOnce() -> T) -> (T, CapturedOutput) {
+    let previous = PROGRAMS_CAPTURED.with(|flag| flag.replace(true));
+    let captured = capture_stage(operation);
+    PROGRAMS_CAPTURED.with(|flag| flag.set(previous));
+    captured
+}
+
+/// Whether the standard output of programs is being collected rather than shown.
+pub(crate) fn programs_captured() -> bool {
+    PROGRAMS_CAPTURED.with(Cell::get)
+}
+
 /// Write the output captured so far to the terminal and keep capturing.
 ///
 /// A child process writes straight to the terminal, so flushing first keeps the
 /// output of the built-in commands that ran before it in order.
 pub(crate) fn flush_captured() {
-    if !STREAM_BEFORE_CHILDREN.with(Cell::get) {
+    // What a substitution has collected belongs to the substitution, not to the screen.
+    if !STREAM_BEFORE_CHILDREN.with(Cell::get) || programs_captured() {
         return;
     }
     let pending = OUTPUT_CAPTURE.with(|capture| capture.borrow_mut().as_mut().map(std::mem::take));
@@ -149,8 +165,15 @@ pub fn stdout_line(message: impl fmt::Display) -> io::Result<()> {
     with_stdout(|writer| write_text(writer, message))
 }
 
+/// What the shell writes on standard error is its own diagnostics, which quote
+/// file names and user input: control characters in them are made harmless, as
+/// for any other text from outside (see `printable`).
+fn diagnostic(message: &str) -> String {
+    printable::printable_multiline(message).into_owned()
+}
+
 pub fn stderr_line(message: impl fmt::Display) -> io::Result<()> {
-    let message = format!("{message}\n");
+    let message = format!("{}\n", diagnostic(&message.to_string()));
     if capture_text(OutputStream::Stderr, &message) {
         return Ok(());
     }
@@ -159,7 +182,7 @@ pub fn stderr_line(message: impl fmt::Display) -> io::Result<()> {
 }
 
 pub fn stderr(message: impl fmt::Display) -> io::Result<()> {
-    let message = message.to_string();
+    let message = diagnostic(&message.to_string());
     if capture_text(OutputStream::Stderr, &message) {
         return Ok(());
     }

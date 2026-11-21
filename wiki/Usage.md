@@ -92,6 +92,26 @@ succeeded, and `||` only if it failed. They are evaluated from left to right and
 `exit` stops the line. Quote an operator to use it as text. A trailing `&` runs
 a command in the background, see [Background jobs](#background-jobs).
 
+## Command substitution
+
+`$(command)` is replaced by what the command prints, without its final newlines:
+
+```text
+echo today is $(date)
+cd $(dirname /usr/bin/env)
+VERSION=$(git describe --tags)
+ls $(find . -name '*.rs')
+```
+
+The command can be any line, with pipes and `;`, and substitutions nest. Unquoted,
+the result is split into words at spaces and newlines and is never matched
+against file names; in double quotes it stays one word (`"$(pwd)"`). In an
+assignment (`NAME=$(cmd)`) it is not split. What the command writes on standard
+error still goes to the terminal. A result can never add an operator such as `;`
+or `>` to the line. Single quotes and `\$(` keep it as text. `cd` inside a
+substitution changes the shell's directory (there is no subshell). Backquotes
+and `$((...))` arithmetic are not available.
+
 ## File name patterns
 
 `*`, `?` and `[...]` in an argument are replaced by the sorted names they match:
@@ -220,6 +240,9 @@ Desktop sessions are isolated per tab. Use `Ctrl+Shift+T` (`Command+T` on macOS)
 to create a tab, `Ctrl+Shift+W` (`Command+W`) to close it, `Ctrl+Tab` to switch
 tabs and `Ctrl+,` (`Command+,`) to open settings. Plain `Ctrl+T` and `Ctrl+W`
 are left to the shell, where they swap two characters and delete a word.
+Select text with the mouse and press `Ctrl+Shift+C` (or `Ctrl+Insert`, or
+`Command+C` on macOS) to copy it; `Ctrl+C` is always the interrupt key. Paste
+with the usual shortcut of your system.
 
 More detail: [dashboard](https://github.com/Blazorde/terminal_rust/blob/main/docs/dashboard.md)
 and [completion](https://github.com/Blazorde/terminal_rust/blob/main/docs/completion.md).

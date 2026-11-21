@@ -19,6 +19,7 @@ mod aliases;
 mod jobs;
 mod pipeline;
 mod scripts;
+mod substitution;
 
 pub struct ShellState {
     previous_dir: Option<PathBuf>,
@@ -473,9 +474,32 @@ fn run_segment(
     background: bool,
     state: &mut ShellState,
 ) -> CommandResult {
+    // Command substitutions run now, then the rewritten text is split again.
+    if text.contains("$(") {
+        let expanded = match substitution::expand(text, state) {
+            Ok(expanded) => expanded,
+            Err(error) => return CommandResult::Error(error),
+        };
+        return match split_stages(&expanded) {
+            Ok(stages) => run_expanded(&expanded, &stages, background, state),
+            Err(error) => CommandResult::Error(error),
+        };
+    }
+    run_expanded(text, stages, background, state)
+}
+
+fn run_expanded(
+    text: &str,
+    stages: &[Stage],
+    background: bool,
+    state: &mut ShellState,
+) -> CommandResult {
+    // Inside a substitution the output of programs is collected: only the
+    // pipeline code does that.
     if let [stage] = stages
         && stage.redirects.is_empty()
         && !background
+        && !render::programs_captured()
     {
         return match parse_args(text, &|name| state.variable(name)) {
             Ok(args) if args.is_empty() => CommandResult::Continue,
@@ -492,6 +516,8 @@ enum StageKind {
     InProcess,
     /// As a program, with its streams connected to the neighbours.
     Program { program: String, args: Vec<String> },
+    /// The native Git, which has its own environment (the bundled runtime).
+    Git { args: Vec<String> },
 }
 
 fn classify(args: &[String], state: &ShellState) -> Result<StageKind, String> {
@@ -502,6 +528,12 @@ fn classify(args: &[String], state: &ShellState) -> Result<StageKind, String> {
         && split_assignment(single).is_some()
     {
         return Ok(StageKind::InProcess);
+    }
+    // Git runs as a program, so its output can go through a pipe or a redirection.
+    if name == "git" {
+        return Ok(StageKind::Git {
+            args: args[1..].to_vec(),
+        });
     }
     if find_command(name).is_some() {
         return Ok(StageKind::InProcess);

@@ -20,6 +20,7 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0011](0011-pipelines-and-redirections.md) | Accepted | Pipelines and redirections |
 | [0012](0012-filename-patterns.md) | Accepted | File name patterns `*`, `?` and `[...]` |
 | [0013](0013-background-jobs.md) | Accepted | Background jobs with `&`, `jobs`, `fg`, `wait` and `kill` |
+| [0014](0014-command-substitution.md) | Accepted | Command substitution `$(...)` |
 
 ## Lifecycle
 

@@ -6,7 +6,9 @@ import { memo, useEffect, useRef, useState } from 'react'
 
 import { createPromptMetadataFilter } from './promptMetadataFilter.ts'
 import { emptyPromptLayout, parsePromptLayout, type PromptLayout } from './PromptSegments'
+import { copyText, isCopyShortcut } from './clipboard.ts'
 import { createSessionRouter } from './sessionRouter.ts'
+import { isMacPlatform } from './shortcuts.ts'
 import { applyTerminalSettings, type DesktopSettings } from './settings'
 import type { ConnectionState } from './terminal-types'
 
@@ -135,7 +137,14 @@ function TerminalPane({
 
       onPatch(tabId, { connection: 'connecting', error: null })
       term.attachCustomKeyEventHandler((event) => {
-        if (event.type !== 'keydown' || event.key !== 'Enter' || !event.shiftKey) return true
+        if (event.type !== 'keydown') return true
+        // Copy the selection. Without one the key keeps its terminal meaning.
+        if (isCopyShortcut(event, isMacPlatform(navigator.platform)) && term.hasSelection()) {
+          event.preventDefault()
+          void copyText(term.getSelection())
+          return false
+        }
+        if (event.key !== 'Enter' || !event.shiftKey) return true
         event.preventDefault()
         sendInput('`\r')
         return false

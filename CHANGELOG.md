@@ -5,6 +5,42 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-21
+
+### Added
+
+- Command substitution ([ADR-0014](docs/decisions/0014-command-substitution.md)):
+  `$(command)` is replaced by the output of the command, which can be a whole
+  line with pipes and chains, and substitutions nest. Unquoted results are split
+  into words (and never matched against file names), quoted ones stay whole, and
+  a result can never inject an operator. Programs and Git write into the
+  substitution like built-in commands do. Backquotes and `$((...))` are not
+  supported.
+- Desktop: `Ctrl+Shift+C` (or `Ctrl+Insert`, `Command+C` on macOS) copies the
+  selected text to the clipboard. Without a selection the keys keep their
+  terminal meaning, and `Ctrl+C` is still the interrupt key.
+
+### Security
+
+- The error messages of the shell quote what you typed and the names it could
+  not find (`cd`, `cat`, an unknown command...). A name holding a terminal escape
+  sequence now has its control characters replaced by `?` there too, in the text
+  written on standard error and in the error returned by the engine. Names shown
+  by `ls`, `pwd` and the prompt were already protected.
+
+### Fixed
+
+- `git` in a pipeline or with a redirection: its output went straight to the
+  terminal, so `git log | head` or `git diff > patch.txt` did not work. Git now
+  runs as a program whose streams are connected like any other.
+- Desktop: two copies of the application starting together could delete and
+  extract the bundled Git runtime at the same time and leave a broken one. The
+  installation now takes a lock file shared by all processes (released when the
+  process ends, even after a crash), and re-checks the runtime once it holds it.
+- Desktop: the bundled runtime archive, several hundred megabytes, was read in
+  full at every start to compute its digest. The digest is now kept with the size
+  and date of the archive and only recomputed when they change.
+
 ## [1.4.0] - 2026-11-21
 
 ### Added
