@@ -46,7 +46,8 @@ takes precedence over a program of the same name. See
 
 ## Variables
 
-`$NAME`, `${NAME}` and `$?` (`0` after a success, `1` after a failure) are
+`$NAME`, `${NAME}` and `$?` (`0` after a success, the exit code of a program
+that failed, `127` for an unknown program, `1` for a failure inside the shell) are
 expanded in command lines, and a leading `~` stands for your home directory.
 Double quotes expand variables, single quotes do not, and `\$` writes a literal
 dollar sign:

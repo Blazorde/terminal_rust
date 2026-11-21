@@ -1028,7 +1028,7 @@ fn the_status_of_a_pipeline_is_the_status_of_its_last_stage() {
     );
 
     assert!(printed.contains("first=0\n"), "{printed}\n{errors}");
-    assert!(printed.contains("second=1\n"), "{printed}\n{errors}");
+    assert!(printed.contains("second=4\n"), "{printed}\n{errors}");
     assert!(printed.contains("third=0\n"), "{printed}\n{errors}");
     assert!(errors.contains("exited with status 4"), "{errors}");
 }
@@ -1320,4 +1320,80 @@ fn a_pattern_works_with_commands_and_pipes() {
     assert!(directory.path().join(".hidden.txt").exists());
     assert!(printed.contains("done\n"), "{printed}");
     assert!(printed.contains("[draft] one.md c.md\n"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn the_status_is_the_exit_code_of_the_program() {
+    let directory = TestDirectory::new("exit codes");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'exit 3'",
+            "echo code=$?",
+            "sh -c 'exit 0'",
+            "echo code=$?",
+            "terminal-rust-no-such-program",
+            "echo code=$?",
+            "cd /terminal-rust-missing-directory",
+            "echo code=$?",
+            "sh -c 'kill -9 $$'",
+            "echo code=$?",
+        ],
+    );
+
+    let codes: Vec<&str> = printed
+        .lines()
+        .filter_map(|line| line.rsplit("> ").next())
+        .filter(|line| line.starts_with("code="))
+        .collect();
+    assert_eq!(
+        codes,
+        ["code=3", "code=0", "code=127", "code=1", "code=137"],
+        "{printed}\n{errors}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn the_code_of_a_pipeline_is_the_code_of_its_last_program() {
+    let directory = TestDirectory::new("pipeline codes");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'exit 3' | sh -c 'cat > /dev/null; exit 4'",
+            "echo code=$?",
+            "sh -c 'exit 5' | cat",
+            "echo code=$?",
+            "echo x | sh -c 'exit 6'",
+            "echo code=$?",
+        ],
+    );
+
+    let codes: Vec<&str> = printed
+        .lines()
+        .filter_map(|line| line.rsplit("> ").next())
+        .filter(|line| line.starts_with("code="))
+        .collect();
+    assert_eq!(codes, ["code=4", "code=0", "code=6"], "{printed}\n{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn and_or_chains_still_follow_success_and_failure_with_exact_codes() {
+    let directory = TestDirectory::new("chain codes");
+
+    let (printed, _) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'exit 9' && echo wrong || echo recovered",
+            "sh -c 'exit 0' && echo ok",
+        ],
+    );
+
+    assert!(printed.contains("recovered"), "{printed}");
+    assert!(!printed.contains("wrong"), "{printed}");
+    assert!(printed.contains("ok"), "{printed}");
 }

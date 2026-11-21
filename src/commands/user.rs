@@ -284,6 +284,7 @@ pub fn run_process(
     if status.success() {
         Ok(())
     } else {
+        external::note_exit_code(external::exit_code(status));
         Err(external::describe_exit(name, status))
     }
 }

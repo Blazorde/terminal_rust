@@ -26,7 +26,8 @@ pub struct ShellState {
     startup_script: Option<String>,
     script_depth: usize,
     variables: HashMap<String, String>,
-    last_failed: bool,
+    /// The status of the last command, the value of `$?`.
+    last_status: i32,
 }
 
 impl ShellState {
@@ -42,7 +43,7 @@ impl ShellState {
             startup_script,
             script_depth: 0,
             variables: HashMap::new(),
-            last_failed: false,
+            last_status: 0,
         }
     }
 
@@ -50,7 +51,7 @@ impl ShellState {
     /// environment the programs would receive.
     pub(crate) fn variable(&self, name: &str) -> Option<String> {
         if name == "?" {
-            return Some(if self.last_failed { "1" } else { "0" }.to_string());
+            return Some(self.last_status.to_string());
         }
         self.variables
             .get(name)
@@ -58,8 +59,11 @@ impl ShellState {
             .or_else(|| shell_env::value(name))
     }
 
+    /// Record the outcome of a command as `$?`: 0, or the exit code of the
+    /// program that failed, or 1 for a command that failed inside the shell.
     pub(crate) fn record_status(&mut self, failed: bool) {
-        self.last_failed = failed;
+        let program_code = external::take_exit_code();
+        self.last_status = if failed { program_code.unwrap_or(1) } else { 0 };
     }
 
     pub(crate) fn user_command_names(&self) -> Vec<String> {
@@ -373,14 +377,14 @@ pub(crate) fn command_help() -> impl Iterator<Item = (&'static str, &'static str
 pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
     let segments = match split_chain(input) {
         Ok(segments) => segments,
-        Err(error) => return CommandResult::Error(error),
+        Err(error) => return syntax_error(error, state),
     };
     // A syntax error anywhere rejects the whole line before anything runs.
     let mut lines = Vec::with_capacity(segments.len());
     for segment in segments {
         match split_stages(&segment.text) {
             Ok(stages) => lines.push((segment, stages)),
-            Err(error) => return CommandResult::Error(error),
+            Err(error) => return syntax_error(error, state),
         }
     }
 
@@ -408,6 +412,12 @@ pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
         }
     }
     last
+}
+
+/// A line that cannot be parsed fails without running anything.
+fn syntax_error(message: String, state: &mut ShellState) -> CommandResult {
+    state.record_status(true);
+    CommandResult::Error(message)
 }
 
 /// Run one segment: a single command, or a pipeline and its redirections.
@@ -542,6 +552,7 @@ fn execute_external(name: &str, args: &[String]) -> CommandResult {
     match external::run(name, args) {
         Ok(()) => CommandResult::Continue,
         Err(external::RunError::NotFound) => {
+            external::note_exit_code(external::COMMAND_NOT_FOUND);
             CommandResult::Error(CommandError::UnknownCommand(name.to_string()).to_string())
         }
         Err(external::RunError::Failed(message)) => CommandResult::Error(message),

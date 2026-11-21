@@ -5,6 +5,13 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Changed
+
+- `$?` is now the exact exit code of the last program (`3` after `exit 3`, `137`
+  after a kill), `127` for a program that does not exist, and the code of the
+  last program of a pipeline. It used to be only `0` or `1`. A command that fails
+  inside the shell is still `1`, and so is a line that cannot be parsed.
+
 ### Added
 
 - Completion offers the programs found in `PATH` next to the built-in commands,
