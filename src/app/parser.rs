@@ -4,8 +4,15 @@ enum Quote {
     Double,
 }
 
-/// Look up the value of a variable name (`?` is the last status).
+/// Look up the value of a variable name (`?` is the last status, `1` to `9` the
+/// positional parameters, `#` their number, `*` all of them joined by spaces, and
+/// `@` all of them joined by [`PARAMETER_SEPARATOR`]).
 pub type Lookup<'a> = &'a dyn Fn(&str) -> Option<String>;
+
+/// Between the positional parameters in the value of `@`: `$@` and `"$@"` become
+/// one word per parameter, so the separator must not be a character that can be
+/// typed in a command line.
+pub const PARAMETER_SEPARATOR: char = '\u{1f}';
 
 /// One word of a command line. `pattern` is set when it holds an unquoted `*`,
 /// `?` or `[`: it is the text to match against file names, in which every other
@@ -55,6 +62,21 @@ pub fn parse_args(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
     Ok(args)
 }
 
+/// Turn the separators of an expanded `$@` into word breaks: the text before the
+/// first one joins the word being written, and each later parameter starts a word.
+fn split_parameters(current: &mut String, args: &mut Vec<Word>, wildcards: &mut Vec<usize>) {
+    if !current.contains(PARAMETER_SEPARATOR) {
+        return;
+    }
+    let all = std::mem::take(current);
+    let mut parts = all.split(PARAMETER_SEPARATOR);
+    *current = parts.next().unwrap_or_default().to_string();
+    for part in parts {
+        args.push(finish_word(std::mem::take(current), wildcards));
+        *current = part.to_string();
+    }
+}
+
 fn finish_word(text: String, wildcards: &mut Vec<usize>) -> Word {
     let pattern = (!wildcards.is_empty()).then(|| pattern_text(&text, wildcards));
     wildcards.clear();
@@ -68,11 +90,21 @@ pub fn parse_words(input: &str, lookup: Lookup) -> Result<Vec<Word>, String> {
     let mut current = String::new();
     let mut quote: Option<Quote> = None;
     let mut started_argument = false;
+    // Whether a word had begun before the quote that is open, and whether a
+    // `"$@"` with no parameter must leave no word at all.
+    let mut started_before_quote = false;
+    let mut drop_empty_quotes = false;
     let mut characters = input.chars().peekable();
 
     while let Some(character) = characters.next() {
         match (quote, character) {
-            (Some(Quote::Single), '\'') | (Some(Quote::Double), '"') => quote = None,
+            (Some(Quote::Single), '\'') | (Some(Quote::Double), '"') => {
+                quote = None;
+                if drop_empty_quotes && current.is_empty() {
+                    started_argument = false;
+                }
+                drop_empty_quotes = false;
+            }
             (Some(Quote::Single), character) => current.push(character),
             (Some(Quote::Double), '\\') if matches!(characters.peek(), Some('"' | '\\' | '$')) => {
                 if let Some(escaped) = characters.next() {
@@ -80,15 +112,23 @@ pub fn parse_words(input: &str, lookup: Lookup) -> Result<Vec<Word>, String> {
                 }
             }
             (Some(Quote::Double), '$') => {
-                expand_variable(&mut characters, lookup, &mut current)?;
+                let parameters = characters.peek() == Some(&'@');
+                let added = expand_variable(&mut characters, lookup, &mut current)?;
+                if parameters {
+                    split_parameters(&mut current, &mut args, &mut wildcards);
+                    // `"$@"` with no parameter is no word, not an empty one.
+                    drop_empty_quotes = !added && current.is_empty() && !started_before_quote;
+                }
             }
             (Some(Quote::Double), character) => current.push(character),
             (None, '\'') => {
                 quote = Some(Quote::Single);
+                started_before_quote = started_argument;
                 started_argument = true;
             }
             (None, '"') => {
                 quote = Some(Quote::Double);
+                started_before_quote = started_argument;
                 started_argument = true;
             }
             (None, '\\')
@@ -109,8 +149,12 @@ pub fn parse_words(input: &str, lookup: Lookup) -> Result<Vec<Word>, String> {
                 started_argument = true;
             }
             (None, '$') => {
+                let parameters = characters.peek() == Some(&'@');
                 if expand_variable(&mut characters, lookup, &mut current)? {
                     started_argument = true;
+                }
+                if parameters {
+                    split_parameters(&mut current, &mut args, &mut wildcards);
                 }
             }
             (None, '~')
@@ -183,9 +227,13 @@ fn expand_variable(
             }
             return expand_braced(&content, lookup, output);
         }
-        Some('?') => {
+        Some(special @ ('?' | '#' | '@' | '*')) => {
             characters.next();
-            "?".to_string()
+            special.to_string()
+        }
+        Some(digit) if digit.is_ascii_digit() => {
+            characters.next();
+            digit.to_string()
         }
         Some(first) if first.is_ascii_alphabetic() || first == '_' => {
             let mut name = String::new();
@@ -213,14 +261,18 @@ fn expand_variable(
 /// word, `NAME:-w` and `NAME-w` (default), `NAME:+w` and `NAME+w` (alternative),
 /// `NAME:?w` and `NAME?w` (error). With a colon, an empty value counts as unset.
 fn expand_braced(content: &str, lookup: Lookup, output: &mut String) -> Result<bool, String> {
-    let valid = |name: &str| crate::utils::shell_env::is_valid_name(name) || name == "?";
+    let valid = |name: &str| {
+        crate::utils::shell_env::is_valid_name(name)
+            || matches!(name, "?" | "#" | "@" | "*")
+            || (!name.is_empty() && name.chars().all(|character| character.is_ascii_digit()))
+    };
     if let Some(name) = content.strip_prefix('#')
         && valid(name)
     {
         output.push_str(&lookup(name).unwrap_or_default().chars().count().to_string());
         return Ok(true);
     }
-    let name_end = if content.starts_with('?') {
+    let name_end = if content.starts_with(['?', '#', '@', '*']) {
         1
     } else {
         content
@@ -1337,7 +1389,96 @@ mod tests {
     #[test]
     fn a_lone_dollar_stays_literal() {
         assert_eq!(expanded("echo $ cost$"), words(&["echo", "$", "cost$"]));
-        assert_eq!(expanded("echo $5"), words(&["echo", "$5"]));
+        // `$5` is the fifth positional parameter, which is not set here.
+        assert_eq!(expanded("echo $5"), words(&["echo"]));
+    }
+
+    fn with_parameters(name: &str) -> Option<String> {
+        match name {
+            "1" => Some("one".to_string()),
+            "2" => Some("two words".to_string()),
+            "#" => Some("2".to_string()),
+            "*" => Some("one two words".to_string()),
+            "@" => Some(format!("one{PARAMETER_SEPARATOR}two words")),
+            _ => variables(name),
+        }
+    }
+
+    fn without_parameters(name: &str) -> Option<String> {
+        match name {
+            "#" => Some("0".to_string()),
+            "@" | "*" => Some(String::new()),
+            _ => variables(name),
+        }
+    }
+
+    fn with(input: &str) -> Result<Vec<String>, String> {
+        parse_with(input, &with_parameters)
+    }
+
+    #[test]
+    fn positional_parameters_have_a_number_and_a_count() {
+        assert_eq!(with("echo $1 $2"), words(&["echo", "one", "two words"]));
+        assert_eq!(with("echo ${1}x $#"), words(&["echo", "onex", "2"]));
+        assert_eq!(with("echo ${#}"), words(&["echo", "2"]));
+        assert_eq!(with("echo ${#1} ${#2}"), words(&["echo", "3", "9"]));
+        assert_eq!(
+            with("echo ${3:-fallback} ${1:-fallback}"),
+            words(&["echo", "fallback", "one"])
+        );
+        // A single digit: `$10` is the first parameter and a zero.
+        assert_eq!(with("echo $10"), words(&["echo", "one0"]));
+        // An unset parameter gives nothing, like any unset variable.
+        assert_eq!(with("echo a$3b"), words(&["echo", "ab"]));
+        assert_eq!(with("echo ${12}"), words(&["echo"]));
+        assert_eq!(
+            expanded("echo ${1a}").unwrap_err(),
+            "invalid variable name: 1a"
+        );
+    }
+
+    #[test]
+    fn at_gives_one_word_per_parameter_and_star_joins_them() {
+        assert_eq!(with("echo $@"), words(&["echo", "one", "two words"]));
+        assert_eq!(with("echo \"$@\""), words(&["echo", "one", "two words"]));
+        assert_eq!(
+            with("echo x\"$@\"y"),
+            words(&["echo", "xone", "two wordsy"])
+        );
+        assert_eq!(with("echo $*"), words(&["echo", "one two words"]));
+        assert_eq!(with("echo \"$*\""), words(&["echo", "one two words"]));
+        assert_eq!(
+            with("echo \"$@\" \"$*\""),
+            words(&["echo", "one", "two words", "one two words"])
+        );
+        // A quoted `$@` next to other text keeps it in the same words.
+        assert_eq!(
+            with("echo \"[$@]\""),
+            words(&["echo", "[one", "two words]"])
+        );
+    }
+
+    #[test]
+    fn at_with_no_parameter_leaves_no_word() {
+        let none = |input: &str| parse_with(input, &without_parameters);
+        assert_eq!(none("echo \"$@\""), words(&["echo"]));
+        assert_eq!(none("echo $@ end"), words(&["echo", "end"]));
+        assert_eq!(none("echo a\"$@\"b"), words(&["echo", "ab"]));
+        assert_eq!(none("echo \"\" \"$@\""), words(&["echo", ""]));
+        assert_eq!(none("echo x\"$@\""), words(&["echo", "x"]));
+        // Other text in the quotes still makes a word, even an empty-looking one.
+        assert_eq!(none("echo \" $@\""), words(&["echo", " "]));
+        assert_eq!(none("echo $# \"$*\""), words(&["echo", "0", ""]));
+    }
+
+    #[test]
+    fn a_parameter_is_never_a_pattern_or_a_separator_in_text() {
+        let lookup = |name: &str| match name {
+            "1" => Some("*.rs".to_string()),
+            _ => None,
+        };
+        let words = parse_words("echo $1", &lookup).expect("parses");
+        assert_eq!(words[1].pattern, None);
     }
 
     #[test]

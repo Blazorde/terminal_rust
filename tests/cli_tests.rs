@@ -1845,7 +1845,7 @@ fn the_standard_error_of_a_substitution_is_not_part_of_its_result() {
 #[test]
 fn substitutions_nested_too_deeply_are_refused() {
     let directory = TestDirectory::new("subst depth");
-    let line = format!("echo {}x{}", "$(echo ".repeat(12), ")".repeat(12));
+    let line = format!("echo {}x{}", "$(echo ".repeat(30), ")".repeat(30));
 
     let (_, errors) = shell_lines(&directory, &[&line]);
 
@@ -2621,7 +2621,6 @@ fn source_runs_a_file_in_the_current_shell_and_reports_its_errors() {
             ". ./lib.sh",
             "source broken.sh",
             "source missing.sh",
-            "source lib.sh extra",
             "source",
         ],
     );
@@ -2642,11 +2641,45 @@ fn source_runs_a_file_in_the_current_shell_and_reports_its_errors() {
     );
     assert!(errors.contains("source: broken.sh:2:"), "{errors}");
     assert!(errors.contains("source: missing.sh:"), "{errors}");
+    assert!(errors.contains("source: expected a file"), "{errors}");
+}
+
+#[test]
+fn source_gives_its_arguments_to_the_file_as_positional_parameters() {
+    let directory = TestDirectory::new("source args");
+    fs::write(
+        directory.path().join("args.sh"),
+        "echo count=$# first=$1\nfor a in \"$@\"; do echo arg=$a; done\nshift\necho after-shift=$# $1\nreturn\n",
+    )
+    .expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "source args.sh one \"two words\" three",
+            "echo outside=$# [$1]",
+            "source args.sh",
+        ],
+    );
+
+    for expected in [
+        "count=3 first=one\n",
+        "arg=one\narg=two words\narg=three\n",
+        "after-shift=2 two words\n",
+        // After the file, the parameters of the caller are back (none here).
+        "outside=0 []\n",
+        "count=0 first=\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    // `return` is for functions: in a sourced file it says so and stops the file.
     assert!(
-        errors.contains("arguments for the file are not supported"),
+        errors.contains("return: can only return from a function"),
         "{errors}"
     );
-    assert!(errors.contains("source: expected a file"), "{errors}");
 }
 
 #[test]
@@ -3106,4 +3139,308 @@ fn case_works_over_several_lines_inside_loops_and_with_a_syntax_error() {
     assert!(printed.contains("after-error\n"), "{printed}");
     assert!(errors.contains("syntax error"), "{errors}");
     assert!(printed.contains("late\n"), "{printed}");
+}
+
+#[test]
+fn a_function_takes_arguments_and_gives_a_status() {
+    let directory = TestDirectory::new("function basics");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "greet() { echo \"hello $1 ($# args: $*)\"; }",
+            "greet a b",
+            "greet",
+            "function add { echo $(( $1 + $2 )); }",
+            "add 2 3",
+            "list() { for a in \"$@\"; do echo item=$a; done; }",
+            "list \"a b\" c",
+            "list",
+            "pass() { echo \"[$1]\" \"${2:-none}\"; }",
+            "pass x",
+            "check() { if [ \"$1\" = ok ]; then return 0; fi; return 4; }",
+            "check ok && echo is-ok",
+            "check bad || echo status=$?",
+            "check bad",
+            "echo direct=$?",
+            "defaults() { echo ${1:-fallback} ${#1}; }",
+            "defaults",
+            "defaults long",
+        ],
+    );
+
+    for expected in [
+        "hello a (2 args: a b)\n",
+        "hello  (0 args: )\n",
+        "5\n",
+        "item=a b\nitem=c\n",
+        "[x] none\n",
+        "is-ok\n",
+        "status=4\n",
+        "direct=4\n",
+        "fallback 0\n",
+        "long 4\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    // `"$@"` with no argument gives no word: the loop does not run.
+    assert_eq!(printed.matches("item=").count(), 2, "{printed}");
+    assert!(errors.is_empty(), "{errors}");
+}
+
+#[test]
+fn functions_work_in_pipelines_redirections_and_lists() {
+    let directory = TestDirectory::new("function streams");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "tr_shout() { echo \"$1!\"; }",
+            "tr_shout hi | cat",
+            "tr_shout saved > out.txt",
+            "cat out.txt",
+            "echo piped-in | tr_shout2",
+            "twice() { tr_shout one; tr_shout two; }",
+            "twice && echo after",
+            "ls() { echo custom-ls; }",
+            "ls",
+            "type ls",
+            "unset -f ls",
+            "type ls",
+            "unset -f tr_shout",
+            "tr_shout gone",
+            "echo status=$?",
+        ],
+    );
+
+    for expected in [
+        "hi!\n",
+        "saved!\n",
+        "one!\ntwo!\nafter\n",
+        "custom-ls\n",
+        "ls is a function\n",
+        "ls is a shell builtin\n",
+        "status=127\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(errors.contains("unknown command: tr_shout2"), "{errors}");
+    assert!(errors.contains("unknown command: tr_shout"), "{errors}");
+}
+
+#[test]
+fn local_variables_end_with_the_function_and_globals_stay() {
+    let directory = TestDirectory::new("function locals");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "x=outer",
+            "y=untouched",
+            "scope() { local x=inner; y=changed; echo in=$x; inner2; echo back=$x; }",
+            "inner2() { echo nested=$x; local x=deepest; echo deeper=$x; }",
+            "scope",
+            "echo out=$x y=$y",
+            "unsetlocal() { local z; echo z=[$z]; z=set-here; echo z=$z; }",
+            "unsetlocal",
+            "echo z=[$z]",
+            "early() { local x=temp; return 2; }",
+            "early",
+            "echo after-return=$x status=$?",
+            "local x=nope",
+            "scope2() { local 1bad=1; }",
+            "scope2",
+        ],
+    );
+
+    for expected in [
+        "in=inner\n",
+        "nested=inner\n",
+        "deeper=deepest\n",
+        "back=inner\n",
+        "out=outer y=changed\n",
+        "z=[]\n",
+        "z=set-here\n",
+        "z=[]\n",
+        "after-return=outer status=2\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(
+        errors.contains("local: can only be used in a function"),
+        "{errors}"
+    );
+    assert!(errors.contains("local: not a valid name: 1bad"), "{errors}");
+}
+
+#[test]
+fn functions_can_call_themselves_and_stop_at_the_depth_limit() {
+    let directory = TestDirectory::new("function recursion");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "fact() { if [ $1 -le 1 ]; then echo 1; return; fi; echo $(( $1 * $(fact $(( $1 - 1 )) ) )); }",
+            "fact 5",
+            "fact 10",
+            "count() { echo $1; if [ $1 -gt 0 ]; then count $(( $1 - 1 )); fi; }",
+            "count 3",
+            "forever() { forever; }",
+            "forever",
+            "echo status=$?",
+            "echo still-alive",
+        ],
+    );
+
+    assert!(printed.contains("120\n"), "{printed}\n{errors}");
+    assert!(printed.contains("3628800\n"), "{printed}");
+    assert!(printed.contains("3\n2\n1\n0\n"), "{printed}");
+    assert!(
+        errors.contains("forever: maximum function nesting depth (64) exceeded"),
+        "{errors}"
+    );
+    assert!(printed.contains("status=1\n"), "{printed}");
+    assert!(
+        printed.contains("still-alive\n"),
+        "the shell survives: {printed}"
+    );
+}
+
+#[test]
+fn shift_return_and_parameters_do_not_leak_out_of_a_function() {
+    let directory = TestDirectory::new("function shift");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "walk() { while [ $# -gt 0 ]; do echo arg=$1; shift; done; echo left=$#; }",
+            "walk a b c",
+            "skip() { shift 2; echo rest=$*; shift 5; }",
+            "skip 1 2 3 4",
+            "echo shifted=$?",
+            "outer() { echo outer=$1; inner x; echo outer-again=$1; }",
+            "inner() { echo inner=$1; }",
+            "outer first",
+            "echo top=[$1] count=$#",
+            "wide() { return 300; }",
+            "wide",
+            "echo wide=$?",
+            "twice() { local x=a; local x=b; echo x=$x; }",
+            "x=original",
+            "twice",
+            "echo restored=$x",
+            "loopret() { for i in 1 2 3; do if [ $i -eq 2 ]; then return 9; fi; echo i=$i; done; echo not-reached; }",
+            "loopret",
+            "echo loopret=$?",
+            "whileret() { while true; do echo once; return; done; echo not-reached; }",
+            "whileret",
+            "return",
+            "shift",
+        ],
+    );
+
+    for expected in [
+        "arg=a\narg=b\narg=c\nleft=0\n",
+        "rest=3 4\n",
+        "shifted=1\n",
+        "outer=first\ninner=x\nouter-again=first\n",
+        "top=[] count=0\n",
+        "wide=44\n",
+        "x=b\n",
+        "restored=original\n",
+        "i=1\n",
+        "loopret=9\n",
+        "once\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("not-reached"), "{printed}");
+    assert!(!printed.contains("i=2"), "{printed}");
+    assert!(
+        errors.contains("shift: shift count out of range"),
+        "{errors}"
+    );
+    assert!(
+        errors.contains("return: can only return from a function"),
+        "{errors}"
+    );
+    assert!(
+        errors.contains("shift: there are no positional parameters"),
+        "{errors}"
+    );
+}
+
+#[test]
+fn a_function_defined_over_several_lines_and_a_group_run_as_written() {
+    let directory = TestDirectory::new("function lines");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "describe()",
+            "{",
+            "  case $1 in",
+            "    *.rs) echo rust ;;",
+            "    *) echo other ;;",
+            "  esac",
+            "}",
+            "describe main.rs",
+            "describe notes.txt",
+            "{ echo group-a; echo group-b; } > group.txt",
+            "cat group.txt",
+            "{ echo one; false; } || echo recovered",
+            "f() { echo $(g); }",
+            "g() { return 7; }",
+            "f",
+        ],
+    );
+
+    for expected in ["rust\n", "other\n", "recovered\n"] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    // A redirection on a whole group is not available: the group is rejected.
+    assert!(errors.contains("syntax error"), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_function_keeps_the_exact_exit_code_of_its_last_program() {
+    let directory = TestDirectory::new("function exit code");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "fails() { sh -c 'exit 7'; }",
+            "fails",
+            "echo code=$?",
+            "wrapper() { fails; }",
+            "wrapper",
+            "echo wrapped=$?",
+            "quiet() { true; }",
+            "quiet",
+            "echo ok=$?",
+        ],
+    );
+
+    for expected in ["code=7\n", "wrapped=7\n", "ok=0\n"] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
 }

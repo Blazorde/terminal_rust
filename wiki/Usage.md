@@ -144,8 +144,8 @@ and pipelines, `break` leaves the innermost loop and `continue` starts its next
 turn, and `true` and `false` are built in. A newline works like `;`, so a block
 can be typed over several lines: the shell asks for more (`>> `) until `done` or
 `fi`. `Ctrl+C` stops a loop. A failing condition is not an error, so its message
-is not shown. Functions, `break 2`, and redirections on a whole loop
-(`done > file`) are not available.
+is not shown. `break 2` and redirections on a whole loop (`done > file`) are not
+available.
 
 `case` runs the first arm whose pattern matches a word:
 
@@ -175,6 +175,33 @@ are not available.
 
 The status is `0` when true, `1` when false (no message) and `2` for a mistake in
 the expression. Quote variables (`[ "$x" = a ]`) as in other shells.
+
+## Functions
+
+A function names a block of commands and gives it arguments:
+
+```text
+mkcd() { mkdir -p "$1" && cd "$1"; }
+function backup { cp "$1" "$1.bak"; }
+greet() {
+  local who=${1:-world}
+  echo "hello $who ($# arguments)"
+  return 0
+}
+mkcd projects/new
+greet Ada
+```
+
+Inside a function `$1`…`$9` are the arguments, `$#` their number, `$*` all of them in
+one word and `"$@"` all of them as separate words (none at all when there are none).
+`shift` drops the first one, `return N` leaves with status `N` (the status of the last
+command if omitted), and `local NAME=value` makes a variable that disappears when the
+function ends. A function can call itself (up to 64 levels), takes the place of a
+built-in or a program of the same name, works in pipes and lists, and `unset -f name`
+removes it. `type name` tells that it is a function, and Tab completes its name.
+Functions last for the session: put them in the startup script to have them always.
+`{ cmd1; cmd2; }` groups commands; `source file a b` gives `$1` and `$2` to the file.
+`declare`, `export -f`, arrays and redirections on a whole function are not available.
 
 ## Brace expansion
 

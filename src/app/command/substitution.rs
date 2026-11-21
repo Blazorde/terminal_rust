@@ -11,7 +11,7 @@ use crate::app::parser::scan_substitution;
 use crate::render;
 use crate::utils::shell_env;
 
-const MAX_DEPTH: u8 = 8;
+const MAX_DEPTH: u8 = 24;
 
 thread_local! {
     static DEPTH: Cell<u8> = const { Cell::new(0) };
@@ -43,6 +43,15 @@ pub(super) fn expand(text: &str, state: &mut ShellState) -> Result<String, Strin
             (Some('"') | None, '$') if characters.get(position + 1) == Some(&'(') => {
                 if characters.get(position + 2) == Some(&'(') {
                     let (expression, end) = arithmetic_body(&characters, position + 3)?;
+                    // Substitutions inside the expression run first, as in other
+                    // shells: `$(( $1 * $(fact 3) ))`. Quoting the text makes each
+                    // result come back as plain text.
+                    let expression = if expression.contains("$(") {
+                        let quoted = expand(&format!("\"{expression}\""), state)?;
+                        quoted[1..quoted.len() - 1].to_string()
+                    } else {
+                        expression
+                    };
                     let value = arithmetic::evaluate(&expression, &|name| state.variable(name))?;
                     // A number has no blank or special character: it needs no quoting.
                     output.push_str(&value.to_string());
@@ -148,6 +157,8 @@ fn capture(line: &str, state: &mut ShellState) -> Result<String, String> {
     }
     DEPTH.with(|cell| cell.set(depth + 1));
     let (result, captured) = render::capture_substitution(|| run_line(line, state));
+    // A `return` inside a substitution ends the substitution, not the function.
+    state.returning = None;
     DEPTH.with(|cell| cell.set(depth));
 
     // Diagnostics are for the user, not for the command that uses the result.
