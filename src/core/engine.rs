@@ -122,7 +122,11 @@ impl ShellEngine {
         let (status, error) = match command_result {
             CommandResult::Continue => (ExecutionStatus::Continue, None),
             CommandResult::Exit => (ExecutionStatus::Exit, None),
-            CommandResult::Error(error) => (ExecutionStatus::Failed, Some(error)),
+            // An empty message means the error was already written, to a redirection.
+            CommandResult::Error(error) => (
+                ExecutionStatus::Failed,
+                Some(error).filter(|e| !e.is_empty()),
+            ),
         };
         self.state.record_status(status == ExecutionStatus::Failed);
 
@@ -576,17 +580,51 @@ response = "Hello from the official Terminal Rust plugin!\n"
     }
 
     #[test]
-    fn a_pipe_is_rejected_instead_of_being_passed_as_an_argument() {
+    fn a_built_in_pipes_its_output_to_the_next_built_in() {
         let mut engine = ShellEngine::new();
 
         let result = engine.execute_line("echo hello | cat");
 
+        assert_eq!(result.status, ExecutionStatus::Continue);
+        assert_eq!(result.stdout, "hello\n");
+        assert_eq!(result.error, None);
+    }
+
+    #[test]
+    fn a_pipeline_with_a_missing_command_is_rejected_before_anything_runs() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("echo first ; echo hello |");
+
         assert_eq!(result.status, ExecutionStatus::Failed);
         assert_eq!(
             result.error.as_deref(),
-            Some("pipes (|) are not supported yet")
+            Some("expected a command after '|'")
         );
         assert_eq!(result.stdout, "");
+    }
+
+    #[test]
+    fn an_error_written_to_a_redirection_is_not_printed_again() {
+        let directory = temp_path("engine", "redirected-error");
+        fs::create_dir(&directory).expect("directory should be created");
+        let log = directory.join("err.txt");
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line(&format!(
+            "cat \"{}\" 2> \"{}\"",
+            directory.join("missing.txt").display(),
+            log.display()
+        ));
+
+        assert_eq!(result.status, ExecutionStatus::Failed);
+        assert_eq!(result.error, None);
+        assert!(
+            fs::read_to_string(&log)
+                .expect("the log should exist")
+                .contains("missing.txt")
+        );
+        fs::remove_dir_all(directory).expect("directory should be removed");
     }
 
     #[test]

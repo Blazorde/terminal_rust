@@ -16,20 +16,32 @@ pub enum RunError {
 /// Run `name` with `args`, sharing the terminal streams, the environment and the
 /// current directory of the shell.
 pub fn run(name: &str, args: &[String]) -> Result<(), RunError> {
-    let mut command = Command::new(resolve(name));
-    shell_env::prepare_child(&mut command);
-    let status = command
-        .args(args)
+    let status = command(name, args)
         .status()
-        .map_err(|error| match error.kind() {
-            io::ErrorKind::NotFound => RunError::NotFound,
-            _ => RunError::Failed(format!("{name}: cannot start: {error}")),
-        })?;
+        .map_err(|error| start_error(name, &error))?;
 
     if status.success() {
         Ok(())
     } else {
         Err(RunError::Failed(describe_exit(name, status)))
+    }
+}
+
+/// The command that runs `name` with `args`: the program is looked up like
+/// `run` does, the exports are applied, and the output captured so far is
+/// written first so it stays ahead of what the program prints.
+pub(crate) fn command(name: &str, args: &[String]) -> Command {
+    let mut command = Command::new(resolve(name));
+    shell_env::prepare_child(&mut command);
+    command.args(args);
+    command
+}
+
+/// What a failure to start `name` means for the user.
+pub(crate) fn start_error(name: &str, error: &io::Error) -> RunError {
+    match error.kind() {
+        io::ErrorKind::NotFound => RunError::NotFound,
+        _ => RunError::Failed(format!("{name}: cannot start: {error}")),
     }
 }
 

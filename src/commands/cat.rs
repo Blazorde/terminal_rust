@@ -3,8 +3,15 @@ use std::path::PathBuf;
 
 use crate::errors::cat::CatError;
 use crate::utils::path::{expand_home, trimmed_arg};
+use crate::utils::pipe_input;
 
 pub fn cat(target: Option<&str>) -> Result<String, CatError> {
+    // Without a file name, `cat` copies the input of the pipeline it is in.
+    if trimmed_arg(target).is_none()
+        && let Some(bytes) = pipe_input::take()
+    {
+        return Ok(String::from_utf8_lossy(&bytes).into_owned());
+    }
     let path = resolve_target(target)?;
 
     if !path.exists() {
@@ -58,7 +65,24 @@ mod tests {
     }
 
     #[test]
+    fn cat_without_a_file_copies_the_pipeline_input() {
+        pipe_input::provide(Some(b"from the pipe\n".to_vec()));
+
+        assert_eq!(cat(None).as_deref().ok(), Some("from the pipe\n"));
+        // The input is consumed: a second `cat` is a usage error again.
+        assert!(matches!(cat(None), Err(CatError::MissingFileName)));
+    }
+
+    #[test]
+    fn cat_with_an_empty_pipeline_input_prints_nothing() {
+        pipe_input::provide(Some(Vec::new()));
+
+        assert_eq!(cat(None).as_deref().ok(), Some(""));
+    }
+
+    #[test]
     fn cat_requires_file_name() {
+        pipe_input::provide(None);
         let error = cat(None).expect_err("cat should require a file name");
 
         assert!(matches!(error, CatError::MissingFileName));

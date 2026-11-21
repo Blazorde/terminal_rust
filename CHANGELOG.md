@@ -5,6 +5,15 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- Pipes and redirections ([ADR-0011](docs/decisions/0011-pipelines-and-redirections.md)):
+  `a | b | c`, `< file`, `> file`, `>> file`, `2> file`, `2>> file`, `2>&1` and
+  `>&2`. Programs are connected with real pipes and run together, built-in
+  commands can produce the input of a program or read a pipe (`cat` without a
+  file), the status of a pipeline is the one of its last command, and a syntax
+  error rejects the line before anything runs. Background jobs (`&`) are still
+  rejected.
 ### Changed
 
 - Builds are reproducible: the crates declare `rust-version = "1.95"`, the lowest
