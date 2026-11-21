@@ -5,6 +5,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- Completion offers the programs found in `PATH` next to the built-in commands,
+  also after `;`, `|`, `&&` and `||` (it used to work only at the start of the
+  line), and completes environment variable names after a `$` or `${`.
+
 ## [1.3.0] - 2026-11-21
 
 ### Added
