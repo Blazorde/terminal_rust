@@ -68,11 +68,19 @@ For shortcuts that do not need a configuration edit, use:
 
 ```text
 alias ll ls -la
-alias --save gs git status --short --branch
+alias ll="ls -la"
+alias --save gs="git status --short --branch"
+alias a=pwd b='echo second'
 alias
 unalias ll
 unalias --save gs
 ```
+
+Both forms work: `alias name command arguments...` and `alias name=value`, where
+the value is read like a command line (quotes group words) and one `alias` can
+define several names. Variables in the value are expanded when the alias is
+defined, and a pattern such as `*.log` is kept as written. A name is made of
+lowercase letters, digits, `-` and `_`.
 
 An alias without `--save` lasts for the current shell session. `--save` writes
 the alias to `shell-state.toml` beside the active user configuration and makes

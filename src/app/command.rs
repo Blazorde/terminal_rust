@@ -179,9 +179,9 @@ const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "pwd",
-        usage: "pwd",
+        usage: "pwd [-L|-P]",
         summary: "print current directory",
-        max_args: Some(0),
+        max_args: Some(1),
         handler: run_pwd,
     },
     CommandSpec {
@@ -828,8 +828,11 @@ fn run_whoami(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_prefixed_error("whoami", whoami::whoami())
 }
 
-fn run_pwd(_args: &[String], _state: &mut ShellState) -> CommandResult {
-    map_prefixed_error("pwd", pwd::pwd())
+fn run_pwd(args: &[String], _state: &mut ShellState) -> CommandResult {
+    match args.first().map(String::as_str) {
+        None | Some("-L" | "-P" | "--") => map_prefixed_error("pwd", pwd::pwd()),
+        Some(option) => CommandResult::Error(format!("pwd: invalid option: {option}")),
+    }
 }
 
 fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
@@ -1299,6 +1302,81 @@ mod tests {
                     .to_string()
             )
         );
+    }
+
+    #[test]
+    fn an_alias_can_be_defined_as_name_equals_value() {
+        let mut state = test_state();
+        state
+            .variables
+            .insert("TR_ALIAS_VAR".to_string(), "expanded".to_string());
+        let mut define = |arguments: &[&str]| {
+            let mut line = vec!["alias"];
+            line.extend_from_slice(arguments);
+            render::capture_output(|| execute(&string_args(&line), &mut state)).0
+        };
+
+        assert!(matches!(define(&["ll=ls -l"]), CommandResult::Continue));
+        assert!(matches!(
+            define(&["say=echo 'two words' \"q r\""]),
+            CommandResult::Continue
+        ));
+        assert!(matches!(
+            define(&["first=echo $TR_ALIAS_VAR", "second=pwd"]),
+            CommandResult::Continue
+        ));
+        assert!(matches!(
+            define(&["pat=echo *.rs"]),
+            CommandResult::Continue
+        ));
+
+        let get = |name: &str| {
+            state
+                .user_commands
+                .get(name)
+                .map(|alias| (alias.target.clone(), alias.args.clone()))
+        };
+        assert_eq!(get("ll"), Some(("ls".to_string(), string_args(&["-l"]))));
+        assert_eq!(
+            get("say"),
+            Some(("echo".to_string(), string_args(&["two words", "q r"])))
+        );
+        // Variables are expanded when the alias is defined; patterns are not.
+        assert_eq!(
+            get("first"),
+            Some(("echo".to_string(), string_args(&["expanded"])))
+        );
+        assert_eq!(get("second"), Some(("pwd".to_string(), Vec::new())));
+        assert_eq!(
+            get("pat"),
+            Some(("echo".to_string(), string_args(&["*.rs"])))
+        );
+    }
+
+    #[test]
+    fn a_bad_alias_definition_is_reported_and_stops_the_list() {
+        let mut state = test_state();
+        let mut run = |arguments: &[&str]| {
+            let mut line = vec!["alias"];
+            line.extend_from_slice(arguments);
+            match render::capture_output(|| execute(&string_args(&line), &mut state)).0 {
+                CommandResult::Error(message) => message,
+                _ => String::new(),
+            }
+        };
+
+        assert!(run(&["empty="]).contains("the definition is empty"));
+        assert!(run(&["ok=pwd", "oops"]).contains("oops: expected name=value"));
+        assert!(run(&["BadName=pwd"]).contains("alias"));
+        assert!(run(&["quote=echo 'open"]).contains("missing closing quote"));
+        // An `=` inside the command of the original form is not a definition.
+        assert_eq!(run(&["envy", "env", "FOO=bar"]), "");
+        assert!(run(&["only"]).contains("expected"));
+        // A definition needs a name: this is not one, so the usage is shown.
+        assert!(run(&["=x"]).contains("or <name>=<command>"));
+        // The first definition before the mistake was kept, the one after was not.
+        assert!(state.user_commands.get("ok").is_some());
+        assert!(state.user_commands.get("envy").is_some());
     }
 
     #[test]
