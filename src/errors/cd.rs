@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum CdError {
-    CurrentDirectoryUnavailable(io::Error),
     HomeDirectoryNotFound,
     NotADirectory(PathBuf),
     PreviousDirectoryNotFound,
@@ -14,9 +13,6 @@ pub enum CdError {
 impl fmt::Display for CdError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::CurrentDirectoryUnavailable(source) => {
-                write!(formatter, "cd: cannot read current directory: {source}")
-            }
             Self::HomeDirectoryNotFound => {
                 write!(formatter, "cd: could not find the home directory")
             }
@@ -40,7 +36,6 @@ impl fmt::Display for CdError {
 impl std::error::Error for CdError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::CurrentDirectoryUnavailable(source) => Some(source),
             Self::ChangeDirectoryFailed { source, .. } => Some(source),
             _ => None,
         }

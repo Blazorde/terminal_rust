@@ -965,3 +965,31 @@ fn pwd_neutralizes_control_characters_in_the_current_directory() {
         "{text:?}"
     );
 }
+
+// Another terminal can delete the directory the shell is in. The prompt used to
+// fail and the shell exited, so the user could not even `cd` out of it.
+#[cfg(unix)]
+#[test]
+fn the_shell_survives_the_deletion_of_its_current_directory() {
+    let directory = TestDirectory::new("deleted cwd");
+    let gone = directory.path().join("gone");
+    let safe = directory.path().join("safe");
+    fs::create_dir(&gone).expect("directory to delete should exist");
+    fs::create_dir(&safe).expect("destination should exist");
+    let input = format!(
+        "rmdir \"{}\"\ncd \"{}\"\npwd\necho still-alive\nexit\n",
+        gone.display(),
+        safe.display()
+    );
+
+    let output = run_interactive(&gone, &input);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("still-alive"), "{text:?}");
+    assert!(
+        text.contains(&format!("{}\n", safe.display())),
+        "pwd should print the new directory: {text:?}"
+    );
+    assert!(!stderr(&output).contains("prompt:"), "{}", stderr(&output));
+}

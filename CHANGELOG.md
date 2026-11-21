@@ -7,6 +7,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Fixed
 
+- The shell no longer exits when its current directory is deleted from another
+  terminal: the prompt shows `(deleted)` and `cd` can leave the directory.
+- `cat` shows a file that is not valid UTF-8 (a binary file, Latin-1 text) with
+  U+FFFD in place of the bad bytes, instead of failing.
+- `touch` now updates the modification time of an existing file.
 - The prompt no longer freezes in a very large repository or on a slow disk:
   `git status` is stopped after 1.5 seconds and the Git segment is left out for
   that prompt. Git is not queried at all when no configured prompt segment shows

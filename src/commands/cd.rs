@@ -4,8 +4,11 @@ use std::path::{Path, PathBuf};
 use crate::errors::cd::CdError;
 use crate::utils::path::{expand_home, trimmed_arg};
 
-pub fn cd(target: Option<&str>, previous_dir: Option<&Path>) -> Result<PathBuf, CdError> {
-    let current_dir = env::current_dir().map_err(CdError::CurrentDirectoryUnavailable)?;
+/// Change the working directory and return the one that was left, when it is
+/// known. The current directory can have been deleted from elsewhere: that must
+/// not stop the user from leaving it.
+pub fn cd(target: Option<&str>, previous_dir: Option<&Path>) -> Result<Option<PathBuf>, CdError> {
+    let current_dir = env::current_dir().ok();
     let path = resolve_target(target, previous_dir)?;
 
     if path.exists() && !path.is_dir() {
@@ -55,10 +58,32 @@ mod tests {
 
         let current_dir = env::current_dir().expect("current dir should be readable");
         assert!(same_directory(&current_dir, &target_dir));
-        assert_eq!(previous_dir, original_dir);
+        assert_eq!(previous_dir, Some(original_dir.clone()));
 
         env::set_current_dir(original_dir).expect("test should restore current directory");
         fs::remove_dir(target_dir).expect("target directory should be removed");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cd_can_leave_a_directory_that_was_deleted() {
+        let _guard = cwd_lock().lock().expect("cwd lock is poisoned");
+        let original_dir = env::current_dir().expect("current dir should be readable");
+        let doomed = temp_path("cd", "deleted");
+        fs::create_dir(&doomed).expect("directory should be created");
+        env::set_current_dir(&doomed).expect("test should enter the directory");
+        fs::remove_dir(&doomed).expect("directory should be removed");
+        assert!(env::current_dir().is_err(), "the directory should be gone");
+
+        let result = cd(
+            Some(original_dir.to_str().expect("path should be UTF-8")),
+            None,
+        );
+
+        let now = env::current_dir();
+        env::set_current_dir(&original_dir).expect("test should restore current directory");
+        assert!(matches!(result, Ok(None)), "{result:?}");
+        assert!(now.is_ok_and(|dir| same_directory(&dir, &original_dir)));
     }
 
     #[test]
