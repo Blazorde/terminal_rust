@@ -211,7 +211,7 @@ fn walk(base: &str, segments: &[&str], found: &mut Vec<String>) {
     let Ok(entries) = fs::read_dir(Path::new(directory)) else {
         return;
     };
-    let mut names: Vec<String> = entries
+    let names: Vec<String> = entries
         .filter_map(Result::ok)
         .filter_map(|entry| entry.file_name().into_string().ok())
         .filter(|name| match_tokens(&tokens, name))
