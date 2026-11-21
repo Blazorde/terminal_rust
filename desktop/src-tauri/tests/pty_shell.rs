@@ -7,6 +7,25 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
+/// An empty home for the shell under test, so it never reads the developer's own
+/// configuration and the results do not depend on whose machine they run on.
+fn isolated_home() -> std::path::PathBuf {
+    let home = std::env::temp_dir().join("terminal-rust-tests-isolated-home");
+    fs::create_dir_all(&home).expect("the isolated home should be created");
+    home
+}
+
+fn isolate(command: &mut CommandBuilder) {
+    let home = isolated_home();
+    command.env("HOME", &home);
+    command.env("USERPROFILE", &home);
+    command.env("XDG_CONFIG_HOME", home.join("config"));
+    command.env("XDG_DATA_HOME", home.join("data"));
+    command.env("APPDATA", home.join("appdata"));
+    command.env("LOCALAPPDATA", home.join("localappdata"));
+    command.env_remove("TERMINAL_RUST_CONFIG");
+}
+
 fn wait_for_prompt_frame(
     receiver: &Receiver<Vec<u8>>,
     output: &mut Vec<u8>,
@@ -172,6 +191,7 @@ fn desktop_binary_runs_the_real_shell_through_a_native_pty() {
     });
 
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    isolate(&mut command);
     command.arg("--pty-shell");
     command.cwd(env!("CARGO_MANIFEST_DIR"));
     command.env("TERMINAL_RUST_GUI", "1");
@@ -339,6 +359,7 @@ fn interactive_pty_keeps_history_directory_changes_and_long_line_edits() {
     });
 
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    isolate(&mut command);
     command.arg("--pty-shell");
     command.cwd(&root);
     command.env("TERMINAL_RUST_GUI", "1");
@@ -525,6 +546,7 @@ fn lines_pasted_in_one_write_all_run_in_order() {
     });
 
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    isolate(&mut command);
     command.arg("--pty-shell");
     command.env("TERMINAL_RUST_GUI", "1");
     command.env("TERM", "xterm-256color");
@@ -631,6 +653,7 @@ fn a_command_typed_while_a_program_runs_is_executed_afterwards() {
     });
 
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    isolate(&mut command);
     command.arg("--pty-shell");
     command.env("TERMINAL_RUST_GUI", "1");
     command.env("TERM", "xterm-256color");
@@ -747,6 +770,7 @@ fn a_process_command_reads_what_the_user_types() {
     });
 
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    isolate(&mut command);
     command.arg("--pty-shell");
     command.env("TERMINAL_RUST_GUI", "1");
     command.env("TERM", "xterm-256color");
@@ -845,6 +869,7 @@ fn live_dashboard_exits_and_restores_the_desktop_pty() {
     });
 
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    isolate(&mut command);
     command.arg("--pty-shell");
     command.env("TERMINAL_RUST_GUI", "1");
     command.env("TERM", "xterm-256color");
@@ -945,7 +970,15 @@ fn concurrent_desktop_sessions_keep_their_working_directories_isolated() {
     fs::create_dir_all(&second_dir).expect("second session directory should be created");
 
     let spawn = |directory: &std::path::Path| {
+        let home = isolated_home();
         Command::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"))
+            .env("HOME", &home)
+            .env("USERPROFILE", &home)
+            .env("XDG_CONFIG_HOME", home.join("config"))
+            .env("XDG_DATA_HOME", home.join("data"))
+            .env("APPDATA", home.join("appdata"))
+            .env("LOCALAPPDATA", home.join("localappdata"))
+            .env_remove("TERMINAL_RUST_CONFIG")
             .arg("--pty-shell")
             .current_dir(directory)
             .stdin(Stdio::piped())
@@ -1024,6 +1057,8 @@ fn desktop_performance_probe_reports_three_trials() {
         });
 
         let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+        isolate(&mut command);
+        isolate(&mut command);
         command.arg("--pty-shell");
         command.env("TERMINAL_RUST_GUI", "1");
         command.env("TERM", "xterm-256color");

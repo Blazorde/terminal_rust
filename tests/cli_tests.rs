@@ -35,8 +35,36 @@ impl Drop for TestDirectory {
     }
 }
 
+/// An empty home for the binary under test. Without it the shell reads the
+/// developer's own configuration (prompt, aliases, plugins), and these tests then
+/// pass or fail depending on whose machine they run on.
+fn isolated_home() -> &'static Path {
+    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    HOME.get_or_init(|| {
+        let home = std::env::temp_dir().join("terminal-rust-tests-isolated-home");
+        fs::create_dir_all(&home).expect("the isolated home should be created");
+        home
+    })
+}
+
+/// The binary under test, started with no access to the user's configuration.
+/// A test that needs a configuration passes it explicitly afterwards.
+fn shell_command() -> Command {
+    let home = isolated_home();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_terminal_rust"));
+    command
+        .env("HOME", home)
+        .env("USERPROFILE", home)
+        .env("XDG_CONFIG_HOME", home.join("config"))
+        .env("XDG_DATA_HOME", home.join("data"))
+        .env("APPDATA", home.join("appdata"))
+        .env("LOCALAPPDATA", home.join("localappdata"))
+        .env_remove("TERMINAL_RUST_CONFIG");
+    command
+}
+
 fn run_cli(current_dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+    shell_command()
         .args(args)
         .current_dir(current_dir)
         .output()
@@ -44,7 +72,7 @@ fn run_cli(current_dir: &Path, args: &[&str]) -> Output {
 }
 
 fn run_cli_with_config(current_dir: &Path, args: &[&str], config_path: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+    shell_command()
         .args(args)
         .current_dir(current_dir)
         .env("TERMINAL_RUST_CONFIG", config_path)
@@ -58,7 +86,7 @@ fn run_cli_with_plugin_data(
     config_path: &Path,
     data_root: &Path,
 ) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_terminal_rust"));
+    let mut command = shell_command();
     command
         .args(args)
         .current_dir(current_dir)
@@ -92,7 +120,7 @@ fn run_interactive(current_dir: &Path, input: &str) -> Output {
 }
 
 fn run_interactive_with_env(current_dir: &Path, input: &str, config_path: Option<&Path>) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+    let mut child = shell_command()
         .current_dir(current_dir)
         .env("USER", "terminal-rust-test")
         .env("USERNAME", "terminal-rust-test")
@@ -829,7 +857,7 @@ fn run_interactive_with_timeout(
     input: &str,
     limit: std::time::Duration,
 ) -> Option<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+    let mut child = shell_command()
         .current_dir(current_dir)
         .env("USER", "terminal-rust-test")
         .stdin(Stdio::piped())
