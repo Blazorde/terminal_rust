@@ -31,8 +31,12 @@ process environment.
 5. `export NAME[=value]` makes a variable visible to the programs the shell
    starts. `unset NAME` removes it, including an inherited one. `export` without
    argument lists the environment as `printenv` does.
-6. `$?` is `0` after a command that succeeded and `1` after one that failed. The
-   exact exit status of a program is not kept.
+6. `$?` is `0` after a command that succeeded. After a program that failed it is
+   the exit code of the program, or 128 plus the signal number when a signal
+   stopped it (`137` after a kill); `127` for a program that does not exist; and
+   `1` for a command that failed inside the shell or a line that cannot be
+   parsed. In a pipeline it is the code of the last program. (Until 1.3.0 it
+   was only `0` or `1`.)
 7. Exported variables live in one table owned by the shell process and are
    applied to every process the shell starts (external programs, Git, editors,
    `fastfetch`, `man`, custom process commands). The process environment of the
@@ -61,7 +65,7 @@ process environment.
 - The exported table is global, so unit tests that change it must use names
   unique to the test.
 - No word splitting and no globbing: `echo $LIST` passes one argument.
-- `$?` only distinguishes success from failure.
+- A command that fails inside the shell is always `1`, and `exit N` has no code.
 - `FOO=1 command` (a variable for a single command) is not supported yet. File
   name patterns were added by [ADR-0012](0012-filename-patterns.md).
 

@@ -132,11 +132,17 @@ pub(super) fn run(stages: &[Stage], state: &mut ShellState) -> CommandResult {
     // Wait for the programs. The status of the pipeline is the one of its last
     // stage: the last child when the last stage is a program.
     let mut program_result = None;
+    let mut last_code = None;
     let started = children.len();
     for (position, (name, mut child)) in children.into_iter().enumerate() {
         let outcome = match child.wait() {
             Ok(status) if status.success() => CommandResult::Continue,
-            Ok(status) => CommandResult::Error(external::describe_exit(&name, status)),
+            Ok(status) => {
+                if position + 1 == started {
+                    last_code = Some(external::exit_code(status));
+                }
+                CommandResult::Error(external::describe_exit(&name, status))
+            }
             Err(error) => CommandResult::Error(format!("{name}: cannot wait: {error}")),
         };
         if position + 1 == started {
@@ -149,6 +155,12 @@ pub(super) fn run(stages: &[Stage], state: &mut ShellState) -> CommandResult {
 
     if exit_requested {
         return CommandResult::Exit;
+    }
+    // `$?` is the code of the last program, when the last stage is one.
+    if last_result.is_none()
+        && let Some(code) = last_code
+    {
+        external::note_exit_code(code);
     }
     last_result
         .or(program_result)
@@ -430,7 +442,12 @@ fn start_program(
     // never see the end of its input.
     drop(command);
     let mut child = spawned.map_err(|error| match external::start_error(name, &error) {
-        RunError::NotFound => CommandError::UnknownCommand(name.to_string()).to_string(),
+        RunError::NotFound => {
+            if is_last {
+                external::note_exit_code(external::COMMAND_NOT_FOUND);
+            }
+            CommandError::UnknownCommand(name.to_string()).to_string()
+        }
         RunError::Failed(message) => message,
     })?;
 
