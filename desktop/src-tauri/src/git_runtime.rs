@@ -1,7 +1,8 @@
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::UNIX_EPOCH;
 
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
@@ -13,6 +14,12 @@ const VERSION_NAME: &str = "git-runtime-version.txt";
 const WINDOWS_NANO_NAME: &str = "nano-win64.exe";
 const READY_NAME: &str = ".ready-version";
 const RUNTIME_DIRECTORY: &str = "git-runtime";
+/// Held while a runtime is installed, so two copies of the application starting
+/// together do not delete and extract the same directory at the same time.
+const INSTALL_LOCK_NAME: &str = "git-runtime.lock";
+/// Remembers the digest of the bundled archive with the size and date it was
+/// computed for, so the archive is not read in full at every start.
+const DIGEST_CACHE_NAME: &str = "git-runtime-digest.txt";
 
 #[derive(Clone, Debug)]
 pub struct GitRuntime {
@@ -71,29 +78,55 @@ impl GitRuntime {
 
         let runtime_dir = app_data.join(RUNTIME_DIRECTORY);
         let ready_path = runtime_dir.join(READY_NAME);
-        let archive_digest = digest_file(&archive_path)?;
+        let archive_digest = cached_digest(&archive_path, app_data)?;
         let marker_contents = format!("{version}\n{archive_digest}\n{nano_digest}");
-        let ready = fs::read_to_string(&ready_path)
-            .is_ok_and(|installed_marker| installed_marker.trim() == marker_contents)
-            && Self::discover(&runtime_dir).is_ok();
-        if !ready {
-            if runtime_dir.exists() {
-                fs::remove_dir_all(&runtime_dir)
-                    .map_err(|error| format!("cannot remove old bundled Git runtime: {error}"))?;
+        let is_ready = || {
+            fs::read_to_string(&ready_path)
+                .is_ok_and(|installed_marker| installed_marker.trim() == marker_contents)
+                && Self::discover(&runtime_dir).is_ok()
+        };
+        if !is_ready() {
+            // One installer at a time, across processes. Another copy may have
+            // finished while this one waited for the lock.
+            let _lock = install_lock(app_data)?;
+            if !is_ready() {
+                Self::install(
+                    resources,
+                    &archive_path,
+                    &runtime_dir,
+                    &ready_path,
+                    &marker_contents,
+                )?;
             }
-            fs::create_dir_all(&runtime_dir)
-                .map_err(|error| format!("cannot create bundled Git directory: {error}"))?;
-            extract_runtime(&archive_path, &runtime_dir)?;
-            run_relocation_fixup(&runtime_dir)?;
-            #[cfg(windows)]
-            install_windows_nano(resources, &runtime_dir)?;
-            let runtime = Self::discover(&runtime_dir)?;
-            configure_credential_helper(&runtime_dir, &runtime)?;
-            fs::write(&ready_path, marker_contents)
-                .map_err(|error| format!("cannot mark bundled Git runtime as ready: {error}"))?;
         }
 
         Self::discover(&runtime_dir).map(Some)
+    }
+
+    fn install(
+        resources: &Path,
+        archive_path: &Path,
+        runtime_dir: &Path,
+        ready_path: &Path,
+        marker_contents: &str,
+    ) -> Result<(), String> {
+        #[cfg(not(windows))]
+        let _ = resources;
+        if runtime_dir.exists() {
+            fs::remove_dir_all(runtime_dir)
+                .map_err(|error| format!("cannot remove old bundled Git runtime: {error}"))?;
+        }
+        fs::create_dir_all(runtime_dir)
+            .map_err(|error| format!("cannot create bundled Git directory: {error}"))?;
+        extract_runtime(archive_path, runtime_dir)?;
+        run_relocation_fixup(runtime_dir)?;
+        #[cfg(windows)]
+        install_windows_nano(resources, runtime_dir)?;
+        let runtime = Self::discover(runtime_dir)?;
+        configure_credential_helper(runtime_dir, &runtime)?;
+        fs::write(ready_path, marker_contents)
+            .map_err(|error| format!("cannot mark bundled Git runtime as ready: {error}"))?;
+        Ok(())
     }
 
     fn discover(root: &Path) -> Result<Self, String> {
@@ -193,6 +226,60 @@ fn install_windows_nano(resources: &Path, runtime_dir: &Path) -> Result<(), Stri
     fs::copy(source, bin.join("nano.exe"))
         .map_err(|error| format!("cannot install bundled Nano: {error}"))?;
     Ok(())
+}
+
+/// Take the installation lock, waiting if another process holds it. The lock is
+/// released when the returned file is dropped, or when the process ends, so a
+/// crash never leaves it taken.
+fn install_lock(app_data: &Path) -> Result<File, String> {
+    with_lock_file(&app_data.join(INSTALL_LOCK_NAME))
+}
+
+fn with_lock_file(path: &Path) -> Result<File, String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create the application data directory: {error}"))?;
+    }
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(path)
+        .map_err(|error| format!("cannot open the Git runtime lock: {error}"))?;
+    file.lock()
+        .map_err(|error| format!("cannot lock the Git runtime installation: {error}"))?;
+    Ok(file)
+}
+
+/// The size and modification date of the archive: they change when the
+/// application is updated with a different runtime.
+fn archive_identity(path: &Path) -> Option<String> {
+    let metadata = fs::metadata(path).ok()?;
+    let modified = metadata.modified().ok()?.duration_since(UNIX_EPOCH).ok()?;
+    Some(format!("{}:{}", metadata.len(), modified.as_secs()))
+}
+
+/// The digest of the archive, read from the cache when the archive still has the
+/// size and date it had then, and computed (then cached) otherwise.
+fn cached_digest(archive_path: &Path, app_data: &Path) -> Result<String, String> {
+    let cache_path = app_data.join(DIGEST_CACHE_NAME);
+    let Some(identity) = archive_identity(archive_path) else {
+        return digest_file(archive_path);
+    };
+    if let Ok(cached) = fs::read_to_string(&cache_path) {
+        let mut lines = cached.lines();
+        if let (Some(cached_identity), Some(digest)) = (lines.next(), lines.next())
+            && cached_identity == identity
+            && !digest.is_empty()
+        {
+            return Ok(digest.to_string());
+        }
+    }
+    let digest = digest_file(archive_path)?;
+    // Best effort: without the cache the archive is simply read again next time.
+    let _ =
+        terminal_rust::write_atomically(&cache_path, format!("{identity}\n{digest}\n").as_bytes());
+    Ok(digest)
 }
 
 fn digest_file(path: &Path) -> Result<String, String> {
@@ -544,5 +631,90 @@ mod tests {
             "PATH",
             std::env::join_paths(path).expect("runtime paths should form a valid PATH"),
         );
+    }
+
+    #[test]
+    fn the_installation_lock_admits_one_holder_at_a_time() {
+        let root = test_directory();
+        fs::create_dir_all(&root).expect("test directory should be created");
+        let lock_path = root.join("test.lock");
+        let inside = std::sync::atomic::AtomicUsize::new(0);
+        let overlaps = std::sync::atomic::AtomicUsize::new(0);
+
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    for _ in 0..3 {
+                        let _lock = with_lock_file(&lock_path).expect("the lock should be taken");
+                        if inside.fetch_add(1, Ordering::SeqCst) != 0 {
+                            overlaps.fetch_add(1, Ordering::SeqCst);
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(20));
+                        inside.fetch_sub(1, Ordering::SeqCst);
+                    }
+                });
+            }
+        });
+
+        assert_eq!(overlaps.load(Ordering::SeqCst), 0, "two holders overlapped");
+        fs::remove_dir_all(root).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn the_lock_is_released_when_its_holder_is_dropped() {
+        let root = test_directory();
+        fs::create_dir_all(&root).expect("test directory should be created");
+        let lock_path = root.join("again.lock");
+
+        drop(with_lock_file(&lock_path).expect("first lock"));
+        let second = with_lock_file(&lock_path).expect("the lock should be free again");
+
+        drop(second);
+        fs::remove_dir_all(root).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn the_archive_digest_is_not_recomputed_while_the_archive_is_unchanged() {
+        // A whole second, so that no file system rounds it to another second.
+        let date = UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        let stamp = |archive: &Path| {
+            File::options()
+                .write(true)
+                .open(archive)
+                .and_then(|file| file.set_modified(date))
+                .expect("set the date")
+        };
+        let root = test_directory();
+        let data = root.join("data");
+        fs::create_dir_all(&data).expect("data directory should be created");
+        let archive = root.join("archive.tar.gz");
+        fs::write(&archive, b"first contents").expect("archive fixture");
+        stamp(&archive);
+        let first = cached_digest(&archive, &data).expect("digest");
+        assert_eq!(first, digest_file(&archive).expect("digest"));
+
+        // Same size and date, different bytes: the cache answers without reading.
+        fs::write(&archive, b"other contents").expect("archive fixture");
+        stamp(&archive);
+        assert_eq!(cached_digest(&archive, &data).expect("digest"), first);
+
+        // A different size is a different archive.
+        fs::write(&archive, b"a longer replacement archive").expect("archive fixture");
+        stamp(&archive);
+        let changed = cached_digest(&archive, &data).expect("digest");
+        assert_ne!(changed, first);
+        assert_eq!(changed, digest_file(&archive).expect("digest"));
+
+        // A different date is a different archive too.
+        fs::write(&archive, b"a longer replacement archive").expect("archive fixture");
+        File::options()
+            .write(true)
+            .open(&archive)
+            .and_then(|file| file.set_modified(date + std::time::Duration::from_secs(60)))
+            .expect("set the date");
+        fs::write(data.join(DIGEST_CACHE_NAME), "stale\nstale\n").expect("stale cache");
+        let refreshed = cached_digest(&archive, &data).expect("digest");
+        assert_eq!(refreshed, digest_file(&archive).expect("digest"));
+        fs::remove_dir_all(root).expect("test directory should be removed");
     }
 }
