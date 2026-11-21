@@ -7,6 +7,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Fixed
 
+- The desktop tab froze for good, and its memory grew without limit, when a
+  program printed an `ESC ] 777 ;` sequence that was not a prompt layout, such as
+  the standard notification `printf '\e]777;notify;Build;done\a'`. The prompt
+  filter now ends at the sequence terminator (BEL or `ESC \`), passes anything
+  else through to the terminal, and releases a sequence longer than 4 KiB.
+  The filter is a separate module with its own tests (`npm test`).
 - Custom commands and aliases of the `process` kind ran with their output
   captured and no standard input, so interactive programs (a prompt, `python`,
   `ssh`, `less`) could not work and the output only appeared at the end. They now
