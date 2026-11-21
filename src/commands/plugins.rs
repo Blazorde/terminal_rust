@@ -53,6 +53,7 @@ fn format_entries(entries: &[RegistryEntry]) -> String {
                     PluginStatus::Enabled => "enabled",
                     PluginStatus::Disabled => "disabled",
                     PluginStatus::Incompatible => "incompatible",
+                    PluginStatus::Superseded => "superseded",
                 };
                 output.push_str(&format!(
                     "  {} {} [{}] - {} ({})\n",
