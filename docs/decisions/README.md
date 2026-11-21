@@ -27,6 +27,7 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0018](0018-history-expansion.md) | Accepted | History expansion: `!!`, `!$`, `!N`, `!prefix` and `history` |
 | [0019](0019-git-completion.md) | Accepted | Git completion: subcommands, branches and tags |
 | [0020](0020-recursive-patterns.md) | Accepted | Recursive patterns: `**` |
+| [0021](0021-functions.md) | Accepted | Functions and positional parameters |
 
 ## Lifecycle
 

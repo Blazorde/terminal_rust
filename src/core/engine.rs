@@ -89,6 +89,7 @@ impl ShellEngine {
             .map(str::to_string)
             .chain(self.state.user_command_names())
             .chain(self.state.plugin_command_names().map(str::to_string))
+            .chain(self.state.function_names().map(str::to_string))
             .collect()
     }
 
@@ -682,6 +683,19 @@ response = "Hello from the official Terminal Rust plugin!\n"
 
         assert_eq!(result.stdout, "");
         assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn a_defined_function_is_offered_for_completion() {
+        let mut engine = ShellEngine::new();
+        assert!(!engine.command_names().contains(&"tr_unique_fn".to_string()));
+
+        let result = engine.execute_line("tr_unique_fn() { echo hi; }");
+
+        assert!(result.succeeded());
+        assert!(engine.command_names().contains(&"tr_unique_fn".to_string()));
+        engine.execute_line("unset -f tr_unique_fn");
+        assert!(!engine.command_names().contains(&"tr_unique_fn".to_string()));
     }
 
     #[test]

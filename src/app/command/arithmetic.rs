@@ -233,7 +233,12 @@ impl Parser<'_> {
             return Err("arithmetic: command substitution is not supported here".to_string());
         }
         let start = self.position;
-        if dollar && self.characters.get(start) == Some(&'?') {
+        let first = self.characters.get(start).copied();
+        if dollar && matches!(first, Some('?' | '#')) {
+            // `$?` and `$#`.
+            self.position += 1;
+        } else if dollar && !braced && first.is_some_and(|c| c.is_ascii_digit()) {
+            // `$1`: one digit, so that `$10` is `$1` followed by a zero.
             self.position += 1;
         } else {
             while self
@@ -251,7 +256,9 @@ impl Parser<'_> {
             }
             self.position += 1;
         }
-        if name != "?" && !shell_env::is_valid_name(&name) {
+        let numbered = !name.is_empty() && name.chars().all(|c| c.is_ascii_digit());
+        let special = matches!(name.as_str(), "?" | "#");
+        if !(special || shell_env::is_valid_name(&name) || (dollar && numbered)) {
             return Err(format!("arithmetic: invalid variable name '{name}'"));
         }
         match (self.lookup)(&name).as_deref().map(str::trim) {
@@ -278,6 +285,10 @@ mod tests {
             "EMPTY" => Some(String::new()),
             "TEXT" => Some("abc".to_string()),
             "?" => Some("2".to_string()),
+            "#" => Some("3".to_string()),
+            "1" => Some("40".to_string()),
+            "2" => Some("2".to_string()),
+            "10" => Some("1000".to_string()),
             _ => None,
         }
     }
@@ -337,6 +348,19 @@ mod tests {
         assert_eq!(calc("${N}%4"), Ok(3));
         assert_eq!(calc("NEG*2"), Ok(-6));
         assert_eq!(calc("$?+1"), Ok(3));
+    }
+
+    #[test]
+    fn positional_parameters_and_their_count_are_variables() {
+        assert_eq!(calc("$1+$2"), Ok(42));
+        assert_eq!(calc("$#*2"), Ok(6));
+        assert_eq!(calc("${1}+1"), Ok(41));
+        assert_eq!(calc("${10}"), Ok(1000));
+        // `$10` is `$1` followed by a digit, which is a syntax error, as in other shells.
+        assert!(calc("$10").is_err());
+        // A parameter that is not set is 0; a bare number is not a variable.
+        assert_eq!(calc("$3+1"), Ok(1));
+        assert_eq!(calc("1+$2*$1"), Ok(81));
     }
 
     #[test]

@@ -7,6 +7,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Functions and positional parameters (ADR-0021): `name() { …; }`, `function name { … }`
+  and `{ …; }` groups; `$1`…`$9`, `${1:-x}`, `$#`, `$*`, `$@` and `"$@"` (one word per
+  argument); `shift`, `return [N]` and `local`; recursion limited to 64 calls;
+  `unset -f`, `type` and completion know functions; `source file args` passes `$1`….
+  `$(( … ))` now runs substitutions inside the expression first, and substitutions may
+  nest 24 deep (they were 8).
 - `case WORD in PATTERN|PATTERN) …;; … esac` (ADR-0016 amended): patterns with `*`
   `?` `[...]`, several patterns per arm, arms on one line or several, nesting, and the
   `>> ` prompt until `esac`. A pattern also matches `/` and a leading `.`; quoted or
