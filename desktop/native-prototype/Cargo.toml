@@ -1,7 +1,8 @@
 [package]
 name = "terminal-rust-native-prototype"
-version = "1.2.2"
+version = "1.3.0"
 edition = "2024"
+rust-version = "1.95"
 license = "MIT"
 repository = "https://github.com/Blazorde/terminal_rust"
 publish = false

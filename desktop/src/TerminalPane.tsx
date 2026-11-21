@@ -6,6 +6,7 @@ import { memo, useEffect, useRef, useState } from 'react'
 
 import { createPromptMetadataFilter } from './promptMetadataFilter.ts'
 import { emptyPromptLayout, parsePromptLayout, type PromptLayout } from './PromptSegments'
+import { createSessionRouter } from './sessionRouter.ts'
 import { applyTerminalSettings, type DesktopSettings } from './settings'
 import type { ConnectionState } from './terminal-types'
 
@@ -74,6 +75,7 @@ function TerminalPane({
     fitAddon.current = fit
 
     let sessionId: number | null = null
+    const router = createSessionRouter()
     let listeners: UnlistenFn[] = []
     let terminalDisposables: Array<{ dispose: () => void }> = []
     let trafficTimer: number | null = null
@@ -149,24 +151,20 @@ function TerminalPane({
       ]
 
       listeners = await Promise.all([
-        listen<PtyOutput>('pty-output', ({ payload }) => {
-          if (payload.sessionId !== sessionId) return
+        listen<PtyOutput>('pty-output', ({ payload }) => router.receive(payload.sessionId, () => {
           const visible = filterPromptMetadata(new Uint8Array(payload.data))
           if (visible) term.write(visible)
           onPatch(tabId, { trafficActive: true })
           if (trafficTimer !== null) window.clearTimeout(trafficTimer)
           trafficTimer = window.setTimeout(() => onPatch(tabId, { trafficActive: false }), 140)
-        }),
-        listen<PtyExit>('pty-exit', ({ payload }) => {
-          if (payload.sessionId !== sessionId) return
+        })),
+        listen<PtyExit>('pty-exit', ({ payload }) => router.receive(payload.sessionId, () => {
           onPatch(tabId, { connection: 'closed' })
           term.writeln(`\r\n\x1b[38;2;150;156;163mSession terminée${payload.success ? '' : ' avec une erreur'}.\x1b[0m`)
-        }),
-        listen<PtyError>('pty-error', ({ payload }) => {
-          if (payload.sessionId === sessionId) {
-            onPatch(tabId, { connection: 'error', error: payload.message })
-          }
-        }),
+        })),
+        listen<PtyError>('pty-error', ({ payload }) => router.receive(payload.sessionId, () => {
+          onPatch(tabId, { connection: 'error', error: payload.message })
+        })),
       ])
       if (disposed) {
         terminalDisposables.forEach((disposable) => disposable.dispose())
@@ -183,6 +181,8 @@ function TerminalPane({
       }
       sessionId = createdSessionId
       onPatch(tabId, { connection: 'ready' })
+      // Show what the shell already wrote while the session was being created.
+      router.attach(createdSessionId)
       if (active) term.focus()
 
     }

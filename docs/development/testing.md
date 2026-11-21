@@ -41,6 +41,17 @@ Environment-dependent tests may skip an extra Git-backed assertion, but missing
 tool and output-parser branches must remain testable without Git. Normalize paths
 with the Rust standard library and tolerate platform line endings.
 
+## Isolation from the developer's environment
+
+Tests that start the binary (`tests/cli_tests.rs`, the PTY tests of the desktop
+crate) run it with an empty `HOME`, `XDG_*`, `APPDATA` and `LOCALAPPDATA` and
+without `TERMINAL_RUST_CONFIG`, through `shell_command()` and `isolate()`. Without
+this the shell reads the developer's own prompt, aliases and plugins and the
+results depend on the machine. A test that needs a configuration passes one
+explicitly after the helper. Use the helper for every new test that starts the
+binary. To check it, put an unusual `config.toml` and `shell-state.toml` in a
+fake `HOME` and run the suite.
+
 ## CI
 
 CI targets Ubuntu, Windows and macOS with formatting, compilation, Clippy, unit

@@ -5,6 +5,57 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-21
+
+### Added
+
+- File name patterns ([ADR-0012](docs/decisions/0012-filename-patterns.md)): `*`,
+  `?`, `[abc]`, `[a-z]` and `[!a-z]` in an argument are replaced by the sorted
+  matching names, one directory level at a time. Hidden names need a leading `.`,
+  a pattern without a match stays as written, and quotes, a backslash (outside
+  Windows) and variable values keep a wildcard literal.
+- Pipes and redirections ([ADR-0011](docs/decisions/0011-pipelines-and-redirections.md)):
+  `a | b | c`, `< file`, `> file`, `>> file`, `2> file`, `2>> file`, `2>&1` and
+  `>&2`. Programs are connected with real pipes and run together, built-in
+  commands can produce the input of a program or read a pipe (`cat` without a
+  file), the status of a pipeline is the one of its last command, and a syntax
+  error rejects the line before anything runs. Background jobs (`&`) are still
+  rejected.
+
+### Changed
+
+- Builds are reproducible: the crates declare `rust-version = "1.95"`, the lowest
+  version that compiles (the `sysinfo` dependency requires it), the CI uses the
+  fixed toolchain 1.95.0 instead of `stable`, cargo runs with `--locked`, and
+  every GitHub Action is pinned to a commit SHA.
+
+### Fixed
+
+- Plugin discovery is tolerant: a plugin folder that cannot be read is reported
+  as an error and no longer disables every plugin, user command and alias. When
+  several compatible versions of a plugin are installed only the newest is used
+  (the others are `superseded`) instead of blocking all its commands as a name
+  conflict, and a manifest whose `id` differs from its folder name is rejected.
+- Desktop: `Ctrl+W` (delete a word) and `Ctrl+T` (swap two characters) no longer
+  close or open a tab, they reach the shell. On Linux and Windows the tab
+  shortcuts are now `Ctrl+Shift+T` and `Ctrl+Shift+W`, as in other terminals;
+  macOS keeps `Command+T` and `Command+W`.
+- Desktop: the first output of a new session (the prompt) could be lost when it
+  arrived before the tab knew its session id. It is now held and shown in order.
+- Desktop: starting a session and writing to it no longer run on the thread that
+  draws the window, so the interface stays responsive during the first start,
+  which can extract the Git runtime, or when the shell is slow to read input. A
+  blocked write no longer holds up the other sessions.
+- The shell no longer exits when its current directory is deleted from another
+  terminal: the prompt shows `(deleted)` and `cd` can leave the directory.
+- `cat` shows a file that is not valid UTF-8 (a binary file, Latin-1 text) with
+  U+FFFD in place of the bad bytes, instead of failing.
+- `touch` now updates the modification time of an existing file.
+- The prompt no longer freezes in a very large repository or on a slow disk:
+  `git status` is stopped after 1.5 seconds and the Git segment is left out for
+  that prompt. Git is not queried at all when no configured prompt segment shows
+  it (`prompt.segments` and `prompt.right_segments`).
+
 ## [1.2.2] - 2026-11-21
 
 ### Security

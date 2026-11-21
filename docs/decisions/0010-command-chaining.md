@@ -30,7 +30,9 @@ misleading result.
    rejects the whole line before anything runs.
 5. Pipes (`|`), redirections (`<`, `>`) and background jobs (`&`) are rejected
    with a clear message until they are designed, instead of being passed to the
-   program as arguments. Quoting or escaping them keeps them literal.
+   program as arguments. Quoting or escaping them keeps them literal. Pipes and
+   redirections were designed in [ADR-0011](0011-pipelines-and-redirections.md);
+   background jobs are still rejected.
 6. When output is going to a terminal, the output captured from built-in
    commands is written before a child process starts, so output keeps the order
    of the commands. The engine API, which returns the captured output, does not

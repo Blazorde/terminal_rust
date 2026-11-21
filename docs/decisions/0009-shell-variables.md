@@ -62,7 +62,8 @@ process environment.
   unique to the test.
 - No word splitting and no globbing: `echo $LIST` passes one argument.
 - `$?` only distinguishes success from failure.
-- `FOO=1 command` (a variable for a single command) is not supported yet.
+- `FOO=1 command` (a variable for a single command) is not supported yet. File
+  name patterns were added by [ADR-0012](0012-filename-patterns.md).
 
 ## Validation
 

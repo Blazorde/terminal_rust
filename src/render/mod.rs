@@ -51,6 +51,17 @@ pub(crate) fn capture_output<T>(operation: impl FnOnce() -> T) -> (T, CapturedOu
     (result, output)
 }
 
+/// Capture the output of one pipeline stage, whether or not an outer capture is
+/// active. The outer capture is set aside and restored afterwards, so what the
+/// stage prints is returned to the caller instead of being mixed into it.
+pub(crate) fn capture_stage<T>(operation: impl FnOnce() -> T) -> (T, CapturedOutput) {
+    let outer =
+        OUTPUT_CAPTURE.with(|capture| capture.borrow_mut().replace(CapturedOutput::default()));
+    let result = operation();
+    let stage = OUTPUT_CAPTURE.with(|capture| std::mem::replace(&mut *capture.borrow_mut(), outer));
+    (result, stage.unwrap_or_default())
+}
+
 /// Write the output captured so far to the terminal and keep capturing.
 ///
 /// A child process writes straight to the terminal, so flushing first keeps the

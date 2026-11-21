@@ -41,8 +41,8 @@ python3 script.py
 
 The program shares the terminal, the environment and the current directory.
 `Ctrl+C` stops the program and returns to the prompt. A built-in command always
-takes precedence over a program of the same name. Pipes, redirections and
-variables are not available yet.
+takes precedence over a program of the same name. See
+[Pipes and redirections](#pipes-and-redirections) and [Variables](#variables).
 
 ## Variables
 
@@ -64,7 +64,7 @@ unset NAME
 `export NAME=value`) also passes it to the programs you start, and `unset NAME`
 removes it. A variable that is not set expands to nothing, and an expansion is
 never split into several arguments. Setting a variable for a single command
-(`NAME=value command`) and `*` patterns are not available yet.
+(`NAME=value command`) is not available yet.
 
 ## Chaining commands
 
@@ -78,9 +78,62 @@ make || echo "build failed"
 
 `;` always runs the next command, `&&` runs it only if the previous one
 succeeded, and `||` only if it failed. They are evaluated from left to right and
-`exit` stops the line. Quote an operator to use it as text. Pipes (`|`),
-redirections (`<`, `>`) and background jobs (`&`) are not available yet: the
-shell says so instead of passing them to a program.
+`exit` stops the line. Quote an operator to use it as text. Background jobs
+(`&`) are not available yet: the shell says so instead of passing the `&` to a
+program.
+
+## File name patterns
+
+`*`, `?` and `[...]` in an argument are replaced by the sorted names they match:
+
+```text
+ls *.rs
+rm build/*.tmp
+cat logs/2026-*.txt | wc -l
+echo src/*/mod.rs
+```
+
+`*` matches any run of characters, `?` one character and `[a-c]` or `[!a-c]` one
+character of a set. A pattern matches within one directory level (`*` never
+matches `/`), and names that start with `.` need a pattern that starts with `.`.
+A pattern that matches nothing stays as written. Quote it (`'*.rs'`) or put a
+backslash before it (`\*`, on Linux and macOS) to use it as text. The value of a
+variable is never a pattern. There is no `**` and no `{a,b}` yet.
+
+## Pipes and redirections
+
+`|` sends the output of one command to the next, and the commands run together:
+
+```text
+ls | grep rs
+cargo test 2>&1 | less
+printf 'b\na\n' | sort | head -n 1
+```
+
+Redirections send a command's input or output to a file:
+
+| Syntax | Meaning |
+| --- | --- |
+| `< file` | read standard input from `file` |
+| `> file` | write standard output to `file` (replaces it) |
+| `>> file` | append standard output to `file` |
+| `2> file`, `2>> file` | the same for standard error |
+| `2>&1` | send standard error where standard output goes |
+| `>&2` | send standard output where standard error goes |
+
+```text
+sort < names.txt > sorted.txt
+cargo build 2> errors.txt
+echo done >> log.txt
+```
+
+The file name is expanded like any argument (`> "my file.txt"`, `> $HOME/out`).
+The status of a pipeline is the status of its last command. Built-in commands
+work in a pipeline too: `ls | grep txt`, `echo hi > file`, `echo hi | cat`.
+`cat` without a file copies its input; other built-in commands ignore theirs.
+Unlike other shells, a built-in such as `cd` or `export` inside a pipeline takes
+effect in the shell itself. Here-documents (`<<`), file descriptors above 2 and
+background jobs are not available.
 
 ## Pasting several lines
 
@@ -128,9 +181,10 @@ shows their status and requested permissions; `plugin` is an alias for
 See [custom commands](../docs/custom-commands.md) and the
 [plugin tutorial](../docs/plugins/getting-started.md) for setup details.
 
-Desktop sessions are isolated per tab. Use `Ctrl/Command+T` to create a tab,
-`Ctrl/Command+W` to close it, `Ctrl+Tab` to switch tabs and `Ctrl/Command+,` to
-open settings.
+Desktop sessions are isolated per tab. Use `Ctrl+Shift+T` (`Command+T` on macOS)
+to create a tab, `Ctrl+Shift+W` (`Command+W`) to close it, `Ctrl+Tab` to switch
+tabs and `Ctrl+,` (`Command+,`) to open settings. Plain `Ctrl+T` and `Ctrl+W`
+are left to the shell, where they swap two characters and delete a word.
 
 More detail: [dashboard](https://github.com/Blazorde/terminal_rust/blob/main/docs/dashboard.md)
 and [completion](https://github.com/Blazorde/terminal_rust/blob/main/docs/completion.md).

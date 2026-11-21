@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::app::help;
-use crate::app::parser::{Connector, parse_with, split_chain};
+use crate::app::parser::{Connector, Stage, parse_args, split_chain, split_stages};
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, external, fastfetch,
     git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime,
@@ -16,6 +16,7 @@ use crate::render::printable::printable_multiline;
 use crate::utils::shell_env;
 
 mod aliases;
+mod pipeline;
 mod scripts;
 
 pub struct ShellState {
@@ -374,9 +375,17 @@ pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
         Ok(segments) => segments,
         Err(error) => return CommandResult::Error(error),
     };
+    // A syntax error anywhere rejects the whole line before anything runs.
+    let mut lines = Vec::with_capacity(segments.len());
+    for segment in segments {
+        match split_stages(&segment.text) {
+            Ok(stages) => lines.push((segment, stages)),
+            Err(error) => return CommandResult::Error(error),
+        }
+    }
 
     let mut last = CommandResult::Continue;
-    for segment in segments {
+    for (segment, stages) in lines {
         let failed = matches!(last, CommandResult::Error(_));
         let run = match segment.connector {
             Connector::Then => true,
@@ -386,22 +395,71 @@ pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
         if !run {
             continue;
         }
-        if let CommandResult::Error(error) = &last {
+        if let CommandResult::Error(error) = &last
+            && !error.is_empty()
+        {
             let _ = render::stderr_line(error);
         }
 
-        let parsed = parse_with(&segment.text, &|name| state.variable(name));
-        last = match parsed {
-            Ok(args) if args.is_empty() => CommandResult::Continue,
-            Ok(args) => execute(&args, state),
-            Err(error) => CommandResult::Error(error),
-        };
+        last = run_segment(&segment.text, &stages, state);
         state.record_status(matches!(last, CommandResult::Error(_)));
         if last == CommandResult::Exit {
             break;
         }
     }
     last
+}
+
+/// Run one segment: a single command, or a pipeline and its redirections.
+fn run_segment(text: &str, stages: &[Stage], state: &mut ShellState) -> CommandResult {
+    if let [stage] = stages
+        && stage.redirects.is_empty()
+    {
+        return match parse_args(text, &|name| state.variable(name)) {
+            Ok(args) if args.is_empty() => CommandResult::Continue,
+            Ok(args) => execute(&args, state),
+            Err(error) => CommandResult::Error(error),
+        };
+    }
+    pipeline::run(stages, state)
+}
+
+/// How a pipeline stage runs.
+enum StageKind {
+    /// Inside the shell: built-in commands, plugin commands, assignments.
+    InProcess,
+    /// As a program, with its streams connected to the neighbours.
+    Program { program: String, args: Vec<String> },
+}
+
+fn classify(args: &[String], state: &ShellState) -> Result<StageKind, String> {
+    let Some(name) = args.first().map(String::as_str) else {
+        return Err("expected a command".to_string());
+    };
+    if let [single] = args
+        && split_assignment(single).is_some()
+    {
+        return Ok(StageKind::InProcess);
+    }
+    if find_command(name).is_some() {
+        return Ok(StageKind::InProcess);
+    }
+    if let Some(command) = state.user_commands.get(name) {
+        return match command.kind {
+            UserCommandKind::Builtin => Ok(StageKind::InProcess),
+            UserCommandKind::Process => user::process_invocation(name, command, &args[1..])
+                .map(|(program, args)| StageKind::Program { program, args }),
+        };
+    }
+    if state.plugin_commands.get(name).is_some()
+        || state.plugin_commands.blocked_reason(name).is_some()
+    {
+        return Ok(StageKind::InProcess);
+    }
+    Ok(StageKind::Program {
+        program: name.to_string(),
+        args: args[1..].to_vec(),
+    })
 }
 
 pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
@@ -558,7 +616,9 @@ fn run_pwd(_args: &[String], _state: &mut ShellState) -> CommandResult {
 fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
     match cd::cd(optional_arg(args), state.previous_dir.as_deref()) {
         Ok(previous_dir) => {
-            state.previous_dir = Some(previous_dir);
+            if previous_dir.is_some() {
+                state.previous_dir = previous_dir;
+            }
             CommandResult::Continue
         }
         Err(error) => CommandResult::Error(error.to_string()),

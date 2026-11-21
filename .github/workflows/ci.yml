@@ -27,11 +27,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch
         with:
+          toolchain: 1.95.0
           components: rustfmt, clippy
 
       - name: Install Linux desktop dependencies
@@ -46,7 +47,7 @@ jobs:
             libxdo-dev
 
       - name: Install Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: npm
@@ -68,33 +69,33 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Check compilation
-        run: cargo check --all-targets --all-features
+        run: cargo check --all-targets --all-features --locked
 
       - name: Check desktop compilation
-        run: cargo check -p terminal-rust-desktop --all-targets --all-features
+        run: cargo check -p terminal-rust-desktop --all-targets --all-features --locked
 
       - name: Check plugin SDK and template compilation
-        run: cargo check -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features
+        run: cargo check -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features --locked
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets --all-features --locked -- -D warnings
 
       - name: Run desktop clippy
-        run: cargo clippy -p terminal-rust-desktop --all-targets --all-features -- -D warnings
+        run: cargo clippy -p terminal-rust-desktop --all-targets --all-features --locked -- -D warnings
 
       - name: Run plugin SDK and template clippy
-        run: cargo clippy -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features -- -D warnings
+        run: cargo clippy -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features --locked -- -D warnings
 
       - name: Run unit and integration tests
-        run: cargo test --all-targets --all-features
+        run: cargo test --all-targets --all-features --locked
 
       - name: Run desktop tests
         env:
           TERMINAL_RUST_REQUIRE_BUNDLED_GIT_TEST: "1"
-        run: cargo test -p terminal-rust-desktop --all-targets --all-features
+        run: cargo test -p terminal-rust-desktop --all-targets --all-features --locked
 
       - name: Run plugin SDK and template tests
-        run: cargo test -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features
+        run: cargo test -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features --locked
 
       - name: Validate Unix installer syntax
         if: runner.os != 'Windows'

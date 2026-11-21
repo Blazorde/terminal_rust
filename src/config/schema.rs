@@ -81,6 +81,16 @@ pub struct PromptConfig {
     pub newline: bool,
 }
 
+impl PromptConfig {
+    /// Whether `name` is part of the left or the right prompt.
+    pub fn uses_segment(&self, name: &str) -> bool {
+        self.segments
+            .iter()
+            .chain(&self.right_segments)
+            .any(|segment| segment == name)
+    }
+}
+
 impl Default for PromptConfig {
     fn default() -> Self {
         Self {

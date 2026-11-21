@@ -7,8 +7,64 @@ enum Quote {
 /// Look up the value of a variable name (`?` is the last status).
 pub type Lookup<'a> = &'a dyn Fn(&str) -> Option<String>;
 
+/// One word of a command line. `pattern` is set when it holds an unquoted `*`,
+/// `?` or `[`: it is the text to match against file names, in which every other
+/// `*`, `?`, `[` and `\` is escaped with a backslash.
+#[derive(Debug, Eq, PartialEq)]
+pub struct Word {
+    pub text: String,
+    pub pattern: Option<String>,
+}
+
+/// The pattern for a word: `text` with the characters that were not typed as
+/// wildcards (quoted, escaped, or from a variable) made literal.
+fn pattern_text(text: &str, wildcards: &[usize]) -> String {
+    let mut pattern = String::with_capacity(text.len() + 2);
+    for (offset, character) in text.char_indices() {
+        let literal_wildcard = matches!(character, '*' | '?' | '[') && !wildcards.contains(&offset);
+        if literal_wildcard || (character == '\\' && !cfg!(windows)) {
+            pattern.push('\\');
+        }
+        pattern.push(character);
+    }
+    pattern
+}
+
+/// Split a command line into words, expanding variables and `~`, without
+/// matching patterns against files.
 pub fn parse_with(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
+    parse_words(input, lookup).map(|words| words.into_iter().map(|word| word.text).collect())
+}
+
+/// Split a command line into arguments and replace each pattern by the sorted
+/// names it matches. A pattern that matches nothing stays as written, as in
+/// POSIX shells. Quoted or escaped characters are never patterns, and neither is
+/// the value of a variable.
+pub fn parse_args(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
     let mut args = Vec::new();
+    for word in parse_words(input, lookup)? {
+        if let Some(pattern) = &word.pattern {
+            let matches = crate::utils::glob::expand(pattern);
+            if !matches.is_empty() {
+                args.extend(matches);
+                continue;
+            }
+        }
+        args.push(word.text);
+    }
+    Ok(args)
+}
+
+fn finish_word(text: String, wildcards: &mut Vec<usize>) -> Word {
+    let pattern = (!wildcards.is_empty()).then(|| pattern_text(&text, wildcards));
+    wildcards.clear();
+    Word { text, pattern }
+}
+
+pub fn parse_words(input: &str, lookup: Lookup) -> Result<Vec<Word>, String> {
+    let mut args: Vec<Word> = Vec::new();
+    // Byte offsets in `current` of the wildcards that were typed unquoted.
+    let mut wildcards: Vec<usize> = Vec::new();
     let mut current = String::new();
     let mut quote: Option<Quote> = None;
     let mut started_argument = false;
@@ -37,7 +93,10 @@ pub fn parse_with(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
             }
             (None, '\\')
                 if characters.peek().is_some_and(|next| {
-                    next.is_whitespace() || matches!(next, '\\' | '\'' | '"' | '$')
+                    next.is_whitespace()
+                        || matches!(next, '\\' | '\'' | '"' | '$')
+                        // Where `\` is not a path separator it also protects patterns.
+                        || (!cfg!(windows) && matches!(next, '*' | '?' | '['))
                 }) =>
             {
                 if let Some(escaped) = characters.next() {
@@ -68,11 +127,14 @@ pub fn parse_with(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
             }
             (None, character) if character.is_whitespace() => {
                 if started_argument {
-                    args.push(std::mem::take(&mut current));
+                    args.push(finish_word(std::mem::take(&mut current), &mut wildcards));
                     started_argument = false;
                 }
             }
             (None, character) => {
+                if matches!(character, '*' | '?' | '[') {
+                    wildcards.push(current.len());
+                }
                 current.push(character);
                 started_argument = true;
             }
@@ -84,7 +146,7 @@ pub fn parse_with(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
     }
 
     if started_argument {
-        args.push(current);
+        args.push(finish_word(current, &mut wildcards));
     }
 
     Ok(args)
@@ -158,9 +220,9 @@ pub struct Segment {
 /// Split a line at the `;`, `&&` and `||` that are neither quoted nor escaped.
 ///
 /// The text of each segment is returned untouched, so quotes and variables are
-/// handled later, right before that segment runs. Pipes, redirections and
-/// background jobs are rejected instead of being passed to a program as
-/// arguments.
+/// handled later, right before that segment runs. Pipes and redirections stay in
+/// the text for [`split_stages`]; background jobs are rejected instead of being
+/// passed to a program as arguments.
 pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
     let mut segments = Vec::new();
     let mut current = String::new();
@@ -205,11 +267,10 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
                 finish_segment(&mut segments, &mut current, connector, "||")?;
                 connector = Connector::Or;
             }
+            // `>&` belongs to a redirection (`2>&1`), a lone `&` is a background job.
+            (None, '&') if current.ends_with('>') => current.push(character),
             (None, '&') => return Err("background jobs (&) are not supported yet".to_string()),
-            (None, '|') => return Err("pipes (|) are not supported yet".to_string()),
-            (None, '<' | '>') => {
-                return Err("redirections (< and >) are not supported yet".to_string());
-            }
+            // Pipes and redirections stay in the text: `split_stages` reads them.
             (None, character) => current.push(character),
         }
     }
@@ -232,6 +293,213 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
     }
 
     Ok(segments)
+}
+
+/// One redirection of a pipeline stage. Targets are raw text: quotes and
+/// variables are expanded right before the stage runs.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Redirect {
+    /// `< file`
+    Stdin(String),
+    /// `> file` or `>> file`
+    Stdout { target: String, append: bool },
+    /// `2> file` or `2>> file`
+    Stderr { target: String, append: bool },
+    /// `2>&1`
+    StderrToStdout,
+    /// `>&2` or `1>&2`
+    StdoutToStderr,
+}
+
+/// One command of a pipeline: its words, without the redirections, and the
+/// redirections themselves in the order they were written.
+#[derive(Debug, Eq, PartialEq)]
+pub struct Stage {
+    pub text: String,
+    pub redirects: Vec<Redirect>,
+}
+
+/// Split the text of a segment at the unquoted `|` and pull the redirections out
+/// of each stage.
+pub fn split_stages(input: &str) -> Result<Vec<Stage>, String> {
+    let characters: Vec<char> = input.chars().collect();
+    let mut position = 0;
+    let mut stages = Vec::new();
+    let mut text = String::new();
+    let mut redirects = Vec::new();
+    let mut quote: Option<Quote> = None;
+
+    while position < characters.len() {
+        let character = characters[position];
+        match (quote, character) {
+            (Some(Quote::Single), '\'') | (Some(Quote::Double), '"') => {
+                quote = None;
+                text.push(character);
+                position += 1;
+            }
+            (Some(Quote::Double), '\\')
+                if matches!(characters.get(position + 1), Some('"' | '\\' | '$')) =>
+            {
+                text.push(character);
+                text.push(characters[position + 1]);
+                position += 2;
+            }
+            (Some(_), _) => {
+                text.push(character);
+                position += 1;
+            }
+            (None, '\'') => {
+                quote = Some(Quote::Single);
+                text.push(character);
+                position += 1;
+            }
+            (None, '"') => {
+                quote = Some(Quote::Double);
+                text.push(character);
+                position += 1;
+            }
+            (None, '\\') => {
+                text.push(character);
+                if let Some(escaped) = characters.get(position + 1) {
+                    text.push(*escaped);
+                }
+                position += 2;
+            }
+            (None, '|') => {
+                if text.trim().is_empty() {
+                    return Err("syntax error near unexpected token '|'".to_string());
+                }
+                stages.push(Stage {
+                    text: std::mem::take(&mut text),
+                    redirects: std::mem::take(&mut redirects),
+                });
+                position += 1;
+            }
+            (None, '<') => {
+                position += 1;
+                redirects.push(Redirect::Stdin(read_target(
+                    &characters,
+                    &mut position,
+                    "<",
+                )?));
+            }
+            (None, '>') => {
+                let descriptor = take_descriptor(&mut text);
+                position += 1;
+                let append = characters.get(position) == Some(&'>');
+                if append {
+                    position += 1;
+                }
+                if !append && characters.get(position) == Some(&'&') {
+                    position += 1;
+                    let destination = characters.get(position).copied();
+                    position += 1;
+                    match (descriptor, destination) {
+                        (Some('2'), Some('1')) => redirects.push(Redirect::StderrToStdout),
+                        (None | Some('1'), Some('2')) => redirects.push(Redirect::StdoutToStderr),
+                        // `1>&1` and `2>&2` change nothing.
+                        (Some('1'), Some('1')) | (Some('2'), Some('2')) => {}
+                        _ => {
+                            return Err("unsupported redirection: only 1 and 2 can be duplicated"
+                                .to_string());
+                        }
+                    }
+                    continue;
+                }
+                let operator = if append { ">>" } else { ">" };
+                let target = read_target(&characters, &mut position, operator)?;
+                redirects.push(if descriptor == Some('2') {
+                    Redirect::Stderr { target, append }
+                } else {
+                    Redirect::Stdout { target, append }
+                });
+            }
+            (None, _) => {
+                text.push(character);
+                position += 1;
+            }
+        }
+    }
+
+    if quote.is_some() {
+        return Err("missing closing quote".to_string());
+    }
+    if text.trim().is_empty() {
+        return Err(if stages.is_empty() {
+            "expected a command before the redirection".to_string()
+        } else {
+            "expected a command after '|'".to_string()
+        });
+    }
+    stages.push(Stage { text, redirects });
+    Ok(stages)
+}
+
+/// A `1` or `2` just before `>` is the descriptor when it is a word of its own
+/// (`cmd 2> log`), and an ordinary part of a word otherwise (`cmd file2> log`).
+fn take_descriptor(text: &mut String) -> Option<char> {
+    let mut characters = text.chars().rev();
+    let last = characters.next()?;
+    if !matches!(last, '1' | '2') {
+        return None;
+    }
+    if characters
+        .next()
+        .is_some_and(|before| !before.is_whitespace())
+    {
+        return None;
+    }
+    text.pop();
+    Some(last)
+}
+
+/// Read the word after a redirection operator, keeping its quotes and escapes.
+fn read_target(
+    characters: &[char],
+    position: &mut usize,
+    operator: &str,
+) -> Result<String, String> {
+    while characters.get(*position).is_some_and(|c| c.is_whitespace()) {
+        *position += 1;
+    }
+    let mut target = String::new();
+    let mut quote: Option<Quote> = None;
+    while let Some(&character) = characters.get(*position) {
+        match (quote, character) {
+            (Some(Quote::Single), '\'') | (Some(Quote::Double), '"') => quote = None,
+            (Some(Quote::Double), '\\')
+                if matches!(characters.get(*position + 1), Some('"' | '\\' | '$')) =>
+            {
+                target.push(character);
+                *position += 1;
+                target.push(characters[*position]);
+                *position += 1;
+                continue;
+            }
+            (Some(_), _) => {}
+            (None, '\'') => quote = Some(Quote::Single),
+            (None, '"') => quote = Some(Quote::Double),
+            (None, '\\') => {
+                target.push(character);
+                *position += 1;
+                if let Some(&escaped) = characters.get(*position) {
+                    target.push(escaped);
+                    *position += 1;
+                }
+                continue;
+            }
+            (None, c) if c.is_whitespace() || matches!(c, '|' | '<' | '>') => break,
+            (None, _) => {}
+        }
+        target.push(character);
+        *position += 1;
+    }
+    if target.is_empty() {
+        return Err(format!(
+            "syntax error: expected a file name after '{operator}'"
+        ));
+    }
+    Ok(target)
 }
 
 fn finish_segment(
@@ -397,23 +665,227 @@ mod tests {
     }
 
     #[test]
-    fn pipes_redirections_and_background_jobs_are_rejected() {
+    fn pipes_and_redirections_stay_in_the_text_of_the_segment() {
+        assert_eq!(chain("a | b"), Ok(vec![(Connector::Then, "a | b".into())]));
+        assert_eq!(chain("a > f"), Ok(vec![(Connector::Then, "a > f".into())]));
+        assert_eq!(chain("a < f"), Ok(vec![(Connector::Then, "a < f".into())]));
         assert_eq!(
-            chain("a | b"),
-            Err("pipes (|) are not supported yet".to_string())
+            chain("a 2>&1 | b && c"),
+            Ok(vec![
+                (Connector::Then, "a 2>&1 | b".into()),
+                (Connector::And, "c".into()),
+            ])
         );
-        assert_eq!(
-            chain("a > f"),
-            Err("redirections (< and >) are not supported yet".to_string())
-        );
-        assert_eq!(
-            chain("a < f"),
-            Err("redirections (< and >) are not supported yet".to_string())
-        );
+    }
+
+    #[test]
+    fn a_background_job_is_rejected() {
         assert_eq!(
             chain("a &"),
             Err("background jobs (&) are not supported yet".to_string())
         );
+        assert_eq!(
+            chain("a & b"),
+            Err("background jobs (&) are not supported yet".to_string())
+        );
+        // `&` is only accepted right after `>`.
+        assert_eq!(
+            chain("a 2> &1"),
+            Err("background jobs (&) are not supported yet".to_string())
+        );
+    }
+
+    fn stages(input: &str) -> Result<Vec<(String, Vec<Redirect>)>, String> {
+        split_stages(input).map(|stages| {
+            stages
+                .into_iter()
+                .map(|stage| (stage.text, stage.redirects))
+                .collect()
+        })
+    }
+
+    fn write(target: &str) -> Redirect {
+        Redirect::Stdout {
+            target: target.into(),
+            append: false,
+        }
+    }
+
+    #[test]
+    fn a_plain_command_is_one_stage_without_redirections() {
+        assert_eq!(stages("ls -l"), Ok(vec![("ls -l".into(), vec![])]));
+    }
+
+    #[test]
+    fn a_pipe_splits_the_stages() {
+        assert_eq!(
+            stages("ls | grep rs | wc -l"),
+            Ok(vec![
+                ("ls ".into(), vec![]),
+                (" grep rs ".into(), vec![]),
+                (" wc -l".into(), vec![]),
+            ])
+        );
+    }
+
+    #[test]
+    fn every_redirection_form_is_read() {
+        assert_eq!(
+            stages("cmd < in > out"),
+            Ok(vec![(
+                "cmd  ".into(),
+                vec![Redirect::Stdin("in".into()), write("out")]
+            )])
+        );
+        assert_eq!(
+            stages("cmd >> log"),
+            Ok(vec![(
+                "cmd ".into(),
+                vec![Redirect::Stdout {
+                    target: "log".into(),
+                    append: true
+                }]
+            )])
+        );
+        assert_eq!(
+            stages("cmd 2> err"),
+            Ok(vec![(
+                "cmd ".into(),
+                vec![Redirect::Stderr {
+                    target: "err".into(),
+                    append: false
+                }]
+            )])
+        );
+        assert_eq!(
+            stages("cmd 2>> err"),
+            Ok(vec![(
+                "cmd ".into(),
+                vec![Redirect::Stderr {
+                    target: "err".into(),
+                    append: true
+                }]
+            )])
+        );
+        assert_eq!(
+            stages("cmd 1> out"),
+            Ok(vec![("cmd ".into(), vec![write("out")])])
+        );
+    }
+
+    #[test]
+    fn descriptors_can_be_duplicated() {
+        assert_eq!(
+            stages("cmd 2>&1"),
+            Ok(vec![("cmd ".into(), vec![Redirect::StderrToStdout])])
+        );
+        assert_eq!(
+            stages("cmd >&2"),
+            Ok(vec![("cmd ".into(), vec![Redirect::StdoutToStderr])])
+        );
+        assert_eq!(
+            stages("cmd 1>&2"),
+            Ok(vec![("cmd ".into(), vec![Redirect::StdoutToStderr])])
+        );
+        assert_eq!(
+            stages("cmd > out 2>&1"),
+            Ok(vec![(
+                "cmd  ".into(),
+                vec![write("out"), Redirect::StderrToStdout]
+            )])
+        );
+        assert_eq!(stages("cmd 1>&1"), Ok(vec![("cmd ".into(), vec![])]));
+        assert!(stages("cmd 2>&3").is_err());
+    }
+
+    #[test]
+    fn a_number_inside_a_word_is_not_a_descriptor() {
+        assert_eq!(
+            stages("echo file2> out"),
+            Ok(vec![("echo file2".into(), vec![write("out")])])
+        );
+        // A `2` argument followed by a space is an argument.
+        assert_eq!(
+            stages("echo 2 > out"),
+            Ok(vec![("echo 2 ".into(), vec![write("out")])])
+        );
+    }
+
+    #[test]
+    fn redirections_can_come_before_the_words_and_without_spaces() {
+        assert_eq!(
+            stages(">out echo hi"),
+            Ok(vec![(" echo hi".into(), vec![write("out")])])
+        );
+        assert_eq!(
+            stages("echo hi>out"),
+            Ok(vec![("echo hi".into(), vec![write("out")])])
+        );
+        assert_eq!(
+            stages("a|b"),
+            Ok(vec![("a".into(), vec![]), ("b".into(), vec![])])
+        );
+    }
+
+    #[test]
+    fn quoted_operators_are_ordinary_text() {
+        assert_eq!(
+            stages("echo \"a | b > c\" 'd < e'"),
+            Ok(vec![("echo \"a | b > c\" 'd < e'".into(), vec![])])
+        );
+        assert_eq!(
+            stages("echo a\\|b \\> c"),
+            Ok(vec![("echo a\\|b \\> c".into(), vec![])])
+        );
+    }
+
+    #[test]
+    fn a_target_keeps_its_quotes_for_the_later_expansion() {
+        assert_eq!(
+            stages("cmd > \"my file.txt\""),
+            Ok(vec![("cmd ".into(), vec![write("\"my file.txt\"")])])
+        );
+        assert_eq!(
+            stages("cmd > $HOME/out"),
+            Ok(vec![("cmd ".into(), vec![write("$HOME/out")])])
+        );
+        assert_eq!(
+            stages("cmd > a\\ b"),
+            Ok(vec![("cmd ".into(), vec![write("a\\ b")])])
+        );
+    }
+
+    #[test]
+    fn syntax_errors_are_reported() {
+        assert_eq!(
+            stages("| b"),
+            Err("syntax error near unexpected token '|'".to_string())
+        );
+        assert_eq!(
+            stages("a | | b"),
+            Err("syntax error near unexpected token '|'".to_string())
+        );
+        assert_eq!(
+            stages("a |"),
+            Err("expected a command after '|'".to_string())
+        );
+        assert_eq!(
+            stages("a >"),
+            Err("syntax error: expected a file name after '>'".to_string())
+        );
+        assert_eq!(
+            stages("a >> | b"),
+            Err("syntax error: expected a file name after '>>'".to_string())
+        );
+        assert_eq!(
+            stages("a <"),
+            Err("syntax error: expected a file name after '<'".to_string())
+        );
+        assert_eq!(
+            stages("> out"),
+            Err("expected a command before the redirection".to_string())
+        );
+        assert_eq!(stages("echo 'a"), Err("missing closing quote".to_string()));
     }
 
     #[test]
@@ -674,5 +1146,67 @@ mod tests {
             parse_input(r#"touch "new_file.txt""#),
             Ok(vec!["touch".into(), "new_file.txt".into()])
         )
+    }
+
+    fn patterns(input: &str) -> Vec<Option<String>> {
+        parse_words(input, &|name| (name == "X").then(|| "*.rs".to_string()))
+            .expect("the line should parse")
+            .into_iter()
+            .map(|word| word.pattern)
+            .collect()
+    }
+
+    #[test]
+    fn an_unquoted_wildcard_makes_a_pattern() {
+        assert_eq!(
+            patterns("ls *.rs a?c [ab]x plain"),
+            [
+                None,
+                Some("*.rs".into()),
+                Some("a?c".into()),
+                Some("[ab]x".into()),
+                None
+            ]
+        );
+    }
+
+    #[test]
+    fn quoted_wildcards_are_literal() {
+        assert_eq!(patterns("echo '*.rs' \"a?c\""), [None, None, None]);
+    }
+
+    #[test]
+    fn a_quoted_wildcard_inside_a_pattern_word_is_escaped() {
+        assert_eq!(
+            patterns("echo \"[draft]\"*.md"),
+            [None, Some("\\[draft]*.md".into())]
+        );
+        assert_eq!(patterns("echo 'a*b'*"), [None, Some("a\\*b*".into())]);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_backslash_protects_a_wildcard_and_stays_literal_elsewhere() {
+        assert_eq!(patterns("echo \\*"), [None, None]);
+        assert_eq!(
+            parse_with("echo \\*", &|_| None),
+            Ok(vec!["echo".to_string(), "*".to_string()])
+        );
+        assert_eq!(patterns("echo a\\*b*"), [None, Some("a\\*b*".into())]);
+    }
+
+    #[test]
+    fn the_value_of_a_variable_is_not_a_pattern() {
+        assert_eq!(patterns("echo $X"), [None, None]);
+        // The variable's own `*` is literal even when the word has a real one.
+        assert_eq!(patterns("echo $X*"), [None, Some("\\*.rs*".into())]);
+    }
+
+    #[test]
+    fn parse_with_never_matches_files() {
+        assert_eq!(
+            parse_with("ls *.rs", &|_| None),
+            Ok(vec!["ls".to_string(), "*.rs".to_string()])
+        );
     }
 }

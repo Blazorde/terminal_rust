@@ -35,8 +35,36 @@ impl Drop for TestDirectory {
     }
 }
 
+/// An empty home for the binary under test. Without it the shell reads the
+/// developer's own configuration (prompt, aliases, plugins), and these tests then
+/// pass or fail depending on whose machine they run on.
+fn isolated_home() -> &'static Path {
+    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    HOME.get_or_init(|| {
+        let home = std::env::temp_dir().join("terminal-rust-tests-isolated-home");
+        fs::create_dir_all(&home).expect("the isolated home should be created");
+        home
+    })
+}
+
+/// The binary under test, started with no access to the user's configuration.
+/// A test that needs a configuration passes it explicitly afterwards.
+fn shell_command() -> Command {
+    let home = isolated_home();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_terminal_rust"));
+    command
+        .env("HOME", home)
+        .env("USERPROFILE", home)
+        .env("XDG_CONFIG_HOME", home.join("config"))
+        .env("XDG_DATA_HOME", home.join("data"))
+        .env("APPDATA", home.join("appdata"))
+        .env("LOCALAPPDATA", home.join("localappdata"))
+        .env_remove("TERMINAL_RUST_CONFIG");
+    command
+}
+
 fn run_cli(current_dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+    shell_command()
         .args(args)
         .current_dir(current_dir)
         .output()
@@ -44,7 +72,7 @@ fn run_cli(current_dir: &Path, args: &[&str]) -> Output {
 }
 
 fn run_cli_with_config(current_dir: &Path, args: &[&str], config_path: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+    shell_command()
         .args(args)
         .current_dir(current_dir)
         .env("TERMINAL_RUST_CONFIG", config_path)
@@ -58,7 +86,7 @@ fn run_cli_with_plugin_data(
     config_path: &Path,
     data_root: &Path,
 ) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_terminal_rust"));
+    let mut command = shell_command();
     command
         .args(args)
         .current_dir(current_dir)
@@ -92,7 +120,7 @@ fn run_interactive(current_dir: &Path, input: &str) -> Output {
 }
 
 fn run_interactive_with_env(current_dir: &Path, input: &str, config_path: Option<&Path>) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+    let mut child = shell_command()
         .current_dir(current_dir)
         .env("USER", "terminal-rust-test")
         .env("USERNAME", "terminal-rust-test")
@@ -809,17 +837,233 @@ fn a_failure_stops_an_and_chain_and_runs_an_or_chain() {
 }
 
 #[test]
-fn a_pipe_is_refused_with_a_clear_message() {
-    let directory = TestDirectory::new("pipe refused");
+fn a_background_job_is_still_refused_with_a_clear_message() {
+    let directory = TestDirectory::new("background refused");
 
-    let output = run_interactive(directory.path(), "echo hello | cat\nexit\n");
+    let output = run_interactive(directory.path(), "echo hello &\nexit\n");
 
     assert!(
-        stderr(&output).contains("pipes (|) are not supported yet"),
+        stderr(&output).contains("background jobs (&) are not supported yet"),
         "{}",
         stderr(&output)
     );
     assert!(!stdout(&output).contains("hello"), "{}", stdout(&output));
+}
+
+fn shell_lines(directory: &TestDirectory, lines: &[&str]) -> (String, String) {
+    let mut input = lines.join("\n");
+    input.push_str("\nexit\n");
+    let output = run_interactive(directory.path(), &input);
+    (stdout(&output), stderr(&output))
+}
+
+#[test]
+fn redirections_write_append_and_read_files() {
+    let directory = TestDirectory::new("redirect files");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo first > f.txt",
+            "echo second >> f.txt",
+            "cat f.txt",
+            "echo replaced > f.txt",
+            "cat < f.txt",
+        ],
+    );
+
+    assert!(printed.contains("first\nsecond\n"), "{printed}\n{errors}");
+    assert!(printed.contains("replaced\n"), "{printed}");
+    assert_eq!(
+        fs::read_to_string(directory.path().join("f.txt")).expect("the file should exist"),
+        "replaced\n"
+    );
+}
+
+#[test]
+fn a_redirection_target_can_hold_spaces_and_a_variable() {
+    let directory = TestDirectory::new("redirect target");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "NAME=report",
+            "echo quoted > \"my file.txt\"",
+            "echo variable > $NAME.txt",
+            "cat \"my file.txt\"",
+            "cat report.txt",
+        ],
+    );
+
+    assert!(printed.contains("quoted\n"), "{printed}\n{errors}");
+    assert!(printed.contains("variable\n"), "{printed}\n{errors}");
+}
+
+#[test]
+fn a_built_in_can_feed_another_through_a_pipe() {
+    let directory = TestDirectory::new("builtin pipe");
+
+    let (printed, errors) = shell_lines(&directory, &["echo piped | cat | cat"]);
+
+    assert!(printed.contains("piped\n"), "{printed}\n{errors}");
+}
+
+#[test]
+fn standard_error_can_go_to_a_file_or_join_the_pipe() {
+    let directory = TestDirectory::new("redirect stderr");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "ls missing-entry 2> err.txt",
+            "cat err.txt",
+            "ls missing-entry 2>&1 | cat",
+        ],
+    );
+
+    let logged = fs::read_to_string(directory.path().join("err.txt")).expect("log should exist");
+    assert!(logged.contains("missing-entry"), "{logged}");
+    // The error is in the file and in the pipe, not on the terminal's stderr.
+    assert!(!errors.contains("missing-entry"), "{errors}");
+    assert_eq!(printed.matches("missing-entry").count(), 2, "{printed}");
+}
+
+#[test]
+fn a_missing_input_file_fails_the_stage_without_running_it() {
+    let directory = TestDirectory::new("missing input");
+
+    let (printed, errors) = shell_lines(&directory, &["cat < nowhere.txt", "echo $?"]);
+
+    assert!(errors.contains("cannot open 'nowhere.txt'"), "{errors}");
+    assert!(printed.contains("1\n"), "{printed}");
+}
+
+#[test]
+fn a_pipeline_with_a_syntax_error_runs_nothing() {
+    let directory = TestDirectory::new("pipeline syntax");
+
+    let (printed, errors) = shell_lines(&directory, &["echo before ; echo a |", "echo after > "]);
+
+    assert!(!printed.contains("before"), "{printed}");
+    assert!(errors.contains("expected a command after '|'"), "{errors}");
+    assert!(
+        errors.contains("expected a file name after '>'"),
+        "{errors}"
+    );
+}
+
+#[test]
+fn quoted_operators_are_ordinary_text() {
+    let directory = TestDirectory::new("quoted operators");
+
+    let (printed, _) = shell_lines(&directory, &["echo \"a | b > c\""]);
+
+    assert!(printed.contains("a | b > c\n"), "{printed}");
+    assert!(!directory.path().join("c").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn programs_are_connected_with_real_pipes() {
+    let directory = TestDirectory::new("program pipes");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo hello | tr a-z A-Z",
+            "printf 'b\\na\\nc\\n' | sort | head -n 2",
+            // Bounded on purpose: an endless producer would fill the memory of
+            // the test if the pipe were not wired.
+            "seq 1 1000 | head -n 2",
+        ],
+    );
+
+    assert!(printed.contains("HELLO\n"), "{printed}\n{errors}");
+    assert!(printed.contains("a\nb\n"), "{printed}\n{errors}");
+    assert!(!printed.contains("c\n"), "{printed}");
+    assert!(printed.contains("1\n2\n"), "{printed}");
+    assert!(!printed.contains("3\n"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_program_can_read_a_file_and_write_two_streams() {
+    let directory = TestDirectory::new("program redirects");
+    fs::write(directory.path().join("names.txt"), "b\na\n").expect("input should be written");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sort < names.txt > sorted.txt",
+            "cat sorted.txt",
+            "sh -c 'echo out; echo err >&2' > both.txt 2>&1",
+            "cat both.txt",
+            "sh -c 'echo only-err >&2' 2> e.txt",
+            "cat e.txt",
+        ],
+    );
+
+    assert!(printed.contains("a\nb\n"), "{printed}\n{errors}");
+    assert!(printed.contains("out\nerr\n"), "{printed}\n{errors}");
+    assert!(printed.contains("only-err\n"), "{printed}\n{errors}");
+    assert!(!errors.contains("only-err"), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn the_status_of_a_pipeline_is_the_status_of_its_last_stage() {
+    let directory = TestDirectory::new("pipeline status");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'exit 3' | cat",
+            "echo first=$?",
+            "echo x | sh -c 'exit 4'",
+            "echo second=$?",
+            // Two programs: only the last one decides.
+            "sh -c 'exit 3' | sh -c 'cat > /dev/null'",
+            "echo third=$?",
+        ],
+    );
+
+    assert!(printed.contains("first=0\n"), "{printed}\n{errors}");
+    assert!(printed.contains("second=1\n"), "{printed}\n{errors}");
+    assert!(printed.contains("third=0\n"), "{printed}\n{errors}");
+    assert!(errors.contains("exited with status 4"), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_missing_program_in_a_pipeline_fails_only_its_own_stage() {
+    let directory = TestDirectory::new("missing program");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["terminal-rust-no-such-program | cat", "echo still-here"],
+    );
+
+    assert!(
+        errors.contains("unknown command: terminal-rust-no-such-program"),
+        "{errors}"
+    );
+    assert!(printed.contains("still-here\n"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn output_stays_in_order_around_a_pipeline() {
+    let directory = TestDirectory::new("pipeline order");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["echo one", "echo two | tr a-z A-Z", "echo three"],
+    );
+
+    let one = printed.find("one").expect("first line");
+    let two = printed.find("TWO").expect("second line");
+    let three = printed.find("three").expect("third line");
+    assert!(one < two && two < three, "{printed}\n{errors}");
 }
 
 /// Run the interactive shell on a piped stdin and give up after `limit`, so a
@@ -829,7 +1073,7 @@ fn run_interactive_with_timeout(
     input: &str,
     limit: std::time::Duration,
 ) -> Option<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+    let mut child = shell_command()
         .current_dir(current_dir)
         .env("USER", "terminal-rust-test")
         .stdin(Stdio::piped())
@@ -964,4 +1208,116 @@ fn pwd_neutralizes_control_characters_in_the_current_directory() {
         !text.contains('\u{1b}') && !text.contains('\u{7}'),
         "{text:?}"
     );
+}
+
+// Another terminal can delete the directory the shell is in. The prompt used to
+// fail and the shell exited, so the user could not even `cd` out of it.
+#[cfg(unix)]
+#[test]
+fn the_shell_survives_the_deletion_of_its_current_directory() {
+    let directory = TestDirectory::new("deleted cwd");
+    let gone = directory.path().join("gone");
+    let safe = directory.path().join("safe");
+    fs::create_dir(&gone).expect("directory to delete should exist");
+    fs::create_dir(&safe).expect("destination should exist");
+    let input = format!(
+        "rmdir \"{}\"\ncd \"{}\"\npwd\necho still-alive\nexit\n",
+        gone.display(),
+        safe.display()
+    );
+
+    let output = run_interactive(&gone, &input);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("still-alive"), "{text:?}");
+    assert!(
+        text.contains(&format!("{}\n", safe.display())),
+        "pwd should print the new directory: {text:?}"
+    );
+    assert!(!stderr(&output).contains("prompt:"), "{}", stderr(&output));
+}
+
+fn glob_fixture(directory: &TestDirectory) {
+    for file in ["a.txt", "b.txt", "c.md", ".hidden.txt", "[draft] one.md"] {
+        fs::write(directory.path().join(file), "").expect("fixture file");
+    }
+    fs::create_dir(directory.path().join("sub")).expect("fixture directory");
+    fs::write(directory.path().join("sub").join("d.txt"), "").expect("fixture file");
+}
+
+#[test]
+fn a_pattern_expands_to_the_sorted_matching_names() {
+    let directory = TestDirectory::new("glob expand");
+    glob_fixture(&directory);
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo *.txt",
+            "echo ?.md",
+            "echo [ab].txt",
+            "echo */d.txt",
+            "echo .*.txt",
+        ],
+    );
+
+    assert!(printed.contains("a.txt b.txt\n"), "{printed}\n{errors}");
+    assert!(printed.contains("c.md\n"), "{printed}");
+    assert!(printed.contains("sub/d.txt\n"), "{printed}");
+    assert!(printed.contains(".hidden.txt\n"), "{printed}");
+    // `*.txt` does not list the hidden file.
+    assert!(!printed.contains("a.txt b.txt .hidden"), "{printed}");
+}
+
+#[test]
+fn quoting_or_escaping_keeps_a_pattern_literal() {
+    let directory = TestDirectory::new("glob literal");
+    glob_fixture(&directory);
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["echo \"*.txt\"", "echo '*.txt'", "echo \\*.txt"],
+    );
+
+    assert_eq!(printed.matches("*.txt\n").count(), 3, "{printed}\n{errors}");
+    assert!(!printed.contains("a.txt"), "{printed}");
+}
+
+#[test]
+fn a_pattern_without_a_match_stays_as_written() {
+    let directory = TestDirectory::new("glob nomatch");
+    glob_fixture(&directory);
+
+    let (printed, _) = shell_lines(&directory, &["echo *.zip missing/*.rs"]);
+
+    assert!(printed.contains("*.zip missing/*.rs\n"), "{printed}");
+}
+
+#[test]
+fn a_quoted_bracket_in_a_pattern_word_is_not_a_wildcard() {
+    let directory = TestDirectory::new("glob quoted bracket");
+    glob_fixture(&directory);
+
+    let (printed, errors) = shell_lines(&directory, &["echo \"[draft]\"*.md"]);
+
+    assert!(printed.contains("[draft] one.md\n"), "{printed}\n{errors}");
+    assert!(!printed.contains("c.md"), "{printed}");
+}
+
+#[test]
+fn a_pattern_works_with_commands_and_pipes() {
+    let directory = TestDirectory::new("glob commands");
+    glob_fixture(&directory);
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["rm *.txt", "echo done", "ls | cat", "echo *.md | cat"],
+    );
+
+    assert!(!directory.path().join("a.txt").exists(), "{errors}");
+    assert!(!directory.path().join("b.txt").exists());
+    assert!(directory.path().join(".hidden.txt").exists());
+    assert!(printed.contains("done\n"), "{printed}");
+    assert!(printed.contains("[draft] one.md c.md\n"), "{printed}");
 }
