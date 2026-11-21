@@ -1686,7 +1686,7 @@ mod tests {
         use std::sync::mpsc::{self, RecvTimeoutError};
         use std::time::Duration;
 
-        const PIECES: [&str; 49] = [
+        const PIECES: [&str; 57] = [
             "echo ",
             "true",
             "false",
@@ -1704,8 +1704,8 @@ mod tests {
             " && ",
             " || ",
             " | ",
-            " > ",
-            " >> ",
+            " > /dev/null ",
+            " >> /dev/null ",
             " 2>&1 ",
             "$(",
             ")",
@@ -1736,21 +1736,18 @@ mod tests {
             "\"$@\"",
             "local x=1",
             "f ",
+            "<<EOF\n",
+            "\nEOF\n",
+            " <<< x",
+            " < /dev/null",
+            " | while read x; do ",
+            "done",
+            "{ ",
+            " }",
         ];
-        let guard = crate::test_support::cwd_lock()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let root = std::env::temp_dir().join(format!(
-            "terminal-rust-fuzz-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&root).expect("fixture directory");
-        let original = std::env::current_dir().expect("cwd");
-        std::env::set_current_dir(&root).expect("enter the fixture");
-
+        // The lines never create a file (their redirections go to `/dev/null`) and
+        // never change directory, so nothing here touches the process-wide state
+        // that other tests read: no fixture directory and no lock.
         let (sender, receiver) = mpsc::channel();
         let worker = std::thread::spawn(move || {
             let mut state = test_state();
@@ -1787,11 +1784,6 @@ mod tests {
             }
         }
         let result = (!hung).then(|| worker.join());
-        // Leave the fixture and release the lock before any assertion: a failure
-        // while holding it would poison it and fail every test that uses it.
-        std::env::set_current_dir(original).expect("restore cwd");
-        let _ = std::fs::remove_dir_all(&root);
-        drop(guard);
         assert!(!hung, "the shell hung on {last:?}");
         assert!(
             result.is_some_and(|result| result.is_ok()),
