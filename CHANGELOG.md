@@ -17,6 +17,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Redirections and pipes on whole blocks (ADR-0022): `while read line; do …; done <
+  file`, `cmd | while read x; do …; done`, `for … done > file`, `{ a; b; } | sort`,
+  `if … fi | cmd`, `case … esac >> log`. `read` takes one line at a time from the
+  block's input, `cat` takes what is left, programs started inside the block are
+  collected, and the end of the input is the end of the file, not the keyboard.
 - Functions and positional parameters (ADR-0021): `name() { …; }`, `function name { … }`
   and `{ …; }` groups; `$1`…`$9`, `${1:-x}`, `$#`, `$*`, `$@` and `"$@"` (one word per
   argument); `shift`, `return [N]` and `local`; recursion limited to 64 calls;

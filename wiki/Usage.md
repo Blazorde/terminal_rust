@@ -144,8 +144,23 @@ and pipelines, `break` leaves the innermost loop and `continue` starts its next
 turn, and `true` and `false` are built in. A newline works like `;`, so a block
 can be typed over several lines: the shell asks for more (`>> `) until `done` or
 `fi`. `Ctrl+C` stops a loop. A failing condition is not an error, so its message
-is not shown. `break 2` and redirections on a whole loop (`done > file`) are not
-available.
+is not shown. `break 2` is not available.
+
+A block can be redirected and piped as a whole, so the usual loops work:
+
+```text
+while read line; do echo "got: $line"; done < notes.txt
+cat names.txt | while read first last; do echo "$last, $first"; done
+for f in *.log; do echo "== $f"; wc -l $f; done > report.txt
+{ echo header; cat data.txt; } | sort
+find_errors | if grep -q fatal; then echo failed; fi
+```
+
+`read` reads the next line of the block's input, and `cat` with no file takes all that is
+left. The block runs inside the shell (variables it sets stay), and what it prints is
+sent to its redirection or the next command when it ends. A function body cannot be
+redirected (redirect the call), a pipeline holds one block, and `<<` here-documents are
+not available.
 
 `case` runs the first arm whose pattern matches a word:
 
