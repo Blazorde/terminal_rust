@@ -5,6 +5,14 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Security
+
+- A file or directory name holding a terminal escape sequence could rewrite the
+  window title or the screen when listed with `ls`, shown by `pwd`, in the prompt
+  path, in the dashboard or in `plugins list`. Control characters (C0, C1, DEL,
+  bidirectional overrides) in these texts, and in the response of a plugin
+  command, are now replaced by `?` before they are displayed.
+
 ### Fixed
 
 - The desktop tab froze for good, and its memory grew without limit, when a

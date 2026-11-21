@@ -6,6 +6,7 @@ use crate::config;
 use crate::plugin::Permission;
 use crate::plugin::registry::{self, PluginStatus, RegistryEntry};
 use crate::render;
+use crate::render::printable::printable;
 
 #[derive(Debug)]
 pub enum PluginsCommandError {
@@ -55,11 +56,11 @@ fn format_entries(entries: &[RegistryEntry]) -> String {
                 };
                 output.push_str(&format!(
                     "  {} {} [{}] - {} ({})\n",
-                    manifest.id,
+                    printable(&manifest.id),
                     manifest.version,
                     status,
-                    manifest.description,
-                    path.display()
+                    printable(&manifest.description),
+                    printable(&path.display().to_string())
                 ));
                 output.push_str(&format!(
                     "    requested permissions: {}\n",
@@ -71,8 +72,9 @@ fn format_entries(entries: &[RegistryEntry]) -> String {
             }
             RegistryEntry::Invalid { path, message } => {
                 output.push_str(&format!(
-                    "  invalid [error] - {} ({message})\n",
-                    path.display()
+                    "  invalid [error] - {} ({})\n",
+                    printable(&path.display().to_string()),
+                    printable(message)
                 ));
             }
         }

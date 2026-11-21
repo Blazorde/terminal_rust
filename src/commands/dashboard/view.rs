@@ -5,6 +5,7 @@ use crossterm::terminal;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::{CONTENT_WIDTH, SystemSnapshot};
+use crate::render::printable::printable;
 
 pub(super) const BAR_WIDTH: usize = 18;
 const CYAN: &str = "\u{1b}[36m";
@@ -108,7 +109,7 @@ pub(super) fn render_dashboard(snapshot: &SystemSnapshot, style: DashboardStyle)
     if let Some(disk) = &snapshot.disk {
         output.push_str(&row(
             "Disk",
-            &disk.mount_point.display().to_string(),
+            &printable(&disk.mount_point.display().to_string()),
             &border,
         ));
         output.push_str(&meter_row(
@@ -139,7 +140,7 @@ pub(super) fn render_dashboard(snapshot: &SystemSnapshot, style: DashboardStyle)
     output.push_str(&section("CONTEXT", &border, style.color));
     output.push_str(&row(
         "Directory",
-        &snapshot.current_dir.display().to_string(),
+        &printable(&snapshot.current_dir.display().to_string()),
         &border,
     ));
     output.push_str(&row(
