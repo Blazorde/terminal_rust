@@ -675,31 +675,46 @@ mod tests {
 
     #[test]
     fn the_archive_digest_is_not_recomputed_while_the_archive_is_unchanged() {
+        // A whole second, so that no file system rounds it to another second.
+        let date = UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        let stamp = |archive: &Path| {
+            File::options()
+                .write(true)
+                .open(archive)
+                .and_then(|file| file.set_modified(date))
+                .expect("set the date")
+        };
         let root = test_directory();
         let data = root.join("data");
         fs::create_dir_all(&data).expect("data directory should be created");
         let archive = root.join("archive.tar.gz");
         fs::write(&archive, b"first contents").expect("archive fixture");
+        stamp(&archive);
         let first = cached_digest(&archive, &data).expect("digest");
         assert_eq!(first, digest_file(&archive).expect("digest"));
-        let modified = fs::metadata(&archive)
-            .and_then(|metadata| metadata.modified())
-            .expect("mtime");
 
         // Same size and date, different bytes: the cache answers without reading.
         fs::write(&archive, b"other contents").expect("archive fixture");
-        File::options()
-            .write(true)
-            .open(&archive)
-            .and_then(|file| file.set_modified(modified))
-            .expect("restore the date");
+        stamp(&archive);
         assert_eq!(cached_digest(&archive, &data).expect("digest"), first);
 
         // A different size is a different archive.
         fs::write(&archive, b"a longer replacement archive").expect("archive fixture");
+        stamp(&archive);
         let changed = cached_digest(&archive, &data).expect("digest");
         assert_ne!(changed, first);
         assert_eq!(changed, digest_file(&archive).expect("digest"));
+
+        // A different date is a different archive too.
+        fs::write(&archive, b"a longer replacement archive").expect("archive fixture");
+        File::options()
+            .write(true)
+            .open(&archive)
+            .and_then(|file| file.set_modified(date + std::time::Duration::from_secs(60)))
+            .expect("set the date");
+        fs::write(data.join(DIGEST_CACHE_NAME), "stale\nstale\n").expect("stale cache");
+        let refreshed = cached_digest(&archive, &data).expect("digest");
+        assert_eq!(refreshed, digest_file(&archive).expect("digest"));
         fs::remove_dir_all(root).expect("test directory should be removed");
     }
 }
