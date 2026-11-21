@@ -118,11 +118,34 @@ pub fn matches(pattern: &str, name: &str) -> bool {
     match_tokens(&compile(pattern), name)
 }
 
+/// Match `text` against a whole pattern, as `case` does: `*` and `?` also match
+/// `/` and a leading `.`, since this is not a file name.
+pub fn matches_text(pattern: &str, text: &str) -> bool {
+    match_run(&compile(pattern), text)
+}
+
+/// `text` with every character that is special in a pattern escaped, so that it
+/// matches only itself.
+pub fn escape(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        if matches!(character, '*' | '?' | '[' | '\\') {
+            escaped.push('\\');
+        }
+        escaped.push(character);
+    }
+    escaped
+}
+
 fn match_tokens(tokens: &[Token], name: &str) -> bool {
     // Hidden names are only matched by a pattern that names the dot itself.
     if name.starts_with('.') && tokens.first() != Some(&Token::Literal('.')) {
         return false;
     }
+    match_run(tokens, name)
+}
+
+fn match_run(tokens: &[Token], name: &str) -> bool {
     let name: Vec<char> = name.chars().collect();
     let (mut t, mut n) = (0, 0);
     // Where to resume after the last `*`: its token position and the name
@@ -302,6 +325,34 @@ mod tests {
         assert!(!m("*.rs", "main.rc"));
         assert!(!m("a*c", "abd"));
         assert!(m("**", "x"));
+    }
+
+    #[test]
+    fn a_text_is_matched_whole_and_without_the_file_name_rules() {
+        // Unlike a file name, a text may start with a dot and contain slashes.
+        assert!(matches_text("*", ".hidden"));
+        assert!(matches_text("*", "a/b/c"));
+        assert!(matches_text("?", "."));
+        assert!(matches_text("*.txt", ".a.txt"));
+        assert!(matches_text("a/*", "a/b/c"));
+        assert!(matches_text("[a-c]*", "bcd"));
+        assert!(matches_text("", ""));
+        // The whole text must match.
+        assert!(!matches_text("a", "ab"));
+        assert!(!matches_text("ab", "a"));
+        assert!(!matches_text("", "x"));
+        assert!(!matches_text("[!a]", "a"));
+    }
+
+    #[test]
+    fn an_escaped_text_matches_only_itself() {
+        for text in ["*", "a?b", "[x]", "back\\slash", "plain", ""] {
+            assert!(matches_text(&escape(text), text), "{text:?}");
+        }
+        assert!(!matches_text(&escape("*"), "anything"));
+        assert!(!matches_text(&escape("a?b"), "axb"));
+        assert!(!matches_text(&escape("[x]"), "x"));
+        assert_eq!(escape("a*b?[c\\"), "a\\*b\\?\\[c\\\\");
     }
 
     #[test]

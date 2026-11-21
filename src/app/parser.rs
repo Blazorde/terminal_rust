@@ -355,6 +355,21 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
                 current.push(character);
                 current.extend(characters.next());
             }
+            // `;;` ends an arm of a `case`: it is a segment of its own.
+            (None, ';') if characters.peek() == Some(&';') => {
+                characters.next();
+                if !current.trim().is_empty() {
+                    finish_segment(&mut segments, &mut current, connector, ";;")?;
+                } else if connector != Connector::Then {
+                    return Err("syntax error near unexpected token ';;'".to_string());
+                }
+                segments.push(Segment {
+                    connector: Connector::Then,
+                    text: ";;".to_string(),
+                    background: false,
+                });
+                connector = Connector::Then;
+            }
             (None, ';') => {
                 finish_segment(&mut segments, &mut current, connector, ";")?;
                 connector = Connector::Then;
@@ -846,10 +861,21 @@ mod tests {
             chain("&& a"),
             Err("syntax error near unexpected token '&&'".to_string())
         );
+        // `;;` is the end of an arm of a `case`: it is a segment of its own here,
+        // and the block parser rejects it outside a `case`.
         assert_eq!(
             chain("a ;; b"),
-            Err("syntax error near unexpected token ';'".to_string())
+            Ok(vec![
+                (Connector::Then, "a".into()),
+                (Connector::Then, ";;".into()),
+                (Connector::Then, "b".into())
+            ])
         );
+        assert_eq!(
+            chain("a && ;; b"),
+            Err("syntax error near unexpected token ';;'".to_string())
+        );
+        assert_eq!(chain(";;"), Ok(vec![(Connector::Then, ";;".into())]));
         assert_eq!(
             chain("a &&"),
             Err("expected a command after &&".to_string())

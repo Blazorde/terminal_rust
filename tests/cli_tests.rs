@@ -3015,3 +3015,95 @@ fn a_double_star_matches_files_at_any_depth() {
     assert!(!printed.contains(".hidden"), "{printed}");
     assert!(errors.is_empty(), "{errors}");
 }
+
+#[test]
+fn case_runs_the_first_arm_whose_pattern_matches() {
+    let directory = TestDirectory::new("case arms");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "case hello in hi) echo greeting;; hel*) echo prefix;; *) echo other;; esac",
+            "case yes in y|yes|Y) echo affirmative;; n|no) echo negative;; esac",
+            "case .hidden/file in *) echo any-text;; esac",
+            "case abc in a?c) echo question;; esac",
+            "false",
+            "case x in a) echo no;; esac",
+            "echo status=$?",
+            "case a in a b) echo two-words;; esac",
+            "NAME=beta",
+            "case $NAME in alpha) echo A;; beta) echo B;; esac",
+            "case \"two words\" in 'two words') echo quoted;; esac",
+            "PATTERN='a*'",
+            "case 'a*' in $PATTERN) echo literal-variable;; esac",
+            "case abc in $PATTERN) echo wrong;; *) echo variable-is-not-a-pattern;; esac",
+            "case $(echo sub) in s*) echo substitution;; esac",
+            "case a in a) echo one; echo two;; esac",
+            "case x in x) false;; esac",
+            "echo falsy=$?",
+        ],
+    );
+
+    for expected in [
+        "prefix\n",
+        "affirmative\n",
+        "any-text\n",
+        "question\n",
+        "status=0\n",
+        "B\n",
+        "quoted\n",
+        "literal-variable\n",
+        "variable-is-not-a-pattern\n",
+        "substitution\n",
+        "one\ntwo\n",
+        "falsy=1\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    for unexpected in ["greeting", "other", "negative", "no\n", "wrong", "A\n"] {
+        assert!(!printed.contains(unexpected), "{unexpected:?} in {printed}");
+    }
+    // A pattern with a blank that is not quoted is refused, and runs nothing.
+    assert!(errors.contains("case: invalid pattern 'a b'"), "{errors}");
+    assert!(!printed.contains("two-words"), "{printed}");
+}
+
+#[test]
+fn case_works_over_several_lines_inside_loops_and_with_a_syntax_error() {
+    let directory = TestDirectory::new("case blocks");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "for f in a.txt b.rs c.md; do",
+            "  case $f in",
+            "    *.txt) echo text:$f ;;",
+            "    *.rs | *.toml)",
+            "      echo code:$f",
+            "      ;;",
+            "    *) echo other:$f",
+            "  esac",
+            "done",
+            "case x in x) echo before ;; echo-without-pattern ;; esac",
+            "echo after-error",
+            // Without its `esac` the block is unfinished: the shell reads on.
+            "case y in",
+            "  y) echo late ;;",
+            "esac",
+        ],
+    );
+
+    assert!(printed.contains("text:a.txt\n"), "{printed}\n{errors}");
+    assert!(printed.contains("code:b.rs\n"), "{printed}");
+    assert!(printed.contains("other:c.md\n"), "{printed}");
+    assert!(
+        !printed.contains("before"),
+        "a syntax error runs nothing: {printed}"
+    );
+    assert!(printed.contains("after-error\n"), "{printed}");
+    assert!(errors.contains("syntax error"), "{errors}");
+    assert!(printed.contains("late\n"), "{printed}");
+}
