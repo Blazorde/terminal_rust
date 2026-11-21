@@ -7,6 +7,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Desktop: `Ctrl+Shift+C` (or `Ctrl+Insert`, `Command+C` on macOS) copies the
+  selected text to the clipboard. Without a selection the keys keep their
+  terminal meaning, and `Ctrl+C` is still the interrupt key.
+
+### Added
+
 - Command substitution ([ADR-0014](docs/decisions/0014-command-substitution.md)):
   `$(command)` is replaced by the output of the command, which can be a whole
   line with pipes and chains, and substitutions nest. Unquoted results are split
