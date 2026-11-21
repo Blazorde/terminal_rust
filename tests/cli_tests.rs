@@ -1607,3 +1607,29 @@ fn kill_stops_a_job_and_an_unknown_job_is_an_error() {
     );
     assert!(printed.contains("checked\n"), "{printed}");
 }
+
+// The shell quotes what you typed and the names it could not find in its error
+// messages. A name holding an escape sequence must not reach the terminal there.
+#[cfg(unix)]
+#[test]
+fn error_messages_neutralize_control_characters_in_quoted_names() {
+    let directory = TestDirectory::new("hostile error");
+    let hostile = "no\u{1b}]0;PWNED\u{7}where";
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            &format!("cd \"{hostile}\""),
+            &format!("cat \"{hostile}\" | cat"),
+            &format!("\"{hostile}\""),
+            "echo still-alive",
+        ],
+    );
+
+    assert!(errors.contains("no?]0;PWNED?where"), "{errors:?}");
+    assert!(
+        !errors.contains('\u{1b}') && !errors.contains('\u{7}'),
+        "{errors:?}"
+    );
+    assert!(printed.contains("still-alive\n"), "{printed}");
+}

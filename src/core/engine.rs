@@ -141,7 +141,9 @@ impl ShellEngine {
             // An empty message means the error was already written, to a redirection.
             CommandResult::Error(error) => (
                 ExecutionStatus::Failed,
-                Some(error).filter(|e| !e.is_empty()),
+                Some(error)
+                    .filter(|error| !error.is_empty())
+                    .map(|error| render::printable::printable_multiline(&error).into_owned()),
             ),
         };
 
@@ -660,5 +662,18 @@ response = "Hello from the official Terminal Rust plugin!\n"
 
         assert_eq!(result.stdout, "");
         assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn the_error_text_returned_by_the_engine_has_no_control_characters() {
+        let mut engine = ShellEngine::new();
+
+        let result = engine.execute_line("\"terminal-rust-no-such\u{1b}]0;title\u{7}program\"");
+
+        assert_eq!(result.status, ExecutionStatus::Failed);
+        assert_eq!(
+            result.error.as_deref(),
+            Some("unknown command: terminal-rust-no-such?]0;title?program")
+        );
     }
 }
