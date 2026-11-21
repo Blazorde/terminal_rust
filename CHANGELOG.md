@@ -5,6 +5,28 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-22
+
+### Added
+
+- Here-documents `<<WORD` and `<<-WORD` (quoted words keep the body literal) and
+  here-strings `<<<` (ADR-0023): the prompt asks for more until the delimiter, in the
+  terminal, in piped input, in scripts and in `source`d files, and the body expands
+  variables and `$(…)` like double-quoted text.
+- Redirections and pipes on whole blocks (ADR-0022): `while read line; do …; done <
+  file`, `cmd | while read x; do …; done`, `for … done > file`, `{ a; b; } | sort`,
+  `if … fi | cmd`, `case … esac >> log`. `read` takes one line at a time from the
+  block's input, `cat` takes what is left, programs started inside the block are
+  collected, and the end of the input is the end of the file, not the keyboard.
+
+### Fixed
+
+- A block that follows `&&` or `||` ran its first command with the connector of the
+  block itself: `cmd || { echo failed; }` printed nothing, `false || if false; then …`
+  took its branch, and `false || while …` never ended. The first command of a block
+  (`{`, `if`, `while`, `until`, `case`, a function body) now runs unconditionally once the
+  block is entered.
+
 ## [1.8.0] - 2026-11-21
 
 ### Added

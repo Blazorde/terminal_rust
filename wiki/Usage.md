@@ -144,8 +144,52 @@ and pipelines, `break` leaves the innermost loop and `continue` starts its next
 turn, and `true` and `false` are built in. A newline works like `;`, so a block
 can be typed over several lines: the shell asks for more (`>> `) until `done` or
 `fi`. `Ctrl+C` stops a loop. A failing condition is not an error, so its message
-is not shown. `break 2` and redirections on a whole loop (`done > file`) are not
-available.
+is not shown. `break 2` is not available.
+
+A block can be redirected and piped as a whole, so the usual loops work:
+
+```text
+while read line; do echo "got: $line"; done < notes.txt
+cat names.txt | while read first last; do echo "$last, $first"; done
+for f in *.log; do echo "== $f"; wc -l $f; done > report.txt
+{ echo header; cat data.txt; } | sort
+find_errors | if grep -q fatal; then echo failed; fi
+```
+
+`read` reads the next line of the block's input, and `cat` with no file takes all that is
+left. The block runs inside the shell (variables it sets stay), and what it prints is
+sent to its redirection or the next command when it ends. A function body cannot be
+redirected (redirect the call) and a pipeline holds one block.
+
+## Here-documents
+
+`<<WORD` gives a command the lines that follow, up to a line made of `WORD` alone, as its
+input. The shell asks for more (`>> `) until then, also in scripts:
+
+```text
+cat <<EOF > config.toml
+name = "$USER"
+path = $HOME/bin
+EOF
+
+sort <<END
+pear
+apple
+END
+
+while read a b; do echo "$b $a"; done <<EOF
+one two
+three four
+EOF
+
+grep -c x <<< "a single line"
+```
+
+With a bare word the body expands variables and `$(…)` (write `\$` for a literal dollar sign);
+with a quoted word (`<<'EOF'`) it is taken literally. `<<-EOF` removes the leading tabs of the
+body and of the closing line, so a here-document can be indented. `command <<< text` is a
+here-string: the text and a newline are the input. A here-document that is never closed
+runs nothing.
 
 `case` runs the first arm whose pattern matches a word:
 

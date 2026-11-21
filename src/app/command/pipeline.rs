@@ -10,13 +10,17 @@ use std::process::{Child, Stdio};
 use std::thread::{self, JoinHandle};
 
 use super::{
-    CommandError, CommandResult, ShellState, StageKind, classify, execute, split_env_prefix,
+    CommandError, CommandResult, ShellState, StageKind, classify, execute, flow, split_env_prefix,
 };
 use crate::app::parser::{Redirect, Stage, parse_args, parse_with};
 use crate::commands::external::{self, RunError};
 use crate::git;
 use crate::render;
 use crate::utils::{pipe_input, shell_env};
+
+/// The text of the stage that stands for the compound command of the pipeline. It
+/// holds the redirections that were written after the closing keyword.
+pub(super) const COMPOUND_STAGE: &str = "\u{1}compound";
 
 /// Where one output stream of a stage goes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,6 +44,8 @@ struct Plan {
     env: Vec<(String, String)>,
     kind: StageKind,
     stdin: Option<PathBuf>,
+    /// The text of a here-string, which is the input instead of `stdin`.
+    here_text: Option<Vec<u8>>,
     out: Sink,
     err: Sink,
     files: Vec<Target>,
@@ -62,11 +68,13 @@ struct Opened {
     files: Vec<File>,
 }
 
-/// `background` is the text of the command when the pipeline runs as a job.
+/// `background` is the text of the command when the pipeline runs as a job, and
+/// `compound` the command that the stage [`COMPOUND_STAGE`] stands for, if any.
 pub(super) fn run(
     stages: &[Stage],
     state: &mut ShellState,
     background: Option<&str>,
+    compound: Option<&flow::Node>,
 ) -> CommandResult {
     // Everything is expanded before anything runs, so a bad line changes nothing.
     let mut plans = Vec::with_capacity(stages.len());
@@ -95,7 +103,11 @@ pub(super) fn run(
 
     for (index, plan) in plans.into_iter().enumerate() {
         let is_last = index + 1 == count;
-        let previous = std::mem::replace(&mut input, Input::Empty);
+        let mut previous = std::mem::replace(&mut input, Input::Empty);
+        // A here-string is the whole input of its stage.
+        if let Some(text) = plan.here_text.clone() {
+            previous = Input::Text(text);
+        }
         let name = plan.args.first().cloned().unwrap_or_default();
 
         let mut opened = match open(&plan) {
@@ -111,9 +123,10 @@ pub(super) fn run(
         };
 
         match &plan.kind {
-            StageKind::InProcess => {
+            StageKind::InProcess | StageKind::Compound => {
                 let stdin = read_input(opened.stdin.take(), previous, index == 0);
-                let (result, next_input) = run_in_process(&plan, opened, stdin, is_last, state);
+                let (result, next_input) =
+                    run_in_process(&plan, opened, stdin, is_last, state, compound);
                 exit_requested |= result == CommandResult::Exit;
                 input = next_input;
                 if is_last {
@@ -217,16 +230,26 @@ pub(super) fn run(
 
 fn plan(stage: &Stage, state: &ShellState) -> Result<Plan, String> {
     let lookup = |name: &str| state.variable(name);
-    let words = parse_args(&stage.text, &lookup)?;
-    if words.is_empty() {
-        return Err("expected a command".to_string());
-    }
-    // `NAME=value command`: the variables apply to this stage only.
-    let (env, rest) = split_env_prefix(&words);
-    let (env, args) = (env, rest.to_vec());
-    let kind = classify(&args, state)?;
+    let (env, args, kind) = if stage.text.trim() == COMPOUND_STAGE {
+        (
+            Vec::new(),
+            vec![COMPOUND_STAGE.to_string()],
+            StageKind::Compound,
+        )
+    } else {
+        let words = parse_args(&stage.text, &lookup)?;
+        if words.is_empty() {
+            return Err("expected a command".to_string());
+        }
+        // `NAME=value command`: the variables apply to this stage only.
+        let (env, rest) = split_env_prefix(&words);
+        let args = rest.to_vec();
+        let kind = classify(&args, state)?;
+        (env, args, kind)
+    };
 
     let mut stdin = None;
+    let mut here_text = None;
     let mut out = Sink::Default;
     let mut err = Sink::Default;
     let mut files = Vec::new();
@@ -240,7 +263,17 @@ fn plan(stage: &Stage, state: &ShellState) -> Result<Plan, String> {
 
     for redirect in &stage.redirects {
         match redirect {
-            Redirect::Stdin(target) => stdin = Some(expand_target(target, &lookup)?),
+            // The last of `<` and `<<<` is the input.
+            Redirect::Stdin(target) => {
+                stdin = Some(expand_target(target, &lookup)?);
+                here_text = None;
+            }
+            Redirect::HereString(word) => {
+                let mut text = parse_with(word, &lookup)?.join(" ");
+                text.push('\n');
+                here_text = Some(text.into_bytes());
+                stdin = None;
+            }
             Redirect::Stdout { target, append } => out = Sink::File(add_file(target, *append)?),
             Redirect::Stderr { target, append } => err = Sink::File(add_file(target, *append)?),
             Redirect::StderrToStdout => {
@@ -270,6 +303,7 @@ fn plan(stage: &Stage, state: &ShellState) -> Result<Plan, String> {
         env,
         kind,
         stdin,
+        here_text,
         out,
         err,
         files,
@@ -319,13 +353,20 @@ fn run_in_process(
     stdin: Option<Vec<u8>>,
     is_last: bool,
     state: &mut ShellState,
+    compound: Option<&flow::Node>,
 ) -> (CommandResult, Input) {
-    pipe_input::provide(stdin);
-    let (result, captured) = render::capture_stage(|| {
-        shell_env::with_temporary(&plan.env, || execute(&plan.args, state))
+    // The input is the stage's own for the duration of the command, and what the
+    // command left unread is not for the next one. A first stage with no input of
+    // its own shares the one of the loop it may be inside.
+    let (result, captured) = pipe_input::scoped(stdin, || match (&plan.kind, compound) {
+        // A compound command also collects the programs it starts.
+        (StageKind::Compound, Some(node)) => {
+            render::capture_substitution(|| flow::run_node(node, state))
+        }
+        _ => render::capture_stage(|| {
+            shell_env::with_temporary(&plan.env, || execute(&plan.args, state))
+        }),
     });
-    // Whatever the command left unread is not for the next one.
-    pipe_input::provide(None);
     let mut stdout_text = captured.stdout;
     let mut stderr_text = captured.stderr;
 
@@ -436,7 +477,9 @@ fn start_program(
     let mut command = match &plan.kind {
         StageKind::Program { program, args } => external::command(program, args),
         StageKind::Git { args } => git::native_command(args),
-        StageKind::InProcess => return Err(format!("{name}: not a program")),
+        StageKind::InProcess | StageKind::Compound => {
+            return Err(format!("{name}: not a program"));
+        }
     };
     // After the exports that `command` applied, so a prefix wins over them.
     command.envs(plan.env.iter().map(|(name, value)| (name, value)));

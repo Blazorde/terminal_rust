@@ -149,20 +149,34 @@ fn execute_contents(
     let mut pending = String::new();
     for (index, raw_line) in content.lines().enumerate() {
         let line_number = index + 1;
-        let line = raw_line.trim();
-        if line.starts_with('#') || line.is_empty() {
-            continue;
-        }
-        if let Some(prefix) = continuation_prefix(line) {
-            pending.push_str(prefix);
-            pending.push(' ');
-            continue;
-        }
-        pending.push_str(line);
-        // A block that is not closed goes on over the next line.
-        if super::input_is_incomplete(&pending) {
-            pending.push('\n');
-            continue;
+        if pending.ends_with('\n') && super::heredoc_is_open(&pending) {
+            // The body of a here-document is kept as it is: blanks, `#` and all.
+            pending.push_str(raw_line);
+            if super::heredoc_is_open(&pending) {
+                pending.push('\n');
+                continue;
+            }
+            // The delimiter line came: the block counting below applies as usual.
+            if super::input_is_incomplete(&pending) {
+                pending.push('\n');
+                continue;
+            }
+        } else {
+            let line = raw_line.trim();
+            if line.starts_with('#') || line.is_empty() {
+                continue;
+            }
+            if let Some(prefix) = continuation_prefix(line) {
+                pending.push_str(prefix);
+                pending.push(' ');
+                continue;
+            }
+            pending.push_str(line);
+            // A block or a here-document that is not closed goes on over the next line.
+            if super::input_is_incomplete(&pending) {
+                pending.push('\n');
+                continue;
+            }
         }
         let result = super::run_line(&pending, state);
         pending.clear();

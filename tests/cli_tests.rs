@@ -3407,14 +3407,14 @@ fn a_function_defined_over_several_lines_and_a_group_run_as_written() {
         ],
     );
 
-    for expected in ["rust\n", "other\n", "recovered\n"] {
+    for expected in ["rust\n", "other\n", "recovered\n", "group-a\ngroup-b\n"] {
         assert!(
             printed.contains(expected),
             "{expected:?} in {printed}\n{errors}"
         );
     }
-    // A redirection on a whole group is not available: the group is rejected.
-    assert!(errors.contains("syntax error"), "{errors}");
+    // The group went to the file, not to the screen.
+    assert_eq!(printed.matches("group-a").count(), 1, "{printed}");
 }
 
 #[cfg(unix)]
@@ -3443,4 +3443,452 @@ fn a_function_keeps_the_exact_exit_code_of_its_last_program() {
             "{expected:?} in {printed}\n{errors}"
         );
     }
+}
+
+#[test]
+fn a_block_after_and_or_runs_its_first_command_whatever_led_to_it() {
+    let directory = TestDirectory::new("block connector");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "false || { echo or-group; }",
+            "true && { echo and-group; }",
+            "true || { echo NEVER-group; }",
+            "false && { echo NEVER-and-group; }",
+            "false || if true; then echo or-if; fi",
+            "false || if false; then echo WRONG-if; else echo or-else; fi",
+            "true && if false; then echo WRONG-and-if; elif true; then echo and-elif; fi",
+            "false || while false; do echo WRONG-while; done",
+            "echo after-while=$?",
+            "false || case x in x) echo or-case;; esac",
+            "false || for i in 1 2; do echo or-for$i; done",
+            "false || f() { echo or-function; }",
+            "f",
+            "cmd-that-fails() { false; }",
+            "cmd-that-fails || { echo recovered; echo second-line; }",
+        ],
+    );
+
+    for expected in [
+        "or-group\n",
+        "and-group\n",
+        "or-if\n",
+        "or-else\n",
+        "and-elif\n",
+        "after-while=0\n",
+        "or-case\n",
+        "or-for1\nor-for2\n",
+        "or-function\n",
+        "recovered\nsecond-line\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    for unexpected in ["NEVER", "WRONG"] {
+        assert!(!printed.contains(unexpected), "{unexpected:?} in {printed}");
+    }
+}
+
+#[test]
+fn a_loop_reads_a_file_line_by_line_with_read() {
+    let directory = TestDirectory::new("while read");
+    fs::write(
+        directory.path().join("in.txt"),
+        "first line\nsecond\n\nlast without newline",
+    )
+    .expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "while read line; do echo \"got=[$line]\"; done < in.txt",
+            "while read a b; do echo \"a=$a b=$b\"; done < in.txt",
+            "cat in.txt | while read line; do echo piped=$line; done",
+            "echo one two | while read x y; do echo $y-$x; done",
+            "n=0",
+            "while read line; do n=$(( n + 1 )); done < in.txt",
+            "echo count=$n",
+            "while read line; do echo before; cat; done < in.txt",
+            "while read x; do echo never; done < missing.txt",
+            "echo missing-status=$?",
+        ],
+    );
+
+    for expected in [
+        "got=[first line]\ngot=[second]\ngot=[]\ngot=[last without newline]\n",
+        "a=first b=line\na=second b=\na= b=\na=last b=without newline\n",
+        "piped=first line\npiped=second\npiped=\npiped=last without newline\n",
+        "two-one\n",
+        "count=4\n",
+        // A command inside the loop shares the file: `cat` takes what `read` left.
+        "before\nsecond\n\nlast without newline",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("never"), "{printed}");
+    assert!(errors.contains("missing.txt"), "{errors}");
+    assert!(printed.contains("missing-status=1\n"), "{printed}");
+}
+
+#[test]
+fn a_block_can_write_to_a_file_and_append() {
+    let directory = TestDirectory::new("block redirect");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "for i in 1 2 3; do echo line$i; done > out.txt",
+            "cat out.txt",
+            "for i in 4 5; do echo line$i; done >> out.txt",
+            "cat out.txt",
+            "if true; then echo from-if; fi > cond.txt",
+            "cat cond.txt",
+            "last=none",
+            "for i in 1 2 3; do last=$i; done > /dev/null",
+            "echo last=$last",
+            "{ echo out-line; ls terminal-rust-no-such-dir; } > both.txt 2>&1",
+            "cat both.txt",
+            "case a in a) echo from-case;; esac > case.txt",
+            "cat case.txt",
+        ],
+    );
+
+    for expected in [
+        "line1\nline2\nline3\n",
+        "line1\nline2\nline3\nline4\nline5\n",
+        "from-if\n",
+        "last=3\n",
+        "out-line\n",
+        "from-case\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    let both = fs::read_to_string(directory.path().join("both.txt")).expect("file");
+    assert!(
+        both.contains("out-line") && both.contains("terminal-rust-no-such-dir"),
+        "{both}"
+    );
+    // What went to a file is not on the screen a second time.
+    assert_eq!(printed.matches("line1").count(), 2, "{printed}");
+}
+
+#[test]
+fn a_block_works_as_a_stage_of_a_pipeline() {
+    let directory = TestDirectory::new("block pipeline");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "for i in 3 1 2; do echo $i; done | cat",
+            "{ echo b; echo a; } | cat",
+            "echo upper | { read w; echo got-$w; }",
+            "if true; then echo piped-if; fi | cat",
+            "case x in x) echo c;; esac | cat | cat",
+            "reader() { while read l; do echo \"[$l]\"; done; }",
+            "echo a | reader",
+            "for i in 1 2; do echo $i; done | reader",
+        ],
+    );
+
+    for expected in [
+        "3\n1\n2\n",
+        "b\na\n",
+        "got-upper\n",
+        "piped-if\n",
+        "c\n",
+        "[a]\n",
+        "[1]\n[2]\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(errors.is_empty(), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn programs_started_inside_a_block_are_collected_too() {
+    let directory = TestDirectory::new("block programs");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "for i in 1 2; do sh -c \"echo ext$i\"; done > ext.txt",
+            "cat ext.txt",
+            "for i in 3 1 2; do echo $i; done | sort",
+            "for i in b a; do sh -c \"echo $i\"; done | sort",
+            "echo x | while read v; do sh -c \"echo child-$v\"; done",
+            "{ sh -c 'exit 7'; } > /dev/null",
+            "echo code=$?",
+            "if sh -c 'exit 3'; then echo yes; else echo no; fi > /dev/null",
+            "echo after-if=$?",
+        ],
+    );
+
+    for expected in [
+        "ext1\next2\n",
+        "1\n2\n3\n",
+        "a\nb\n",
+        "child-x\n",
+        "code=7\n",
+        "after-if=0\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    // The programs wrote to the file, not to the screen.
+    assert_eq!(printed.matches("ext1").count(), 1, "{printed}");
+}
+
+#[test]
+fn a_failing_block_gives_its_status_and_errors_reach_the_screen() {
+    let directory = TestDirectory::new("block status");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "for i in 1; do false; done > out.txt",
+            "echo status=$?",
+            "for i in 1; do terminal-rust-no-such-command; done > out.txt",
+            "echo unknown=$?",
+            "{ echo ok; } > out.txt && echo and-ran",
+            "{ false; } > out.txt || echo or-ran",
+            "false || { echo ran-after-or; } > or.txt",
+            "cat or.txt",
+            "true && for i in 1; do echo ran-after-and; done | cat",
+            "false && { echo skipped; } > skipped.txt",
+            "echo skipped-status=$?",
+            "while read x; do echo $x; done < nowhere.txt || echo cannot-open",
+            "for i in 1 2; do echo $i; done > /nonexistent-dir/file",
+            "echo write-status=$?",
+        ],
+    );
+
+    for expected in [
+        "status=1\n",
+        "unknown=127\n",
+        "and-ran\n",
+        "or-ran\n",
+        "cannot-open\n",
+        "ran-after-or\n",
+        "ran-after-and\n",
+        "skipped-status=1\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(
+        !directory.path().join("skipped.txt").exists(),
+        "a skipped block opens nothing"
+    );
+    assert!(errors.contains("terminal-rust-no-such-command"), "{errors}");
+    assert!(errors.contains("nowhere.txt"), "{errors}");
+    assert!(errors.contains("nonexistent-dir"), "{errors}");
+    // A block that could not be written runs nothing.
+    assert!(!printed.contains("write-status=0"), "{printed}");
+}
+
+#[test]
+fn a_here_document_gives_its_body_as_input_with_expansions() {
+    let directory = TestDirectory::new("heredoc expand");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "NAME=world",
+            "cat <<EOF",
+            "hello $NAME",
+            "sum=$((1+2)) sub=$(echo inner)",
+            "quote \"x\" and \\$escaped and 'single'",
+            "",
+            "after a blank line",
+            "EOF",
+            "echo after-heredoc=$?",
+            "cat <<EOF > out.txt",
+            "to a file: $NAME",
+            "EOF",
+            "cat out.txt",
+        ],
+    );
+
+    for expected in [
+        "hello world\n",
+        "sum=3 sub=inner\n",
+        "quote \"x\" and $escaped and 'single'\n",
+        "\n\nafter a blank line\n",
+        "after-heredoc=0\n",
+        "to a file: world\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert_eq!(
+        fs::read_to_string(directory.path().join("out.txt")).expect("file"),
+        "to a file: world\n"
+    );
+    assert!(errors.is_empty(), "{errors}");
+}
+
+#[test]
+fn a_quoted_delimiter_keeps_the_body_literal_and_a_dash_removes_tabs() {
+    let directory = TestDirectory::new("heredoc literal");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "NAME=nope",
+            "cat <<'EOF'",
+            "$NAME $(echo no) $((1+1)) \"q\" it's \\n",
+            "EOF",
+            "cat <<\"EOF\"",
+            "double-quoted delimiter: $NAME",
+            "EOF",
+            "cat <<-EOF",
+            "\tstripped $NAME",
+            "\t\tdeeper",
+            "\tEOF",
+            "echo done",
+        ],
+    );
+
+    for expected in [
+        "$NAME $(echo no) $((1+1)) \"q\" it's \\n\n",
+        "double-quoted delimiter: $NAME\n",
+        "stripped nope\ndeeper\n",
+        "done\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+}
+
+#[test]
+fn a_here_document_works_with_pipes_loops_functions_and_here_strings() {
+    let directory = TestDirectory::new("heredoc uses");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "while read a b; do echo \"[$a|$b]\"; done <<EOF",
+            "one two three",
+            "four",
+            "EOF",
+            "wrap() {",
+            "  cat <<EOT",
+            "inside $1",
+            "EOT",
+            "}",
+            "wrap function",
+            "cat <<< \"a here-string\"",
+            "NAME=value",
+            "cat <<< $NAME",
+            "read x y <<< \"p q r\"",
+            "echo x=$x y=$y",
+            "cat <<A | cat",
+            "piped body",
+            "A",
+        ],
+    );
+
+    for expected in [
+        "[one|two three]\n[four|]\n",
+        "inside function\n",
+        "a here-string\n",
+        "value\n",
+        "x=p y=q r\n",
+        "piped body\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(errors.is_empty(), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_here_document_is_the_input_of_a_program_too() {
+    let directory = TestDirectory::new("heredoc program");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sort <<EOF",
+            "pear",
+            "apple",
+            "fig",
+            "EOF",
+            "sh -c 'cat' <<< from-here-string",
+        ],
+    );
+
+    assert!(
+        printed.contains("apple\nfig\npear\n"),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("from-here-string\n"), "{printed}");
+}
+
+#[test]
+fn a_here_document_in_a_file_keeps_its_blank_lines_and_comments() {
+    let directory = TestDirectory::new("heredoc source");
+    fs::write(
+        directory.path().join("doc.sh"),
+        "# a script\nNAME=file\ncat <<EOF\n  indented $NAME\n\n# not a comment\nEOF\nfor i in 1 2; do\n  cat <<EOF\nloop $i\nEOF\ndone\necho end\n",
+    )
+    .expect("fixture");
+
+    let (printed, errors) = shell_lines(&directory, &["source doc.sh"]);
+
+    for expected in [
+        "  indented file\n\n# not a comment\n",
+        "loop 1\nloop 2\n",
+        "end\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+}
+
+#[test]
+fn a_here_document_that_never_ends_runs_nothing_and_a_bare_operator_is_an_error() {
+    let directory = TestDirectory::new("heredoc errors");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo before",
+            "cat <<",
+            "echo after-bare=$?",
+            "cat <<EOF",
+            "never closed",
+        ],
+    );
+
+    assert!(printed.contains("before\n"), "{printed}");
+    assert!(printed.contains("after-bare=1\n"), "{printed}");
+    assert!(errors.contains("here-document needs its body"), "{errors}");
+    assert!(!printed.contains("never closed"), "{printed}");
 }

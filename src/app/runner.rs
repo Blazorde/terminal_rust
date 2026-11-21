@@ -262,13 +262,21 @@ fn read_plain_command(reader: &mut impl BufRead, input: &mut String) -> io::Resu
         input.push(' ');
         input.push_str(continuation.trim_end_matches(['\r', '\n']));
     }
-    // A `for`, `while` or `if` goes on until its `done` or `fi`; the end of the
-    // input then leaves it unfinished, and running it reports that.
+    // A `for`, `while` or `if` goes on until its `done` or `fi`, and a here-document
+    // until its delimiter; the end of the input then leaves it unfinished, and
+    // running it reports that.
+    let mut first_line = true;
     while input_is_incomplete(input) {
         render::stdout(">> ")?;
         let mut more = String::new();
         if reader.read_line(&mut more)? == 0 {
             break;
+        }
+        // Lines are joined with exactly one line ending: the first line still has
+        // its own, which would otherwise start a here-document with a blank line.
+        if first_line {
+            input.truncate(input.trim_end_matches(['\r', '\n']).len());
+            first_line = false;
         }
         input.push('\n');
         input.push_str(more.trim_end_matches(['\r', '\n']));
@@ -390,5 +398,29 @@ mod tests {
         let mut command = String::new();
         let error = read_plain_command(&mut reader, &mut command).unwrap_err();
         assert_eq!(error.kind(), std::io::ErrorKind::UnexpectedEof);
+    }
+
+    #[test]
+    fn a_here_document_is_read_with_one_line_ending_between_its_lines() {
+        let mut reader = Cursor::new("cat <<EOF > out\nfirst\n\nthird\nEOF\necho next\n");
+        let mut command = String::new();
+
+        assert!(read_plain_command(&mut reader, &mut command).expect("reads"));
+        assert_eq!(command, "cat <<EOF > out\nfirst\n\nthird\nEOF");
+
+        // The line after the delimiter is the next command.
+        command.clear();
+        assert!(read_plain_command(&mut reader, &mut command).expect("reads"));
+        assert_eq!(command.trim_end(), "echo next");
+    }
+
+    #[test]
+    fn the_end_of_the_input_leaves_a_here_document_unfinished() {
+        let mut reader = Cursor::new("cat <<EOF\nonly a body\n");
+        let mut command = String::new();
+
+        assert!(read_plain_command(&mut reader, &mut command).expect("reads"));
+        assert_eq!(command, "cat <<EOF\nonly a body");
+        assert!(crate::app::command::input_is_incomplete(&command));
     }
 }
