@@ -1827,7 +1827,8 @@ fn an_unclosed_substitution_rejects_the_whole_line() {
 
     assert!(!printed.contains("first"), "{printed}");
     assert!(errors.contains("missing closing parenthesis"), "{errors}");
-    assert!(errors.contains("arithmetic expansion"), "{errors}");
+    // The line after the rejected one still runs, arithmetic included.
+    assert!(printed.contains("3\n"), "{printed}");
     assert!(printed.contains("still-here\n"), "{printed}");
 }
 
@@ -2545,6 +2546,55 @@ fn parameter_expansion_gives_defaults_alternatives_and_lengths() {
     assert!(errors.contains("TR_UNSET: missing value"), "{errors}");
     assert!(
         errors.contains("assigning in an expansion is not supported"),
+        "{errors}"
+    );
+}
+
+#[test]
+fn arithmetic_expansion_computes_in_lines_loops_and_assignments() {
+    let directory = TestDirectory::new("arithmetic");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo sum=$((1+2)) product=$(( 6 * 7 )) group=$(( (1+2)*3 ))",
+            "n=5",
+            "echo double=$((n*2)) dollar=$(($n+1)) glued=$((2+2))abc",
+            "total=$((10-3))",
+            "echo total=$total",
+            "echo \"quoted=$((7%4))\" single='$((1+1))'",
+            "echo cmp=$((3>2)) eq=$((2==3)) logic=$((1&&0))",
+            "i=0",
+            "while [ $i -lt 3 ]; do echo i=$i; i=$((i+1)); done",
+            "echo status=$((1+1))$?",
+            "echo before $((1/0)) after",
+            "echo failed=$?",
+            "echo $((9223372036854775807+1))",
+            "echo $((1+",
+        ],
+    );
+
+    for expected in [
+        "sum=3 product=42 group=9\n",
+        "double=10 dollar=6 glued=4abc\n",
+        "total=7\n",
+        "quoted=3 single=$((1+1))\n",
+        "cmp=1 eq=0 logic=0\n",
+        "i=0\ni=1\ni=2\n",
+        "failed=1\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(
+        !printed.contains("before"),
+        "a failed expansion must not run the command: {printed}"
+    );
+    assert!(errors.contains("arithmetic: division by 0"), "{errors}");
+    assert!(
+        errors.contains("arithmetic: result out of range"),
         "{errors}"
     );
 }

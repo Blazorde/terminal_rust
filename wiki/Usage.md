@@ -189,7 +189,27 @@ assignment (`NAME=$(cmd)`) it is not split. What the command writes on standard
 error still goes to the terminal. A result can never add an operator such as `;`
 or `>` to the line. Single quotes and `\$(` keep it as text. `cd` inside a
 substitution changes the shell's directory (there is no subshell). Backquotes
-and `$((...))` arithmetic are not available.
+are not available.
+
+## Arithmetic
+
+`$((expression))` is replaced by the value of an integer expression, so loops can
+count:
+
+```text
+echo $((6 * 7))                  # 42
+i=0; while [ $i -lt 3 ]; do echo $i; i=$((i + 1)); done
+echo "half: $((total / 2))"
+echo $(( (a + b) % 10 ))
+```
+
+Numbers are 64-bit integers (decimal or `0x` hexadecimal). Available: `+ - * / %`,
+parentheses, the signs `-` `+` and `!`, the comparisons `== != < <= > >=` and the
+logical `&&` `||`, which give `1` or `0`. A variable is written `n` or `$n`; an
+unset or empty one is `0`. A division by zero, an overflow or a bad expression is
+an error and the command does not run. There is no assignment inside the
+expression (`i=$((i+1))` is an ordinary assignment), no `**`, no bit operators and
+no `$(...)` inside it.
 
 ## File name patterns
 

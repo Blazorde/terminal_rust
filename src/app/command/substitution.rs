@@ -6,7 +6,7 @@
 
 use std::cell::Cell;
 
-use super::{CommandResult, ShellState, run_line};
+use super::{CommandResult, ShellState, arithmetic, run_line};
 use crate::app::parser::scan_substitution;
 use crate::render;
 use crate::utils::shell_env;
@@ -42,7 +42,13 @@ pub(super) fn expand(text: &str, state: &mut ShellState) -> Result<String, Strin
             }
             (Some('"') | None, '$') if characters.get(position + 1) == Some(&'(') => {
                 if characters.get(position + 2) == Some(&'(') {
-                    return Err("arithmetic expansion $(( )) is not supported".to_string());
+                    let (expression, end) = arithmetic_body(&characters, position + 3)?;
+                    let value = arithmetic::evaluate(&expression, &|name| state.variable(name))?;
+                    // A number has no blank or special character: it needs no quoting.
+                    output.push_str(&value.to_string());
+                    position = end;
+                    position += 1;
+                    continue;
                 }
                 position += 2;
                 let mut inner = String::new();
@@ -78,6 +84,26 @@ pub(super) fn expand(text: &str, state: &mut ShellState) -> Result<String, Strin
         position += 1;
     }
     Ok(output)
+}
+
+/// The text of a `$((...))` that starts at `from` (just after the two opening
+/// parentheses), and the index of its last `)`.
+fn arithmetic_body(characters: &[char], from: usize) -> Result<(String, usize), String> {
+    let mut depth = 0_usize;
+    let mut index = from;
+    while let Some(&character) = characters.get(index) {
+        match character {
+            '(' => depth += 1,
+            ')' if depth > 0 => depth -= 1,
+            ')' if characters.get(index + 1) == Some(&')') => {
+                return Ok((characters[from..index].iter().collect(), index + 1));
+            }
+            ')' => return Err("arithmetic: missing '))'".to_string()),
+            _ => {}
+        }
+        index += 1;
+    }
+    Err("arithmetic: missing '))'".to_string())
 }
 
 /// Whether the word typed so far is `NAME=`: its substitutions are not split.
@@ -161,6 +187,20 @@ mod tests {
     fn what_a_quoted_word_treats_specially_is_escaped() {
         assert_eq!(escape("a\"b$c\\d"), "a\\\"b\\$c\\\\d");
         assert_eq!(replacement("x;y|z>w", false, false), "\"x;y|z>w\"");
+    }
+
+    #[test]
+    fn the_body_of_an_arithmetic_expansion_ends_at_its_double_parenthesis() {
+        let characters: Vec<char> = "(1+2)*3)) rest".chars().collect();
+        assert_eq!(
+            arithmetic_body(&characters, 0),
+            Ok(("(1+2)*3".to_string(), 8))
+        );
+        let characters: Vec<char> = "1+2".chars().collect();
+        assert!(arithmetic_body(&characters, 0).is_err());
+        // `$((1+2) )` closes the group with a space between: not arithmetic.
+        let characters: Vec<char> = "1+2) )".chars().collect();
+        assert!(arithmetic_body(&characters, 0).is_err());
     }
 
     #[test]

@@ -7,6 +7,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Arithmetic expansion `$((…))` on 64-bit integers (ADR-0017): `+ - * / %`,
+  parentheses, signs, comparisons and `&&` `||`, variables by name, hexadecimal
+  numbers. Overflow and division by zero are errors, never wrapped values.
 - Parameter expansion in `${…}`: `${NAME:-default}`, `${NAME-default}`,
   `${NAME:+alternative}`, `${NAME:?message}` and `${#NAME}`, with nested words,
   quotes and variables. `${NAME:=word}` and the trimming forms are refused with a
