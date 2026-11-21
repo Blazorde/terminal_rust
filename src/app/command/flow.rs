@@ -59,6 +59,11 @@ impl Node {
     }
 }
 
+/// Whether `name` is a keyword of the shell language.
+pub(super) fn is_keyword(name: &str) -> bool {
+    KEYWORDS.contains(&name)
+}
+
 /// The keyword a command starts with and what follows it in the same command.
 fn keyword(text: &str) -> Option<(&'static str, &str)> {
     let trimmed = text.trim_start();

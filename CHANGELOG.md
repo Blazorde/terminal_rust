@@ -7,6 +7,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- `type` and `which` say what a name runs: keyword, built-in, alias, custom
+  command, plugin, or the program found in `PATH` with its path (a missing name is
+  reported and gives status 1).
 - `test` and `[ … ]` are built in (ADR-0016): `-e -f -d -s -r -w -x -L`, `-z -n`,
   `= == !=`, `-eq -ne -lt -le -gt -ge`, `!`, `-a` and `-o`. Status 0 when true, 1
   when false without a message, 2 for a mistake. Conditions in `if` and `while`

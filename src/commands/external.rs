@@ -81,6 +81,43 @@ pub(crate) fn start_error(name: &str, error: &io::Error) -> RunError {
     }
 }
 
+/// The program that `name` would start: the path as written when it has one,
+/// otherwise the first match in `PATH`. `None` when there is none.
+pub(crate) fn locate(name: &str) -> Option<PathBuf> {
+    let path = shell_env::value("PATH")
+        .map(OsString::from)
+        .unwrap_or_default();
+    if name.contains(['/', '\\']) {
+        let candidate = PathBuf::from(name);
+        return is_program(&candidate).then_some(candidate);
+    }
+    #[cfg(windows)]
+    {
+        let pathext = shell_env::value("PATHEXT")
+            .map(OsString::from)
+            .unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
+        find_in_path(name, &path, &pathext, |candidate| candidate.is_file())
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::split_paths(&path)
+            .map(|directory| directory.join(name))
+            .find(|candidate| is_program(candidate))
+    }
+}
+
+#[cfg(unix)]
+fn is_program(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn is_program(path: &Path) -> bool {
+    path.is_file()
+}
+
 /// Keep `Ctrl+C` from ending the shell while a program is running: the interrupt
 /// reaches the foreground program, which stops, and the prompt comes back.
 pub fn keep_shell_alive_on_interrupt() {
