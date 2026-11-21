@@ -15,6 +15,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Fixed
 
+- Saving the shell state (permanent aliases, startup script) or the desktop
+  settings is now atomic. The old code moved the existing file to a `.bak` before
+  moving the new one, so a crash in between left no file at all, and two shells
+  saving at once shared the same temporary name and could corrupt each other. The
+  data is now written to a unique temporary file, flushed, and renamed over the
+  target in one step, keeping the file's permissions. No `.bak` file is left.
 - The desktop tab froze for good, and its memory grew without limit, when a
   program printed an `ESC ] 777 ;` sequence that was not a prompt layout, such as
   the standard notification `printf '\e]777;notify;Build;done\a'`. The prompt
