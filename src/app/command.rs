@@ -189,9 +189,9 @@ const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "cat",
-        usage: "cat [file]",
+        usage: "cat [file]...",
         summary: "print file content",
-        max_args: Some(1),
+        max_args: None,
         handler: run_cat,
     },
     CommandSpec {
@@ -774,10 +774,13 @@ fn run_touch(args: &[String], _state: &mut ShellState) -> CommandResult {
 }
 
 fn run_cat(args: &[String], _state: &mut ShellState) -> CommandResult {
-    match cat::cat(optional_arg(args)) {
-        Ok(content) => map_result(render::stdout(content), |error| format!("cat: {error}")),
-        Err(error) => CommandResult::Error(error.to_string()),
+    let (content, errors) = cat::cat_all(args);
+    if !content.is_empty()
+        && let Err(error) = render::stdout(content)
+    {
+        return CommandResult::Error(format!("cat: {error}"));
     }
+    failures(errors)
 }
 
 fn run_rm(args: &[String], _state: &mut ShellState) -> CommandResult {

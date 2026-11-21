@@ -5,6 +5,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Fixed
+
+- `cat` accepts several files (it read only the first one, so `cat *.txt` was
+  wrong), prints those it can read and names each one it cannot, and `-` stands
+  for the input of the pipeline: `echo x | cat a.txt - b.txt`.
+
 ### Added
 
 - Brace expansion ([ADR-0015](docs/decisions/0015-brace-expansion.md)):
