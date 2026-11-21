@@ -6,6 +6,7 @@
 //! first, so a mistake rejects the whole input before anything runs. Then the
 //! tree is executed.
 
+use super::pipeline::COMPOUND_STAGE;
 use super::{CommandResult, ShellState, assign_variable, run_segment};
 use crate::app::parser::{Connector, Segment, Stage, split_chain, split_stages};
 use crate::commands::external;
@@ -60,6 +61,14 @@ pub(super) enum Node {
         connector: Connector,
         body: Vec<Node>,
     },
+    /// A compound command with redirections after its closing keyword, or in a
+    /// pipeline (`cmd | while read x; do …; done > file`): `stages` are the stages
+    /// of the pipeline, one of which, [`COMPOUND_STAGE`], stands for `inner`.
+    Pipeline {
+        connector: Connector,
+        inner: Box<Node>,
+        stages: Vec<Stage>,
+    },
     /// `name() { LIST; }`: running it records the function.
     Function {
         connector: Connector,
@@ -77,7 +86,22 @@ impl Node {
             | Self::If { connector, .. }
             | Self::Case { connector, .. }
             | Self::Group { connector, .. }
+            | Self::Pipeline { connector, .. }
             | Self::Function { connector, .. } => *connector,
+        }
+    }
+
+    /// Make the node run whatever came before it, for use inside a pipeline.
+    fn run_unconditionally(&mut self) {
+        match self {
+            Self::Simple { segment, .. } => segment.connector = Connector::Then,
+            Self::For { connector, .. }
+            | Self::While { connector, .. }
+            | Self::If { connector, .. }
+            | Self::Case { connector, .. }
+            | Self::Group { connector, .. }
+            | Self::Pipeline { connector, .. }
+            | Self::Function { connector, .. } => *connector = Connector::Then,
         }
     }
 }
@@ -140,6 +164,12 @@ pub(super) fn is_incomplete(line: &str) -> bool {
                     awaiting_brace = true;
                 }
                 break;
+            }
+            // `cmd | while ...` opens a block after the pipe.
+            if keyword(text).is_none()
+                && let Some((_, start)) = pipe_into_compound(text)
+            {
+                text = &text[start..];
             }
             match keyword(text) {
                 Some(("for" | "while" | "until" | "if", _)) => depth += 1,
@@ -267,6 +297,59 @@ fn function_header(text: &str) -> Result<Option<FunctionHeader<'_>>, String> {
     }
 }
 
+/// Whether `text` starts like a redirection or a pipe: what may follow the
+/// closing keyword of a compound command (`done > file`, `fi | sort`, `} 2>&1`).
+fn starts_redirection(text: &str) -> bool {
+    let mut characters = text.chars();
+    match characters.next() {
+        Some('<' | '>' | '|') => true,
+        Some(digit) if digit.is_ascii_digit() => matches!(characters.next(), Some('<' | '>')),
+        _ => false,
+    }
+}
+
+/// Whether `word` starts a compound command.
+fn starts_compound(word: &str) -> bool {
+    matches!(word, "for" | "while" | "until" | "if" | "case" | "{")
+}
+
+/// In the text of a command, the position of the first `|` that is followed by a
+/// compound command (`cmd | while read x`), and where that command starts. The
+/// `|` of quotes, of `$(...)` and of `>|` do not count.
+fn pipe_into_compound(text: &str) -> Option<(usize, usize)> {
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    let mut substitution = 0_usize;
+    let mut previous = '\0';
+    for (index, character) in text.char_indices() {
+        if escaped {
+            escaped = false;
+            previous = character;
+            continue;
+        }
+        match (quote, character) {
+            (_, '\\') if quote != Some('\'') => escaped = true,
+            (Some(open), close) if open == close => quote = None,
+            (Some(_), _) => {}
+            (None, '\'' | '"') => quote = Some(character),
+            (None, '(') if previous == '$' || substitution > 0 => substitution += 1,
+            (None, ')') if substitution > 0 => substitution -= 1,
+            (None, '|') if substitution == 0 && previous != '>' && previous != '|' => {
+                let rest = &text[index + 1..];
+                let start = index + 1 + (rest.len() - rest.trim_start().len());
+                if let Some((word, _)) = keyword(&text[start..])
+                    && starts_compound(word)
+                {
+                    return Some((index, start));
+                }
+            }
+            _ => {}
+        }
+        previous = character;
+    }
+    None
+}
+
 /// The first word of `text`, quotes and `$(...)` included, and what follows it.
 fn split_word(text: &str) -> (&str, &str) {
     let text = text.trim_start();
@@ -360,6 +443,9 @@ fn split_patterns(patterns: &str) -> Vec<String> {
 struct Parser {
     segments: Vec<Segment>,
     position: usize,
+    /// What followed the closing keyword of the compound command that was just
+    /// read: its redirections or the pipe that goes on.
+    tail: String,
 }
 
 /// Build the tree of a line, or say what is wrong with it.
@@ -367,6 +453,7 @@ pub(super) fn parse(segments: Vec<Segment>) -> Result<Vec<Node>, String> {
     let mut parser = Parser {
         segments,
         position: 0,
+        tail: String::new(),
     };
     let nodes = parser.list(&[])?;
     match parser.current_keyword() {
@@ -426,18 +513,25 @@ impl Parser {
         while self.position < self.segments.len() {
             match self.current_keyword() {
                 Some((word, _)) if stops.contains(&word) => return Ok(nodes),
-                Some(("for", _)) => nodes.push(self.for_loop()?),
-                Some(("while", _)) => nodes.push(self.while_loop(false)?),
-                Some(("until", _)) => nodes.push(self.while_loop(true)?),
-                Some(("if", _)) => nodes.push(self.conditional()?),
-                Some(("case", _)) => nodes.push(self.case_statement()?),
-                Some(("{", _)) => nodes.push(self.group()?),
+                Some(("for" | "while" | "until" | "if" | "case" | "{", _)) => {
+                    let node = self.compound()?;
+                    nodes.push(self.with_tail(node, Vec::new())?);
+                }
                 Some((word, _)) => return Err(unexpected(word)),
                 None => {
                     if let Some(header) = function_header(&self.segments[self.position].text)? {
                         let (name, opens, rest) =
                             (header.name, header.opens, header.rest.to_string());
                         nodes.push(self.function_definition(name, opens, rest)?);
+                        continue;
+                    }
+                    // `cmd | while read x; do …; done`: a compound command after a pipe.
+                    let text = self.segments[self.position].text.clone();
+                    if let Some((pipe, start)) = pipe_into_compound(&text) {
+                        let before = split_stages(text[..pipe].trim())?;
+                        self.segments[self.position].text = text[start..].to_string();
+                        let node = self.compound()?;
+                        nodes.push(self.with_tail(node, before)?);
                         continue;
                     }
                     let segment = Segment {
@@ -471,7 +565,7 @@ impl Parser {
         self.position += 1;
         self.expect("do")?;
         let body = self.list(&["done"])?;
-        self.finish("done")?;
+        self.finish_with_tail("done")?;
         Ok(Node::For {
             connector,
             variable,
@@ -486,7 +580,7 @@ impl Parser {
         let condition = self.list(&["do"])?;
         self.expect("do")?;
         let body = self.list(&["done"])?;
-        self.finish("done")?;
+        self.finish_with_tail("done")?;
         Ok(Node::While {
             connector,
             until,
@@ -515,11 +609,42 @@ impl Parser {
                 _ => break,
             }
         }
-        self.finish("fi")?;
+        self.finish_with_tail("fi")?;
         Ok(Node::If {
             connector,
             branches,
             otherwise,
+        })
+    }
+
+    /// The compound command that starts at the current keyword.
+    fn compound(&mut self) -> Result<Node, String> {
+        match self.current_keyword() {
+            Some(("for", _)) => self.for_loop(),
+            Some(("while", _)) => self.while_loop(false),
+            Some(("until", _)) => self.while_loop(true),
+            Some(("if", _)) => self.conditional(),
+            Some(("case", _)) => self.case_statement(),
+            Some(("{", _)) => self.group(),
+            _ => Err("syntax error: expected a compound command".to_string()),
+        }
+    }
+
+    /// Wrap a compound command that has redirections after it, or stages before
+    /// it, into a pipeline. `before` are the stages that come first.
+    fn with_tail(&mut self, mut node: Node, before: Vec<Stage>) -> Result<Node, String> {
+        let tail = std::mem::take(&mut self.tail);
+        if tail.is_empty() && before.is_empty() {
+            return Ok(node);
+        }
+        let connector = node.connector();
+        node.run_unconditionally();
+        let mut stages = before;
+        stages.extend(split_stages(&format!("{COMPOUND_STAGE} {tail}"))?);
+        Ok(Node::Pipeline {
+            connector,
+            inner: Box::new(node),
+            stages,
         })
     }
 
@@ -528,7 +653,7 @@ impl Parser {
         let connector = self.segments[self.position].connector;
         self.consume_keyword();
         let body = self.list(&["}"])?;
-        self.finish("}")?;
+        self.finish_with_tail("}")?;
         Ok(Node::Group { connector, body })
     }
 
@@ -586,7 +711,7 @@ impl Parser {
         loop {
             match self.current_keyword() {
                 Some(("esac", _)) => {
-                    self.finish("esac")?;
+                    self.finish_with_tail("esac")?;
                     break;
                 }
                 // An empty arm, or a stray `;;` right after another.
@@ -627,12 +752,25 @@ impl Parser {
 
     /// The keyword that closes a compound command, with nothing after it.
     fn finish(&mut self, wanted: &'static str) -> Result<(), String> {
+        self.finish_with_tail(wanted)?;
+        let tail = std::mem::take(&mut self.tail);
+        if tail.is_empty() {
+            Ok(())
+        } else {
+            Err(format!("syntax error: unexpected text after '{wanted}'"))
+        }
+    }
+
+    /// The keyword that closes a compound command. What follows it must be
+    /// redirections or a pipe, and is kept in `tail`.
+    fn finish_with_tail(&mut self, wanted: &'static str) -> Result<(), String> {
         match self.current_keyword() {
             Some((word, rest)) if word == wanted => {
-                if !rest.is_empty() {
+                if !rest.is_empty() && !starts_redirection(&rest) {
                     return Err(format!("syntax error: unexpected text after '{wanted}'"));
                 }
                 self.position += 1;
+                self.tail = rest;
                 Ok(())
             }
             _ => Err(format!("syntax error: expected '{wanted}'")),
@@ -692,6 +830,7 @@ pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult
             } => run_if(branches, otherwise, state),
             Node::Case { word, arms, .. } => run_case(word, arms, state),
             Node::Group { body, .. } => run_nodes(body, state),
+            Node::Pipeline { inner, stages, .. } => run_pipeline(inner, stages, state),
             Node::Function { name, body, .. } => {
                 state
                     .functions
@@ -705,6 +844,11 @@ pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult
         }
     }
     last
+}
+
+/// Run one node as if it were a list of its own.
+pub(super) fn run_node(node: &Node, state: &mut ShellState) -> CommandResult {
+    run_nodes(std::slice::from_ref(node), state)
 }
 
 /// Print the error of a command that another one is about to follow.
@@ -832,6 +976,17 @@ fn run_if(
     run_nodes(otherwise, state)
 }
 
+/// Run a compound command that has redirections or is part of a pipeline.
+fn run_pipeline(inner: &Node, stages: &[Stage], state: &mut ShellState) -> CommandResult {
+    let result = super::pipeline::run(stages, state, None, Some(inner));
+    // Alone, the command keeps the exact status of its last command.
+    if stages.len() == 1 && matches!(result, CommandResult::Error(_)) && state.last_status != 0 {
+        external::note_exit_code(state.last_status);
+    }
+    state.record_status(matches!(result, CommandResult::Error(_)));
+    result
+}
+
 fn run_case(
     word: &str,
     arms: &[(Vec<String>, Vec<Node>)],
@@ -863,6 +1018,14 @@ mod tests {
 
     fn tree(line: &str) -> Result<Vec<Node>, String> {
         parse(split_chain(line)?)
+    }
+
+    fn redirects(stage: &Stage) -> String {
+        stage
+            .redirects
+            .iter()
+            .map(|redirect| format!(" {redirect:?}"))
+            .collect()
     }
 
     fn shape(nodes: &[Node]) -> String {
@@ -901,6 +1064,23 @@ mod tests {
                     format!("if {} else ({})", parts.join(" elif "), shape(otherwise))
                 }
                 Node::Group { body, .. } => format!("group ({})", shape(body)),
+                Node::Pipeline { inner, stages, .. } => {
+                    let parts: Vec<String> = stages
+                        .iter()
+                        .map(|stage| {
+                            if stage.text.trim() == COMPOUND_STAGE {
+                                format!(
+                                    "[{}]{}",
+                                    shape(std::slice::from_ref(inner)),
+                                    redirects(stage)
+                                )
+                            } else {
+                                format!("{}{}", stage.text.trim(), redirects(stage))
+                            }
+                        })
+                        .collect();
+                    parts.join(" | ")
+                }
                 Node::Function { name, body, .. } => format!("function {name} ({})", shape(body)),
                 Node::Case { word, arms, .. } => {
                     let parts: Vec<String> = arms
@@ -1004,9 +1184,10 @@ mod tests {
             ("while a; do b; done done", "unexpected text after 'done'"),
             ("while a; do b; done; done", "unexpected token 'done'"),
             (
-                "for f in a; do x; done > out",
+                "for f in a; do x; done oops",
                 "unexpected text after 'done'",
             ),
+            ("f() { x; } > out", "unexpected text after '}'"),
         ] {
             let error = tree(line)
                 .err()
@@ -1178,6 +1359,94 @@ mod tests {
         assert!(!is_incomplete("{ echo hi; }"));
         assert!(!is_incomplete("f() { g() { echo x; }; }"));
         assert!(!is_incomplete("echo }"));
+    }
+
+    #[test]
+    fn redirections_and_pipes_after_a_compound_command_are_parsed() {
+        assert_eq!(
+            shape(&tree("for f in a b; do echo $f; done > out.txt").unwrap()),
+            "[for f in [a b] do (echo $f)] Stdout { target: \"out.txt\", append: false }"
+        );
+        assert_eq!(
+            shape(&tree("while read l; do echo $l; done < in.txt 2>&1").unwrap()),
+            "[while (read l) do (echo $l)] Stdin(\"in.txt\") StderrToStdout"
+        );
+        assert_eq!(
+            shape(&tree("if true; then echo y; fi | sort | head").unwrap()),
+            "[if (true) then (echo y) else ()] | sort | head"
+        );
+        assert_eq!(
+            shape(&tree("{ echo a; echo b; } >> log").unwrap()),
+            "[group (echo a ; echo b)] Stdout { target: \"log\", append: true }"
+        );
+        assert_eq!(
+            shape(&tree("case x in x) echo hit;; esac | cat").unwrap()),
+            "[case x [x => (echo hit)]] | cat"
+        );
+        // Several commands: the redirection belongs to the one it follows.
+        assert_eq!(
+            shape(&tree("for i in 1; do echo $i; done > a; echo after").unwrap()),
+            "[for i in [1] do (echo $i)] Stdout { target: \"a\", append: false } ; echo after"
+        );
+    }
+
+    #[test]
+    fn a_compound_command_can_follow_a_pipe() {
+        assert_eq!(
+            shape(&tree("cat f | while read l; do echo $l; done").unwrap()),
+            "cat f | [while (read l) do (echo $l)]"
+        );
+        assert_eq!(
+            shape(&tree("a | b | for x in 1; do echo $x; done | sort > out").unwrap()),
+            "a | b | [for x in [1] do (echo $x)] | sort Stdout { target: \"out\", append: false }"
+        );
+        assert_eq!(
+            shape(&tree("echo x | { read a; echo got-$a; }").unwrap()),
+            "echo x | [group (read a ; echo got-$a)]"
+        );
+        // Inside another block, and in a function.
+        assert_eq!(
+            shape(&tree("f() { printf x | while read l; do echo $l; done; }").unwrap()),
+            "function f (printf x | [while (read l) do (echo $l)])"
+        );
+        // A `|` in quotes, in `$(...)` or in `>|` is not a pipe to a block.
+        assert_eq!(
+            shape(&tree("echo \"a | while b\"").unwrap()),
+            "echo \"a | while b\""
+        );
+        assert_eq!(
+            shape(&tree("echo $(echo a | tr a b) done").unwrap()),
+            "echo $(echo a | tr a b) done"
+        );
+        // A pipe to something that is not a block stays an ordinary pipeline.
+        assert_eq!(shape(&tree("a | while2").unwrap()), "a | while2");
+    }
+
+    #[test]
+    fn a_block_after_a_pipe_asks_for_more_input_until_it_is_closed() {
+        assert!(is_incomplete("cat f | while read l"));
+        assert!(is_incomplete("cat f | while read l; do echo $l"));
+        assert!(!is_incomplete("cat f | while read l; do echo $l; done"));
+        assert!(is_incomplete(
+            "for f in a; do printf x | while read l; do echo $l"
+        ));
+        assert!(is_incomplete("echo x | {"));
+        assert!(!is_incomplete("echo x | { read a; }"));
+        assert!(!is_incomplete("while read l; do echo $l; done < f"));
+        assert!(is_incomplete("echo x | if true"));
+    }
+
+    #[test]
+    fn a_malformed_block_with_redirections_is_rejected() {
+        for line in [
+            "for f in a; do x; done >",
+            "while true; do x; done | ",
+            "echo x | while true; do y",
+            "if true; then x; fi <",
+            "| while true; do x; done",
+        ] {
+            assert!(tree(line).is_err(), "{line:?} should be rejected");
+        }
     }
 
     #[test]

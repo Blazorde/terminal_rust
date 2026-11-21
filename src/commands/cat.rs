@@ -98,7 +98,10 @@ mod tests {
         pipe_input::provide(Some(b"from the pipe\n".to_vec()));
 
         assert_eq!(cat(None).as_deref().ok(), Some("from the pipe\n"));
-        // The input is consumed: a second `cat` is a usage error again.
+        // The input is read to its end: a second `cat` finds nothing more.
+        assert_eq!(cat(None).as_deref().ok(), Some(""));
+        // Without an input at all, `cat` still needs a file name.
+        pipe_input::provide(None);
         assert!(matches!(cat(None), Err(CatError::MissingFileName)));
     }
 
