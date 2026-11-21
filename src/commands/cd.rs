@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::errors::cd::CdError;
 use crate::utils::path::{expand_home, trimmed_arg};
+use crate::utils::shell_env;
 
 /// Change the working directory and return the one that was left, when it is
 /// known. The current directory can have been deleted from elsewhere: that must
@@ -19,6 +20,45 @@ pub fn cd(target: Option<&str>, previous_dir: Option<&Path>) -> Result<Option<Pa
         .map_err(|source| CdError::ChangeDirectoryFailed { path, source })?;
 
     Ok(current_dir)
+}
+
+/// Tell the programs the shell starts where it is: `PWD` is the directory just
+/// entered and `OLDPWD` the one that was left, when it is known.
+pub fn record_change(left: Option<&Path>) {
+    if let Some(left) = left {
+        shell_env::export("OLDPWD", &left.to_string_lossy());
+    }
+    if let Ok(now) = env::current_dir() {
+        shell_env::export("PWD", &now.to_string_lossy());
+    }
+}
+
+/// What `PWD` should become when the shell starts in `current`, or `None` to keep
+/// the inherited value. An inherited `PWD` that names the same directory by
+/// another path (through a symbolic link) is kept, as other shells do; a stale
+/// one, left by a parent that changed directory, is replaced.
+fn initial_pwd(inherited: Option<PathBuf>, current: &Path) -> Option<PathBuf> {
+    let same = |left: &Path, right: &Path| {
+        matches!(
+            (std::fs::canonicalize(left), std::fs::canonicalize(right)),
+            (Ok(left), Ok(right)) if left == right
+        )
+    };
+    match inherited {
+        Some(path) if path.is_absolute() && same(&path, current) => None,
+        _ => Some(current.to_path_buf()),
+    }
+}
+
+/// Make `PWD` true when the shell starts, and forget the `OLDPWD` of the parent:
+/// there is no previous directory yet.
+pub fn start_in_current_directory() {
+    if let Ok(current) = env::current_dir()
+        && let Some(pwd) = initial_pwd(env::var_os("PWD").map(PathBuf::from), &current)
+    {
+        shell_env::export("PWD", &pwd.to_string_lossy());
+    }
+    shell_env::remove("OLDPWD");
 }
 
 fn resolve_target(target: Option<&str>, previous_dir: Option<&Path>) -> Result<PathBuf, CdError> {
@@ -41,6 +81,78 @@ mod tests {
 
     fn same_directory(left: &Path, right: &Path) -> bool {
         fs::canonicalize(left).ok() == fs::canonicalize(right).ok()
+    }
+
+    #[test]
+    fn a_stale_pwd_is_replaced_and_a_link_to_the_directory_is_kept() {
+        let directory = temp_path("cd", "initial-pwd");
+        fs::create_dir(&directory).expect("fixture");
+        let other = temp_path("cd", "initial-pwd-other");
+        fs::create_dir(&other).expect("fixture");
+
+        // Nothing inherited, or an inherited path that is another directory, or
+        // one that does not exist, or a relative one: replaced by the real one.
+        assert_eq!(initial_pwd(None, &directory), Some(directory.clone()));
+        assert_eq!(
+            initial_pwd(Some(other.clone()), &directory),
+            Some(directory.clone())
+        );
+        assert_eq!(
+            initial_pwd(
+                Some(PathBuf::from("/terminal-rust/no/such/dir")),
+                &directory
+            ),
+            Some(directory.clone())
+        );
+        assert_eq!(
+            initial_pwd(Some(PathBuf::from("relative")), &directory),
+            Some(directory.clone())
+        );
+        // The same directory: kept as inherited.
+        assert_eq!(initial_pwd(Some(directory.clone()), &directory), None);
+        #[cfg(unix)]
+        {
+            let link = temp_path("cd", "initial-pwd-link");
+            std::os::unix::fs::symlink(&directory, &link).expect("symlink");
+            assert_eq!(initial_pwd(Some(link.clone()), &directory), None);
+            fs::remove_file(link).expect("cleanup");
+        }
+
+        fs::remove_dir(directory).expect("cleanup");
+        fs::remove_dir(other).expect("cleanup");
+    }
+
+    #[test]
+    fn a_directory_change_is_recorded_for_the_programs() {
+        let guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let original_dir = env::current_dir().expect("current dir should be readable");
+        let target_dir = temp_path("cd", "recorded");
+        fs::create_dir(&target_dir).expect("fixture");
+        let before = (shell_env::value("PWD"), shell_env::value("OLDPWD"));
+
+        let left = cd(Some(target_dir.to_str().expect("UTF-8")), None).expect("cd");
+        record_change(left.as_deref());
+        let pwd = shell_env::value("PWD");
+        let oldpwd = shell_env::value("OLDPWD");
+
+        // Put everything back before asserting.
+        env::set_current_dir(&original_dir).expect("restore cwd");
+        for (name, value) in [("PWD", before.0), ("OLDPWD", before.1)] {
+            match value {
+                Some(value) => shell_env::export(name, &value),
+                None => shell_env::remove(name),
+            }
+        }
+        fs::remove_dir(&target_dir).expect("cleanup");
+        drop(guard);
+
+        assert!(same_directory(
+            Path::new(&pwd.expect("PWD is set")),
+            &target_dir
+        ));
+        assert_eq!(oldpwd, Some(original_dir.to_string_lossy().into_owned()));
     }
 
     #[test]

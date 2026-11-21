@@ -79,6 +79,9 @@ set variables for that command only (`LANG=C sort names.txt`, `PORT=8080 node
 app.js`): the program sees them, the shell does not keep them, and the previous
 value comes back afterwards.
 
+`$PWD` is the current directory and `$OLDPWD` the one you left; `cd` keeps them up
+to date for the programs it starts, and `cd -` goes back and prints where it went.
+
 Inside `${…}` you can give a default, test for a value, or take a length. With a
 colon an empty value counts as unset; without it only an unset variable does:
 

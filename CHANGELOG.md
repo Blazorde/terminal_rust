@@ -14,6 +14,10 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Fixed
 
+- `PWD` and `OLDPWD` follow `cd`. They kept the value of the parent process, so
+  `$PWD` and the programs the shell started saw a stale directory after a `cd`. A
+  stale `PWD` is replaced at start-up, and `cd -` now prints the directory it goes
+  to.
 - File name completion no longer offers hidden entries (`.git/`, `.cache`) unless the
   name being typed starts with a dot.
 

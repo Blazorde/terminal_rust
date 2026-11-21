@@ -833,10 +833,16 @@ fn run_pwd(_args: &[String], _state: &mut ShellState) -> CommandResult {
 }
 
 fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
+    let to_previous = optional_arg(args).map(str::trim) == Some("-");
     match cd::cd(optional_arg(args), state.previous_dir.as_deref()) {
         Ok(previous_dir) => {
             if previous_dir.is_some() {
                 state.previous_dir = previous_dir;
+            }
+            cd::record_change(state.previous_dir.as_deref());
+            // `cd -` says where it went, as other shells do.
+            if to_previous && let Ok(now) = std::env::current_dir() {
+                return map_prefixed_error("cd", render::stdout_line(now.display()));
             }
             CommandResult::Continue
         }
