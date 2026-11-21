@@ -558,7 +558,9 @@ fn run_pwd(_args: &[String], _state: &mut ShellState) -> CommandResult {
 fn run_cd(args: &[String], state: &mut ShellState) -> CommandResult {
     match cd::cd(optional_arg(args), state.previous_dir.as_deref()) {
         Ok(previous_dir) => {
-            state.previous_dir = Some(previous_dir);
+            if previous_dir.is_some() {
+                state.previous_dir = previous_dir;
+            }
             CommandResult::Continue
         }
         Err(error) => CommandResult::Error(error.to_string()),

@@ -23,6 +23,15 @@ const GIT_CACHE_TTL: Duration = Duration::from_millis(250);
 pub(crate) const GUI_PROMPT_ENV: &str = "TERMINAL_RUST_GUI";
 const GUI_PROMPT_OSC: u16 = 777;
 
+/// What the prompt shows when the current directory no longer exists.
+const DELETED_DIRECTORY: &str = "(deleted)";
+
+/// The working directory, or a placeholder if it was deleted from elsewhere: the
+/// prompt must keep working so the user can leave it with `cd`.
+fn working_directory() -> std::path::PathBuf {
+    env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(DELETED_DIRECTORY))
+}
+
 pub struct Prompt {
     git_cache: GitPromptCache,
     palette: Palette,
@@ -86,7 +95,7 @@ impl Prompt {
     }
 
     pub fn render(&mut self) -> io::Result<String> {
-        let current_dir = env::current_dir()?;
+        let current_dir = working_directory();
         let git = self.git_info(&current_dir);
         let is_terminal = io::stdout().is_terminal();
         let color = ansi::color_enabled(is_terminal);
@@ -119,7 +128,7 @@ impl Prompt {
     }
 
     fn render_for_editor_mode(&mut self, gui: bool) -> io::Result<(String, String)> {
-        let current_dir = env::current_dir()?;
+        let current_dir = working_directory();
         let git = self.git_info(&current_dir);
         let is_terminal = io::stdout().is_terminal();
         let color = ansi::color_enabled(is_terminal);
