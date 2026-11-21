@@ -2334,3 +2334,81 @@ fn a_script_can_hold_a_loop_over_several_lines() {
         "{printed}\n{errors}"
     );
 }
+
+#[test]
+fn test_and_brackets_decide_if_and_while_without_any_system_program() {
+    let directory = TestDirectory::new("test builtin");
+    fs::write(directory.path().join("data.txt"), "x").expect("fixture");
+    fs::create_dir(directory.path().join("sub")).expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "if [ -f data.txt ]; then echo file; fi",
+            "if [ -d sub ] && [ ! -e missing.txt ]; then echo dir-and-absent; fi",
+            "if test -s data.txt -a -d sub; then echo both; fi",
+            "if [ \"a b\" = \"a b\" ]; then echo equal; fi",
+            "if [ 10 -gt 9 ]; then echo numeric; fi",
+            "if [ -z \"\" ]; then echo empty; fi",
+            "if [ -f nothing ]; then echo no; else echo not-a-file; fi",
+            "for n in 1 2 3 4; do if [ $n -eq 2 ]; then continue; fi; echo n=$n; done",
+            "while [ ! -f stop.txt ]; do touch stop.txt; echo once; done",
+        ],
+    );
+
+    for expected in [
+        "file\n",
+        "dir-and-absent\n",
+        "both\n",
+        "equal\n",
+        "numeric\n",
+        "empty\n",
+        "not-a-file\n",
+        "n=1\nn=3\nn=4\n",
+        "once\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("no\n"), "{printed}");
+    assert!(
+        errors.is_empty(),
+        "a false condition must be silent: {errors}"
+    );
+}
+
+#[test]
+fn test_reports_its_status_and_its_mistakes() {
+    let directory = TestDirectory::new("test status");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "[ 1 -eq 1 ]",
+            "echo true=$?",
+            "[ 1 -eq 2 ]",
+            "echo false=$?",
+            "[ x -eq 1 ]",
+            "echo wrong=$?",
+            "[ a = a",
+            "echo unclosed=$?",
+            "test",
+            "echo none=$?",
+        ],
+    );
+
+    assert!(printed.contains("true=0\n"), "{printed}\n{errors}");
+    assert!(printed.contains("false=1\n"), "{printed}");
+    assert!(printed.contains("wrong=2\n"), "{printed}");
+    assert!(printed.contains("unclosed=2\n"), "{printed}");
+    assert!(printed.contains("none=1\n"), "{printed}");
+    assert!(
+        errors.contains("integer expression expected: 'x'"),
+        "{errors}"
+    );
+    assert!(errors.contains("[: missing ']'"), "{errors}");
+    // A false condition (`[ 1 -eq 2 ]`, `test`) says nothing: only the two mistakes.
+    assert_eq!(errors.lines().count(), 2, "{errors}");
+}

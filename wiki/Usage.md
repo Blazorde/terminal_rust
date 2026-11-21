@@ -111,7 +111,18 @@ turn, and `true` and `false` are built in. A newline works like `;`, so a block
 can be typed over several lines: the shell asks for more (`>> `) until `done` or
 `fi`. `Ctrl+C` stops a loop. A failing condition is not an error, so its message
 is not shown. `case`, functions, `break 2`, and redirections on a whole loop
-(`done > file`) are not available, and `test` or `[` are the system programs.
+(`done > file`) are not available.
+
+`test` and `[ … ]` are built in, so conditions work on every system:
+
+```text
+[ -f file ]  [ -d dir ]  [ -e path ]  [ -s file ]  [ -r f ] [ -w f ] [ -x f ]  [ -L link ]
+[ -z "$x" ]  [ -n "$x" ]  [ "$a" = "$b" ]  [ "$a" != "$b" ]
+[ $n -eq 3 ]  -ne  -lt  -le  -gt  -ge        [ ! cond ]  [ c1 -a c2 ]  [ c1 -o c2 ]
+```
+
+The status is `0` when true, `1` when false (no message) and `2` for a mistake in
+the expression. Quote variables (`[ "$x" = a ]`) as in other shells.
 
 ## Brace expansion
 

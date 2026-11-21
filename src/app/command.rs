@@ -5,8 +5,8 @@ use crate::app::help;
 use crate::app::parser::{Stage, parse_args, split_chain, split_stages};
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, external, fastfetch,
-    git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime,
-    user, whoami,
+    git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, test_command, theme,
+    touch, uptime, user, whoami,
 };
 use crate::config::UserCommandKind;
 use crate::errors::command::CommandError;
@@ -339,6 +339,20 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "alias for nvim",
         max_args: None,
         handler: run_neovim,
+    },
+    CommandSpec {
+        name: "test",
+        usage: "test <expression>",
+        summary: "check a condition on files, strings or integers (status 0 if true)",
+        max_args: None,
+        handler: run_test,
+    },
+    CommandSpec {
+        name: "[",
+        usage: "[ <expression> ]",
+        summary: "same as test, with a closing ]",
+        max_args: None,
+        handler: run_bracket,
     },
     CommandSpec {
         name: "true",
@@ -926,6 +940,27 @@ fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_result(help::print_help(command_help()), |error| {
         format!("help: {error}")
     })
+}
+
+/// A condition: success when true, a silent failure (status 1) when false, and a
+/// message with status 2 when the expression is wrong.
+fn condition(outcome: test_command::Outcome) -> CommandResult {
+    match outcome {
+        Ok(true) => CommandResult::Continue,
+        Ok(false) => CommandResult::Error(String::new()),
+        Err(message) => {
+            external::note_exit_code(2);
+            CommandResult::Error(message)
+        }
+    }
+}
+
+fn run_test(args: &[String], _state: &mut ShellState) -> CommandResult {
+    condition(test_command::evaluate(args, false))
+}
+
+fn run_bracket(args: &[String], _state: &mut ShellState) -> CommandResult {
+    condition(test_command::evaluate(args, true))
 }
 
 fn run_true(_args: &[String], _state: &mut ShellState) -> CommandResult {

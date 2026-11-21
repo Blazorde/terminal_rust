@@ -5,6 +5,13 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- `test` and `[ … ]` are built in (ADR-0016): `-e -f -d -s -r -w -x -L`, `-z -n`,
+  `= == !=`, `-eq -ne -lt -le -gt -ge`, `!`, `-a` and `-o`. Status 0 when true, 1
+  when false without a message, 2 for a mistake. Conditions in `if` and `while`
+  now work on Windows, where there is no `test` program.
+
 ## [1.6.0] - 2026-11-21
 
 ### Added

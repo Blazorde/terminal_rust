@@ -46,8 +46,8 @@ have.
    runs.
 7. **Not included**: `case`, functions, `select`, `break N`, `[[ ]]`, arithmetic
    `for ((...))`, redirections or pipes on a whole compound (`done > file`,
-   `done | cat`), and keywords written inside a word. Use the programs `test` or
-   `[` for tests, where the system has them.
+   `done | cat`), and keywords written inside a word. Conditions use the built-in
+   `test` and `[ ... ]` (files, strings, integers, `!`, `-a`, `-o`; no parentheses).
 
 ## Options considered
 
@@ -69,8 +69,7 @@ have.
 
 - The compound commands have no redirections or pipes of their own, and there are
   no functions or `case`.
-- On Windows there is no `test` program, so conditions are limited to commands
-  that succeed or fail by themselves.
+- `test` has no parentheses and no `-nt`/`-ot`/`-ef` file comparisons.
 - A multi-line block typed interactively is one history entry per line.
 
 ## Validation
