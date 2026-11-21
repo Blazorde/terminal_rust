@@ -249,21 +249,32 @@ impl UserCommandRegistry {
     }
 }
 
-pub fn run_process(
+/// The program and arguments a `process` command starts with `invocation_args`.
+pub fn process_invocation(
     name: &str,
     command: &UserCommandConfig,
     invocation_args: &[String],
-) -> Result<(), String> {
-    let mut process = Command::new(&command.target);
-    shell_env::prepare_child(&mut process);
-    process.args(&command.args);
+) -> Result<(String, Vec<String>), String> {
+    let mut args = command.args.clone();
     if command.append_args {
-        process.args(invocation_args);
+        args.extend_from_slice(invocation_args);
     } else if !invocation_args.is_empty() {
         return Err(format!(
             "{name}: this custom command does not accept arguments"
         ));
     }
+    Ok((command.target.clone(), args))
+}
+
+pub fn run_process(
+    name: &str,
+    command: &UserCommandConfig,
+    invocation_args: &[String],
+) -> Result<(), String> {
+    let (target, args) = process_invocation(name, command, invocation_args)?;
+    let mut process = Command::new(&target);
+    shell_env::prepare_child(&mut process);
+    process.args(&args);
 
     // Inherit the terminal streams: capturing them would give the program no
     // terminal and no stdin, which breaks every interactive tool.

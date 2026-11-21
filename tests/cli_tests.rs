@@ -837,17 +837,233 @@ fn a_failure_stops_an_and_chain_and_runs_an_or_chain() {
 }
 
 #[test]
-fn a_pipe_is_refused_with_a_clear_message() {
-    let directory = TestDirectory::new("pipe refused");
+fn a_background_job_is_still_refused_with_a_clear_message() {
+    let directory = TestDirectory::new("background refused");
 
-    let output = run_interactive(directory.path(), "echo hello | cat\nexit\n");
+    let output = run_interactive(directory.path(), "echo hello &\nexit\n");
 
     assert!(
-        stderr(&output).contains("pipes (|) are not supported yet"),
+        stderr(&output).contains("background jobs (&) are not supported yet"),
         "{}",
         stderr(&output)
     );
     assert!(!stdout(&output).contains("hello"), "{}", stdout(&output));
+}
+
+fn shell_lines(directory: &TestDirectory, lines: &[&str]) -> (String, String) {
+    let mut input = lines.join("\n");
+    input.push_str("\nexit\n");
+    let output = run_interactive(directory.path(), &input);
+    (stdout(&output), stderr(&output))
+}
+
+#[test]
+fn redirections_write_append_and_read_files() {
+    let directory = TestDirectory::new("redirect files");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo first > f.txt",
+            "echo second >> f.txt",
+            "cat f.txt",
+            "echo replaced > f.txt",
+            "cat < f.txt",
+        ],
+    );
+
+    assert!(printed.contains("first\nsecond\n"), "{printed}\n{errors}");
+    assert!(printed.contains("replaced\n"), "{printed}");
+    assert_eq!(
+        fs::read_to_string(directory.path().join("f.txt")).expect("the file should exist"),
+        "replaced\n"
+    );
+}
+
+#[test]
+fn a_redirection_target_can_hold_spaces_and_a_variable() {
+    let directory = TestDirectory::new("redirect target");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "NAME=report",
+            "echo quoted > \"my file.txt\"",
+            "echo variable > $NAME.txt",
+            "cat \"my file.txt\"",
+            "cat report.txt",
+        ],
+    );
+
+    assert!(printed.contains("quoted\n"), "{printed}\n{errors}");
+    assert!(printed.contains("variable\n"), "{printed}\n{errors}");
+}
+
+#[test]
+fn a_built_in_can_feed_another_through_a_pipe() {
+    let directory = TestDirectory::new("builtin pipe");
+
+    let (printed, errors) = shell_lines(&directory, &["echo piped | cat | cat"]);
+
+    assert!(printed.contains("piped\n"), "{printed}\n{errors}");
+}
+
+#[test]
+fn standard_error_can_go_to_a_file_or_join_the_pipe() {
+    let directory = TestDirectory::new("redirect stderr");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "ls missing-entry 2> err.txt",
+            "cat err.txt",
+            "ls missing-entry 2>&1 | cat",
+        ],
+    );
+
+    let logged = fs::read_to_string(directory.path().join("err.txt")).expect("log should exist");
+    assert!(logged.contains("missing-entry"), "{logged}");
+    // The error is in the file and in the pipe, not on the terminal's stderr.
+    assert!(!errors.contains("missing-entry"), "{errors}");
+    assert_eq!(printed.matches("missing-entry").count(), 2, "{printed}");
+}
+
+#[test]
+fn a_missing_input_file_fails_the_stage_without_running_it() {
+    let directory = TestDirectory::new("missing input");
+
+    let (printed, errors) = shell_lines(&directory, &["cat < nowhere.txt", "echo $?"]);
+
+    assert!(errors.contains("cannot open 'nowhere.txt'"), "{errors}");
+    assert!(printed.contains("1\n"), "{printed}");
+}
+
+#[test]
+fn a_pipeline_with_a_syntax_error_runs_nothing() {
+    let directory = TestDirectory::new("pipeline syntax");
+
+    let (printed, errors) = shell_lines(&directory, &["echo before ; echo a |", "echo after > "]);
+
+    assert!(!printed.contains("before"), "{printed}");
+    assert!(errors.contains("expected a command after '|'"), "{errors}");
+    assert!(
+        errors.contains("expected a file name after '>'"),
+        "{errors}"
+    );
+}
+
+#[test]
+fn quoted_operators_are_ordinary_text() {
+    let directory = TestDirectory::new("quoted operators");
+
+    let (printed, _) = shell_lines(&directory, &["echo \"a | b > c\""]);
+
+    assert!(printed.contains("a | b > c\n"), "{printed}");
+    assert!(!directory.path().join("c").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn programs_are_connected_with_real_pipes() {
+    let directory = TestDirectory::new("program pipes");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo hello | tr a-z A-Z",
+            "printf 'b\\na\\nc\\n' | sort | head -n 2",
+            // Bounded on purpose: an endless producer would fill the memory of
+            // the test if the pipe were not wired.
+            "seq 1 1000 | head -n 2",
+        ],
+    );
+
+    assert!(printed.contains("HELLO\n"), "{printed}\n{errors}");
+    assert!(printed.contains("a\nb\n"), "{printed}\n{errors}");
+    assert!(!printed.contains("c\n"), "{printed}");
+    assert!(printed.contains("1\n2\n"), "{printed}");
+    assert!(!printed.contains("3\n"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_program_can_read_a_file_and_write_two_streams() {
+    let directory = TestDirectory::new("program redirects");
+    fs::write(directory.path().join("names.txt"), "b\na\n").expect("input should be written");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sort < names.txt > sorted.txt",
+            "cat sorted.txt",
+            "sh -c 'echo out; echo err >&2' > both.txt 2>&1",
+            "cat both.txt",
+            "sh -c 'echo only-err >&2' 2> e.txt",
+            "cat e.txt",
+        ],
+    );
+
+    assert!(printed.contains("a\nb\n"), "{printed}\n{errors}");
+    assert!(printed.contains("out\nerr\n"), "{printed}\n{errors}");
+    assert!(printed.contains("only-err\n"), "{printed}\n{errors}");
+    assert!(!errors.contains("only-err"), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn the_status_of_a_pipeline_is_the_status_of_its_last_stage() {
+    let directory = TestDirectory::new("pipeline status");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sh -c 'exit 3' | cat",
+            "echo first=$?",
+            "echo x | sh -c 'exit 4'",
+            "echo second=$?",
+            // Two programs: only the last one decides.
+            "sh -c 'exit 3' | sh -c 'cat > /dev/null'",
+            "echo third=$?",
+        ],
+    );
+
+    assert!(printed.contains("first=0\n"), "{printed}\n{errors}");
+    assert!(printed.contains("second=1\n"), "{printed}\n{errors}");
+    assert!(printed.contains("third=0\n"), "{printed}\n{errors}");
+    assert!(errors.contains("exited with status 4"), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_missing_program_in_a_pipeline_fails_only_its_own_stage() {
+    let directory = TestDirectory::new("missing program");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["terminal-rust-no-such-program | cat", "echo still-here"],
+    );
+
+    assert!(
+        errors.contains("unknown command: terminal-rust-no-such-program"),
+        "{errors}"
+    );
+    assert!(printed.contains("still-here\n"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn output_stays_in_order_around_a_pipeline() {
+    let directory = TestDirectory::new("pipeline order");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["echo one", "echo two | tr a-z A-Z", "echo three"],
+    );
+
+    let one = printed.find("one").expect("first line");
+    let two = printed.find("TWO").expect("second line");
+    let three = printed.find("three").expect("third line");
+    assert!(one < two && two < three, "{printed}\n{errors}");
 }
 
 /// Run the interactive shell on a piped stdin and give up after `limit`, so a

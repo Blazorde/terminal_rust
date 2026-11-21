@@ -17,6 +17,7 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0008](0008-external-programs.md) | Accepted | Run external programs from the shell |
 | [0009](0009-shell-variables.md) | Accepted | Shell variables, expansion, `export` and `unset` |
 | [0010](0010-command-chaining.md) | Accepted | Command chaining with `;`, `&&` and `||` |
+| [0011](0011-pipelines-and-redirections.md) | Accepted | Pipelines and redirections |
 
 ## Lifecycle
 
