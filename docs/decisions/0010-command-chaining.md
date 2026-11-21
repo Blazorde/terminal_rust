@@ -58,7 +58,8 @@ misleading result.
 
 - No pipes, redirections or background jobs yet, so many one-liners still need
   another shell.
-- No grouping with parentheses or braces, and no `!` negation.
+- No grouping with parentheses or braces, and no `!` negation. Loops and
+  conditions were added by [ADR-0016](0016-control-flow.md).
 - Splitting happens before expansion, so a variable cannot contain an operator.
 
 ## Validation
