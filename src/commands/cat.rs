@@ -29,6 +29,35 @@ pub fn cat(target: Option<&str>) -> Result<String, CatError> {
         .map_err(|source| CatError::ReadFailed { path, source })
 }
 
+/// What `cat` prints for `targets` and the failures, in the order of the files.
+/// With no target it copies the input of the pipeline, and `-` stands for that
+/// input too. Every file is tried: a missing one does not hide the others.
+pub fn cat_all(targets: &[String]) -> (String, Vec<CatError>) {
+    if targets.is_empty() {
+        return match cat(None) {
+            Ok(content) => (content, Vec::new()),
+            Err(error) => (String::new(), vec![error]),
+        };
+    }
+    let mut output = String::new();
+    let mut errors = Vec::new();
+    // The input of a pipeline can only be read once.
+    let mut input = pipe_input::take();
+    for target in targets {
+        if target == "-" {
+            if let Some(bytes) = input.take() {
+                output.push_str(&String::from_utf8_lossy(&bytes));
+            }
+            continue;
+        }
+        match cat(Some(target)) {
+            Ok(content) => output.push_str(&content),
+            Err(error) => errors.push(error),
+        }
+    }
+    (output, errors)
+}
+
 fn resolve_target(target: Option<&str>) -> Result<PathBuf, CatError> {
     let target = trimmed_arg(target).ok_or(CatError::MissingFileName)?;
 
@@ -78,6 +107,48 @@ mod tests {
         pipe_input::provide(Some(Vec::new()));
 
         assert_eq!(cat(None).as_deref().ok(), Some(""));
+    }
+
+    #[test]
+    fn cat_all_joins_several_files_and_reports_each_missing_one() {
+        let first = temp_path("cat", "first");
+        let second = temp_path("cat", "second");
+        let missing = temp_path("cat", "missing");
+        fs::write(&first, "one\n").expect("fixture");
+        fs::write(&second, "two\n").expect("fixture");
+        let names = |paths: &[&PathBuf]| -> Vec<String> {
+            paths
+                .iter()
+                .map(|path| path.to_str().expect("UTF-8").to_string())
+                .collect()
+        };
+
+        let (content, errors) = cat_all(&names(&[&first, &missing, &second]));
+
+        assert_eq!(content, "one\ntwo\n");
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(matches!(errors[0], CatError::NotFound(_)));
+        fs::remove_file(first).expect("cleanup");
+        fs::remove_file(second).expect("cleanup");
+    }
+
+    #[test]
+    fn a_dash_stands_for_the_pipeline_input_between_files() {
+        let file = temp_path("cat", "dash");
+        fs::write(&file, "file\n").expect("fixture");
+        pipe_input::provide(Some(b"piped\n".to_vec()));
+
+        let (content, errors) = cat_all(&[
+            "-".to_string(),
+            file.to_str().expect("UTF-8").to_string(),
+            "-".to_string(),
+        ]);
+
+        // The input is read once: the second dash has nothing left.
+        assert_eq!(content, "piped\nfile\n");
+        assert!(errors.is_empty());
+        pipe_input::provide(None);
+        fs::remove_file(file).expect("cleanup");
     }
 
     #[test]

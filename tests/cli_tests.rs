@@ -1994,3 +1994,26 @@ fn mkdir_and_touch_take_several_targets_and_report_each_failure() {
     }
     assert!(directory.path().join("deep/er/still").is_dir());
 }
+
+#[test]
+fn cat_prints_every_file_of_a_pattern_and_keeps_going_after_a_missing_one() {
+    let directory = TestDirectory::new("cat several");
+    fs::write(directory.path().join("a.txt"), "alpha\n").expect("fixture");
+    fs::write(directory.path().join("b.txt"), "beta\n").expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "cat *.txt",
+            "cat a.txt nowhere.txt b.txt",
+            "echo from-pipe | cat a.txt - b.txt",
+        ],
+    );
+
+    assert!(printed.contains("alpha\nbeta\n"), "{printed}\n{errors}");
+    assert!(errors.contains("nowhere.txt"), "{errors}");
+    assert!(
+        printed.contains("alpha\nfrom-pipe\nbeta\n"),
+        "{printed}\n{errors}"
+    );
+}
