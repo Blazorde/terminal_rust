@@ -41,8 +41,8 @@ python3 script.py
 
 The program shares the terminal, the environment and the current directory.
 `Ctrl+C` stops the program and returns to the prompt. A built-in command always
-takes precedence over a program of the same name. Pipes, redirections and
-variables are not available yet.
+takes precedence over a program of the same name. See
+[Pipes and redirections](#pipes-and-redirections) and [Variables](#variables).
 
 ## Variables
 
@@ -78,9 +78,44 @@ make || echo "build failed"
 
 `;` always runs the next command, `&&` runs it only if the previous one
 succeeded, and `||` only if it failed. They are evaluated from left to right and
-`exit` stops the line. Quote an operator to use it as text. Pipes (`|`),
-redirections (`<`, `>`) and background jobs (`&`) are not available yet: the
-shell says so instead of passing them to a program.
+`exit` stops the line. Quote an operator to use it as text. Background jobs
+(`&`) are not available yet: the shell says so instead of passing the `&` to a
+program.
+
+## Pipes and redirections
+
+`|` sends the output of one command to the next, and the commands run together:
+
+```text
+ls | grep rs
+cargo test 2>&1 | less
+printf 'b\na\n' | sort | head -n 1
+```
+
+Redirections send a command's input or output to a file:
+
+| Syntax | Meaning |
+| --- | --- |
+| `< file` | read standard input from `file` |
+| `> file` | write standard output to `file` (replaces it) |
+| `>> file` | append standard output to `file` |
+| `2> file`, `2>> file` | the same for standard error |
+| `2>&1` | send standard error where standard output goes |
+| `>&2` | send standard output where standard error goes |
+
+```text
+sort < names.txt > sorted.txt
+cargo build 2> errors.txt
+echo done >> log.txt
+```
+
+The file name is expanded like any argument (`> "my file.txt"`, `> $HOME/out`).
+The status of a pipeline is the status of its last command. Built-in commands
+work in a pipeline too: `ls | grep txt`, `echo hi > file`, `echo hi | cat`.
+`cat` without a file copies its input; other built-in commands ignore theirs.
+Unlike other shells, a built-in such as `cd` or `export` inside a pipeline takes
+effect in the shell itself. Here-documents (`<<`), file descriptors above 2 and
+background jobs are not available.
 
 ## Pasting several lines
 
