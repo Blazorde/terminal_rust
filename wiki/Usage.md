@@ -289,6 +289,26 @@ npm run dev` or `[1]+  Exit 3  ...`. A job is one command or one pipeline: `a &&
 b &` is rejected. Programs keep running if you leave the shell. There is no
 `Ctrl+Z` and no `bg`: an interactive program has to run in the foreground.
 
+## History
+
+`history` lists the lines you typed, numbered; `history 10` shows the last ten.
+At the prompt, a few references stand for earlier lines:
+
+| Type | It becomes |
+| --- | --- |
+| `!!` | the previous line (`sudo !!`) |
+| `!$` | the last word of the previous line (`mkdir -p a/b` then `cd !$`) |
+| `!^` | the first argument of the previous line |
+| `!5`, `!-2` | line number 5, or the second line back |
+| `!git` | the most recent line that starts with `git` |
+
+The line that runs is shown first and is recorded as expanded. A line that does
+not exist (`!99`) prints `event not found` and nothing runs. A `!` is left alone
+inside quotes, after a backslash or `$`, at the end of a line and before a blank,
+`=` or `(`, so `echo hi!`, `[ ! -f x ]` and `a != b` keep working. References
+only apply when you type at the prompt: scripts and piped input never expand
+them. `!!:1`, `^a^b`, `!?text?` and `history -c` are not available.
+
 ## Running a file and reading input
 
 `source file` (or `. file`) runs the commands of a file in the current shell, so

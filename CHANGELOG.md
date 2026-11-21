@@ -7,6 +7,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- History: `history [N]` lists the lines typed at the prompt, and `!!`, `!$`, `!^`,
+  `!N`, `!-N` and `!prefix` stand for earlier lines (ADR-0018). The expanded line
+  is shown and recorded; a missing event runs nothing.
 - `source file` and `. file` run a file in the current shell (any file name, stops
   at the first error and names the line); `read [-r] [-p prompt] [name...]` reads
   a line from a pipe, a redirection or the terminal into variables.

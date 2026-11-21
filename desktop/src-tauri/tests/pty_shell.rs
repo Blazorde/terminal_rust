@@ -625,6 +625,117 @@ fn lines_pasted_in_one_write_all_run_in_order() {
     assert!(status.success(), "shell should exit cleanly");
 }
 
+// `!!`, `!$` and `!prefix` stand for earlier lines of the prompt: the expanded
+// line runs and is recorded, and a missing event runs nothing.
+#[cfg(unix)]
+#[test]
+fn history_references_expand_at_the_prompt() {
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows: 24,
+            cols: 100,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .expect("native PTY should open");
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .expect("PTY output should be readable");
+    let mut writer = pair
+        .master
+        .take_writer()
+        .expect("PTY input should be writable");
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut buffer = [0; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(length) => {
+                    if sender.send(buffer[..length].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    isolate(&mut command);
+    command.arg("--pty-shell");
+    command.env("TERMINAL_RUST_GUI", "1");
+    command.env("TERM", "xterm-256color");
+    let mut child = pair
+        .slave
+        .spawn_command(command)
+        .expect("desktop shell mode should start");
+    drop(pair.slave);
+
+    let mut output = Vec::new();
+    let mut cursor_answered = false;
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        1,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+
+    // A command's output starts a line; its typed echo does not.
+    let mut type_line = |line: &str, needle: &str, occurrences: usize, output: &mut Vec<u8>| {
+        writer
+            .write_all(format!("{line}\r").as_bytes())
+            .and_then(|()| writer.flush())
+            .expect("a line should reach the PTY");
+        wait_for_output_occurrences(
+            &receiver,
+            output,
+            needle,
+            occurrences,
+            writer.as_mut(),
+            &mut cursor_answered,
+        );
+    };
+    type_line("echo first-line", "\r\nfirst-line\r\n", 1, &mut output);
+    type_line("!!", "\r\nfirst-line\r\n", 2, &mut output);
+    type_line("echo a b zed", "\r\na b zed\r\n", 1, &mut output);
+    type_line("echo !$", "\r\nzed\r\n", 1, &mut output);
+    type_line("!nothing", "!nothing: event not found", 1, &mut output);
+    type_line("echo after-error", "\r\nafter-error\r\n", 1, &mut output);
+    type_line("history", "    4  echo after-error\r\n", 1, &mut output);
+
+    let text = String::from_utf8_lossy(&output).into_owned();
+    // The expanded line is what is recorded; a repeat and a missing event are not.
+    for recorded in [
+        "    1  echo first-line",
+        "    2  echo a b zed",
+        "    3  echo zed",
+    ] {
+        assert!(text.contains(recorded), "{recorded:?} in {text}");
+    }
+    assert!(!text.contains("    5  echo after-error"), "{text}");
+    assert!(
+        !text.contains("\r\nnothing"),
+        "a missing event must run nothing: {text}"
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut next_exit = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("shell status should be readable") {
+            break status;
+        }
+        assert!(Instant::now() < deadline, "shell did not exit: {text}");
+        if Instant::now() >= next_exit {
+            let _ = writer.write_all(b"exit\r").and_then(|()| writer.flush());
+            next_exit = Instant::now() + Duration::from_millis(500);
+        }
+        thread::sleep(Duration::from_millis(20));
+    };
+    assert!(status.success(), "shell should exit cleanly");
+}
+
 // While a program runs the terminal is in cooked mode and turns Enter into a
 // line feed, so input typed ahead reaches the line editor as Ctrl+J. It must
 // still accept the line: a binding that inserted a newline instead left the

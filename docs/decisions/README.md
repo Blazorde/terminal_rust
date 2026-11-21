@@ -24,6 +24,7 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0015](0015-brace-expansion.md) | Accepted | Brace expansion `{a,b}` and `{1..5}` |
 | [0016](0016-control-flow.md) | Accepted | Control flow: `for`, `while`, `until`, `if`, `break`, `continue` |
 | [0017](0017-arithmetic-expansion.md) | Accepted | Arithmetic expansion: `$((...))` |
+| [0018](0018-history-expansion.md) | Accepted | History expansion: `!!`, `!$`, `!N`, `!prefix` and `history` |
 
 ## Lifecycle
 
