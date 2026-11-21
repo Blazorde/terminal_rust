@@ -5,6 +5,18 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- Git completion (ADR-0019): `Tab` after `git ` completes the subcommands, and after
+  `checkout`, `switch`, `merge`, `rebase`, `branch`, `diff`, `log`, `push`, `pull`
+  and a few more it completes branches, remote branches and tags, read from the
+  repository files without starting Git.
+
+### Fixed
+
+- File name completion no longer offers hidden entries (`.git/`, `.cache`) unless the
+  name being typed starts with a dot.
+
 ## [1.7.0] - 2026-11-21
 
 ### Added
