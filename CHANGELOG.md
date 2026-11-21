@@ -5,6 +5,15 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- `NAME=value command`: variables set for a single command (and for one stage of
+  a pipeline), restored afterwards.
+- `exit [code]`: the shell leaves with the given code (modulo 256), or with the
+  status of the last command; an invalid code is an error and the shell stays
+  open. The shell also leaves with the status of the last command when its input
+  ends, and `terminal_rust <command>` returns the exact code of the command.
+
 ### Changed
 
 - `$?` is now the exact exit code of the last program (`3` after `exit 3`, `137`

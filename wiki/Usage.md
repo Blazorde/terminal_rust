@@ -64,8 +64,18 @@ unset NAME
 `NAME=value` creates a variable that only the shell sees. `export NAME` (or
 `export NAME=value`) also passes it to the programs you start, and `unset NAME`
 removes it. A variable that is not set expands to nothing, and an expansion is
-never split into several arguments. Setting a variable for a single command
-(`NAME=value command`) is not available yet.
+never split into several arguments. Put `NAME=value` words before a command to
+set variables for that command only (`LANG=C sort names.txt`, `PORT=8080 node
+app.js`): the program sees them, the shell does not keep them, and the previous
+value comes back afterwards.
+
+## Leaving the shell
+
+`exit` closes the shell with the status of the last command. `exit 3` closes it
+with code 3 (the code is taken modulo 256, so `exit -1` is 255), which scripts
+and callers can test. `exit soon` is an error and the shell stays open. When the
+input ends (`Ctrl+D`, the end of a script piped in) the shell also leaves with
+the status of the last command.
 
 ## Chaining commands
 

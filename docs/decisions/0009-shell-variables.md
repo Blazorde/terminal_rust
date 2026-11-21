@@ -65,9 +65,12 @@ process environment.
 - The exported table is global, so unit tests that change it must use names
   unique to the test.
 - No word splitting and no globbing: `echo $LIST` passes one argument.
-- A command that fails inside the shell is always `1`, and `exit N` has no code.
-- `FOO=1 command` (a variable for a single command) is not supported yet. File
-  name patterns were added by [ADR-0012](0012-filename-patterns.md).
+- A command that fails inside the shell is always `1`.
+- `NAME=value command` was added in 1.3.1: the variables are exported for that
+  command only (a program or a pipeline stage) and the previous values are
+  restored. A built-in command sees them through the same table. `exit [code]`
+  leaves with that code, or with the last status. File name patterns were added
+  by [ADR-0012](0012-filename-patterns.md).
 
 ## Validation
 
