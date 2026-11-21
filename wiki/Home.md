@@ -22,5 +22,5 @@ Repository files are the source of truth.
 
 ## Current status
 
-`v1.2.1` is the latest stable release. CI runs on Windows, Linux and macOS for
+`v1.2.2` is the latest stable release. CI runs on Windows, Linux and macOS for
 every change. The macOS bundle still requires validation on Apple hardware.
