@@ -3702,3 +3702,193 @@ fn a_failing_block_gives_its_status_and_errors_reach_the_screen() {
     // A block that could not be written runs nothing.
     assert!(!printed.contains("write-status=0"), "{printed}");
 }
+
+#[test]
+fn a_here_document_gives_its_body_as_input_with_expansions() {
+    let directory = TestDirectory::new("heredoc expand");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "NAME=world",
+            "cat <<EOF",
+            "hello $NAME",
+            "sum=$((1+2)) sub=$(echo inner)",
+            "quote \"x\" and \\$escaped and 'single'",
+            "",
+            "after a blank line",
+            "EOF",
+            "echo after-heredoc=$?",
+            "cat <<EOF > out.txt",
+            "to a file: $NAME",
+            "EOF",
+            "cat out.txt",
+        ],
+    );
+
+    for expected in [
+        "hello world\n",
+        "sum=3 sub=inner\n",
+        "quote \"x\" and $escaped and 'single'\n",
+        "\n\nafter a blank line\n",
+        "after-heredoc=0\n",
+        "to a file: world\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert_eq!(
+        fs::read_to_string(directory.path().join("out.txt")).expect("file"),
+        "to a file: world\n"
+    );
+    assert!(errors.is_empty(), "{errors}");
+}
+
+#[test]
+fn a_quoted_delimiter_keeps_the_body_literal_and_a_dash_removes_tabs() {
+    let directory = TestDirectory::new("heredoc literal");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "NAME=nope",
+            "cat <<'EOF'",
+            "$NAME $(echo no) $((1+1)) \"q\" it's \\n",
+            "EOF",
+            "cat <<\"EOF\"",
+            "double-quoted delimiter: $NAME",
+            "EOF",
+            "cat <<-EOF",
+            "\tstripped $NAME",
+            "\t\tdeeper",
+            "\tEOF",
+            "echo done",
+        ],
+    );
+
+    for expected in [
+        "$NAME $(echo no) $((1+1)) \"q\" it's \\n\n",
+        "double-quoted delimiter: $NAME\n",
+        "stripped nope\ndeeper\n",
+        "done\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+}
+
+#[test]
+fn a_here_document_works_with_pipes_loops_functions_and_here_strings() {
+    let directory = TestDirectory::new("heredoc uses");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "while read a b; do echo \"[$a|$b]\"; done <<EOF",
+            "one two three",
+            "four",
+            "EOF",
+            "wrap() {",
+            "  cat <<EOT",
+            "inside $1",
+            "EOT",
+            "}",
+            "wrap function",
+            "cat <<< \"a here-string\"",
+            "NAME=value",
+            "cat <<< $NAME",
+            "read x y <<< \"p q r\"",
+            "echo x=$x y=$y",
+            "cat <<A | cat",
+            "piped body",
+            "A",
+        ],
+    );
+
+    for expected in [
+        "[one|two three]\n[four|]\n",
+        "inside function\n",
+        "a here-string\n",
+        "value\n",
+        "x=p y=q r\n",
+        "piped body\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(errors.is_empty(), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_here_document_is_the_input_of_a_program_too() {
+    let directory = TestDirectory::new("heredoc program");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "sort <<EOF",
+            "pear",
+            "apple",
+            "fig",
+            "EOF",
+            "sh -c 'cat' <<< from-here-string",
+        ],
+    );
+
+    assert!(
+        printed.contains("apple\nfig\npear\n"),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("from-here-string\n"), "{printed}");
+}
+
+#[test]
+fn a_here_document_in_a_file_keeps_its_blank_lines_and_comments() {
+    let directory = TestDirectory::new("heredoc source");
+    fs::write(
+        directory.path().join("doc.sh"),
+        "# a script\nNAME=file\ncat <<EOF\n  indented $NAME\n\n# not a comment\nEOF\nfor i in 1 2; do\n  cat <<EOF\nloop $i\nEOF\ndone\necho end\n",
+    )
+    .expect("fixture");
+
+    let (printed, errors) = shell_lines(&directory, &["source doc.sh"]);
+
+    for expected in [
+        "  indented file\n\n# not a comment\n",
+        "loop 1\nloop 2\n",
+        "end\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+}
+
+#[test]
+fn a_here_document_that_never_ends_runs_nothing_and_a_bare_operator_is_an_error() {
+    let directory = TestDirectory::new("heredoc errors");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo before",
+            "cat <<",
+            "echo after-bare=$?",
+            "cat <<EOF",
+            "never closed",
+        ],
+    );
+
+    assert!(printed.contains("before\n"), "{printed}");
+    assert!(printed.contains("after-bare=1\n"), "{printed}");
+    assert!(errors.contains("here-document needs its body"), "{errors}");
+    assert!(!printed.contains("never closed"), "{printed}");
+}

@@ -532,6 +532,9 @@ pub(crate) fn scan_substitution(
 pub enum Redirect {
     /// `< file`
     Stdin(String),
+    /// `<<< word`: the word and a newline are the input. A here-document is
+    /// rewritten into one of these.
+    HereString(String),
     /// `> file` or `>> file`
     Stdout { target: String, append: bool },
     /// `2> file` or `2>> file`
@@ -619,6 +622,20 @@ pub fn split_stages(input: &str) -> Result<Vec<Stage>, String> {
                     redirects: std::mem::take(&mut redirects),
                 });
                 position += 1;
+            }
+            (None, '<') if characters.get(position + 1) == Some(&'<') => {
+                if characters.get(position + 2) != Some(&'<') {
+                    return Err(
+                        "syntax error: a here-document needs its body on the following lines"
+                            .to_string(),
+                    );
+                }
+                position += 3;
+                redirects.push(Redirect::HereString(read_target(
+                    &characters,
+                    &mut position,
+                    "<<<",
+                )?));
             }
             (None, '<') => {
                 position += 1;
