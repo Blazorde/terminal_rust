@@ -53,6 +53,9 @@ impl ShellEngine {
     }
 
     pub(crate) fn from_config(config: &AppConfig) -> Result<Self, String> {
+        // The programs the shell starts see where it really is, not where its
+        // parent was.
+        crate::commands::cd::start_in_current_directory();
         let entries = registry::discover_default(&config.plugins.enabled)
             .map_err(|error| format!("cannot discover plugins: {error}"))?;
         Self::from_config_and_entries(config, &entries)

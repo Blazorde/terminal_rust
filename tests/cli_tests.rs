@@ -2707,3 +2707,165 @@ fn read_stores_a_line_from_a_pipe_a_redirection_or_the_next_input_line() {
     );
     assert!(errors.contains("read: unsupported option '-s'"), "{errors}");
 }
+
+/// Run the shell in `directory` with extra environment variables.
+fn shell_lines_with_env(
+    directory: &Path,
+    environment: &[(&str, &str)],
+    lines: &[&str],
+) -> (String, String) {
+    let mut child = shell_command()
+        .current_dir(directory)
+        .env("USER", "terminal-rust-test")
+        .env("USERNAME", "terminal-rust-test")
+        .envs(environment.iter().copied())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the terminal_rust binary should start");
+    let mut input = lines.join("\n");
+    input.push_str("\nexit\n");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin should be piped")
+        .write_all(input.as_bytes())
+        .expect("input should be written");
+    let output = child.wait_with_output().expect("the shell should finish");
+    (stdout(&output), stderr(&output))
+}
+
+/// The directory a printed line names, resolved so that `/var` and `/private/var`
+/// compare equal where the temporary directory is a link.
+fn same_place(printed: &str, expected: &Path) -> bool {
+    fs::canonicalize(printed.trim()).ok() == fs::canonicalize(expected).ok()
+}
+
+#[test]
+fn pwd_is_the_real_directory_even_when_the_parent_left_a_stale_one() {
+    let directory = TestDirectory::new("stale pwd");
+
+    let (printed, errors) = shell_lines_with_env(
+        directory.path(),
+        &[
+            ("PWD", "/terminal-rust/stale/parent/directory"),
+            ("OLDPWD", "/terminal-rust/stale/old"),
+        ],
+        &["echo $PWD", "echo old=[$OLDPWD]"],
+    );
+
+    let first = printed
+        .lines()
+        .find_map(|line| {
+            line.rsplit("> ")
+                .next()
+                .filter(|text| text.starts_with('/'))
+        })
+        .unwrap_or_default();
+    assert!(same_place(first, directory.path()), "{printed}\n{errors}");
+    assert!(printed.contains("old=[]\n"), "{printed}");
+    assert!(!printed.contains("/terminal-rust/stale"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_pwd_that_is_a_link_to_the_directory_is_kept() {
+    let directory = TestDirectory::new("link pwd");
+    let real = directory.path().join("real");
+    let link = directory.path().join("link");
+    fs::create_dir(&real).expect("fixture");
+    std::os::unix::fs::symlink(&real, &link).expect("symlink");
+
+    let (printed, errors) = shell_lines_with_env(
+        &real,
+        &[("PWD", link.to_str().expect("UTF-8"))],
+        &["echo logical=$PWD"],
+    );
+
+    assert!(
+        printed.contains(&format!("logical={}\n", link.display())),
+        "{printed}\n{errors}"
+    );
+}
+
+#[test]
+fn cd_updates_pwd_and_oldpwd_and_cd_dash_says_where_it_went() {
+    let directory = TestDirectory::new("cd tracks");
+    fs::create_dir(directory.path().join("sub")).expect("fixture");
+
+    let (printed, errors) = shell_lines_with_env(
+        directory.path(),
+        &[],
+        &[
+            "echo start=$PWD",
+            "cd sub",
+            "echo here=$PWD old=$OLDPWD",
+            "cd -",
+            "echo back=$PWD old=$OLDPWD",
+            "cd nowhere-at-all",
+            "echo kept=$PWD",
+        ],
+    );
+
+    let value = |label: &str| -> Vec<String> {
+        printed
+            .lines()
+            .filter_map(|line| line.rsplit("> ").next())
+            .filter_map(|text| text.strip_prefix(label))
+            .map(str::to_string)
+            .collect()
+    };
+    let start = value("start=").pop().expect("start printed");
+    assert!(same_place(&start, directory.path()), "{printed}\n{errors}");
+    let here = value("here=").pop().expect("here printed");
+    let (here_pwd, here_old) = here.split_once(" old=").expect("both printed");
+    assert!(
+        same_place(here_pwd, &directory.path().join("sub")),
+        "{printed}"
+    );
+    assert!(same_place(here_old, directory.path()), "{printed}");
+    // `cd -` prints the directory it went to, on a line of its own.
+    assert!(
+        printed
+            .lines()
+            .filter_map(|line| line.rsplit("> ").next())
+            .any(|text| text.starts_with('/') && same_place(text, directory.path())),
+        "{printed}"
+    );
+    let back = value("back=").pop().expect("back printed");
+    let (back_pwd, back_old) = back.split_once(" old=").expect("both printed");
+    assert!(same_place(back_pwd, directory.path()), "{printed}");
+    assert!(
+        same_place(back_old, &directory.path().join("sub")),
+        "{printed}"
+    );
+    // A failed `cd` changes nothing.
+    let kept = value("kept=").pop().expect("kept printed");
+    assert!(same_place(&kept, directory.path()), "{printed}");
+    assert!(errors.contains("nowhere-at-all"), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_program_started_after_cd_sees_the_new_pwd() {
+    let directory = TestDirectory::new("cd program");
+    fs::create_dir(directory.path().join("sub")).expect("fixture");
+
+    let (printed, errors) = shell_lines_with_env(
+        directory.path(),
+        &[],
+        &["cd sub", "env | grep -E '^(PWD|OLDPWD)='"],
+    );
+
+    let pwd = printed
+        .lines()
+        .filter_map(|line| line.rsplit("> ").next())
+        .find_map(|text| text.strip_prefix("PWD="))
+        .unwrap_or_default();
+    assert!(
+        same_place(pwd, &directory.path().join("sub")),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("OLDPWD="), "{printed}");
+}
