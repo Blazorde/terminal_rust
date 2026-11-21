@@ -492,6 +492,8 @@ enum StageKind {
     InProcess,
     /// As a program, with its streams connected to the neighbours.
     Program { program: String, args: Vec<String> },
+    /// The native Git, which has its own environment (the bundled runtime).
+    Git { args: Vec<String> },
 }
 
 fn classify(args: &[String], state: &ShellState) -> Result<StageKind, String> {
@@ -502,6 +504,12 @@ fn classify(args: &[String], state: &ShellState) -> Result<StageKind, String> {
         && split_assignment(single).is_some()
     {
         return Ok(StageKind::InProcess);
+    }
+    // Git runs as a program, so its output can go through a pipe or a redirection.
+    if name == "git" {
+        return Ok(StageKind::Git {
+            args: args[1..].to_vec(),
+        });
     }
     if find_command(name).is_some() {
         return Ok(StageKind::InProcess);

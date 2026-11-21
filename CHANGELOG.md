@@ -15,6 +15,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Fixed
 
+- `git` in a pipeline or with a redirection: its output went straight to the
+  terminal, so `git log | head` or `git diff > patch.txt` did not work. Git now
+  runs as a program whose streams are connected like any other.
 - Desktop: two copies of the application starting together could delete and
   extract the bundled Git runtime at the same time and leave a broken one. The
   installation now takes a lock file shared by all processes (released when the
