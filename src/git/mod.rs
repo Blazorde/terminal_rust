@@ -1,8 +1,13 @@
 use std::ffi::{OsStr, OsString};
 use std::fmt;
-use std::io;
+use std::io::{self, Read};
 use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
+
+/// How long the prompt waits for `git status` before leaving the segment out.
+const PROMPT_GIT_TIMEOUT: Duration = Duration::from_millis(1500);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PromptGitInfo {
@@ -107,7 +112,7 @@ fn is_inside_work_tree_with_program(path: &Path, program: impl AsRef<OsStr>) -> 
 fn prompt_info_with_program(path: &Path, program: impl AsRef<OsStr>) -> Option<PromptGitInfo> {
     let mut command = Command::new(program);
     apply_git_environment(&mut command);
-    let output = command
+    command
         .arg("--no-optional-locks")
         .arg("-C")
         .arg(path)
@@ -116,16 +121,50 @@ fn prompt_info_with_program(path: &Path, program: impl AsRef<OsStr>) -> Option<P
             "--porcelain=v2",
             "--branch",
             "--untracked-files=normal",
-        ])
+        ]);
+    let stdout = output_within(&mut command, PROMPT_GIT_TIMEOUT)?;
+    parse_prompt_status(&stdout)
+}
+
+/// Run `command` and return its standard output if it succeeds before `timeout`.
+///
+/// `git status` can take many seconds in a huge repository or on a slow network
+/// disk, and the prompt waits for it. Past the deadline the process is killed and
+/// the segment is left out rather than freezing every prompt.
+fn output_within(command: &mut Command, timeout: Duration) -> Option<Vec<u8>> {
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .output()
+        .spawn()
         .ok()?;
+    let mut stdout = child.stdout.take()?;
+    // Read on a thread so a full pipe cannot block the child while we wait.
+    let reader = thread::spawn(move || {
+        let mut buffer = Vec::new();
+        stdout.read_to_end(&mut buffer).ok().map(|_| buffer)
+    });
 
-    if !output.status.success() {
-        return None;
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return if status.success() {
+                    reader.join().ok().flatten()
+                } else {
+                    None
+                };
+            }
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(5)),
+            // Timed out, or the status cannot be read. The reader thread ends once
+            // the pipe closes; it is not joined, a grandchild may still hold it.
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
     }
-
-    parse_prompt_status(&output.stdout)
 }
 
 fn apply_git_environment(command: &mut Command) {
@@ -182,6 +221,63 @@ mod tests {
     use std::fs;
 
     use crate::utils::path::temp_path;
+
+    #[cfg(unix)]
+    fn shell(script: &str) -> Command {
+        let mut command = Command::new("sh");
+        command.args(["-c", script]);
+        command
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn output_within_returns_the_output_of_a_quick_command() {
+        let output = output_within(&mut shell("printf hello"), Duration::from_secs(10));
+
+        assert_eq!(output, Some(b"hello".to_vec()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn output_within_gives_up_on_a_command_that_runs_too_long() {
+        let started = Instant::now();
+
+        let output = output_within(&mut shell("sleep 30"), Duration::from_millis(200));
+
+        assert_eq!(output, None);
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the wait must stop at the deadline, took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn output_within_ignores_a_failing_command() {
+        let output = output_within(&mut shell("echo partial; exit 1"), Duration::from_secs(10));
+
+        assert_eq!(output, None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn output_within_does_not_block_on_output_larger_than_the_pipe() {
+        let output = output_within(
+            &mut shell("head -c 300000 /dev/zero"),
+            Duration::from_secs(10),
+        )
+        .expect("a large output should be collected");
+
+        assert_eq!(output.len(), 300_000);
+    }
+
+    #[test]
+    fn output_within_reports_a_missing_program() {
+        let mut command = Command::new("terminal-rust-no-such-program");
+
+        assert_eq!(output_within(&mut command, Duration::from_secs(1)), None);
+    }
 
     #[test]
     fn recognizes_git_inside_work_tree_output() {
