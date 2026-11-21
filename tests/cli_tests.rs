@@ -3892,3 +3892,31 @@ fn a_here_document_that_never_ends_runs_nothing_and_a_bare_operator_is_an_error(
     assert!(errors.contains("here-document needs its body"), "{errors}");
     assert!(!printed.contains("never closed"), "{printed}");
 }
+
+#[test]
+fn an_alias_defined_in_a_file_is_silent_and_one_typed_at_the_prompt_confirms() {
+    let directory = TestDirectory::new("alias quiet");
+    fs::write(
+        directory.path().join("aliases.sh"),
+        "alias from-file=\"echo from-file\"\nalias second-from-file=pwd\n",
+    )
+    .expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &["source aliases.sh", "from-file", "alias typed=pwd"],
+    );
+
+    assert!(
+        printed.contains("from-file\n"),
+        "the aliases work: {printed}\n{errors}"
+    );
+    assert!(
+        !printed.contains("Alias 'from-file'") && !printed.contains("Alias 'second-from-file'"),
+        "a file says nothing: {printed}"
+    );
+    assert!(
+        printed.contains("Alias 'typed' saved for this session."),
+        "{printed}"
+    );
+}
