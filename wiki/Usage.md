@@ -240,6 +240,9 @@ Desktop sessions are isolated per tab. Use `Ctrl+Shift+T` (`Command+T` on macOS)
 to create a tab, `Ctrl+Shift+W` (`Command+W`) to close it, `Ctrl+Tab` to switch
 tabs and `Ctrl+,` (`Command+,`) to open settings. Plain `Ctrl+T` and `Ctrl+W`
 are left to the shell, where they swap two characters and delete a word.
+Select text with the mouse and press `Ctrl+Shift+C` (or `Ctrl+Insert`, or
+`Command+C` on macOS) to copy it; `Ctrl+C` is always the interrupt key. Paste
+with the usual shortcut of your system.
 
 More detail: [dashboard](https://github.com/Blazorde/terminal_rust/blob/main/docs/dashboard.md)
 and [completion](https://github.com/Blazorde/terminal_rust/blob/main/docs/completion.md).
