@@ -2598,3 +2598,112 @@ fn arithmetic_expansion_computes_in_lines_loops_and_assignments() {
         "{errors}"
     );
 }
+
+#[test]
+fn source_runs_a_file_in_the_current_shell_and_reports_its_errors() {
+    let directory = TestDirectory::new("source file");
+    fs::write(
+        directory.path().join("lib.sh"),
+        "# a helper file\nTR_GREETING=hello\necho from-file $TR_GREETING\nfor n in 1 2; do\n  echo n=$n\ndone\n",
+    )
+    .expect("fixture");
+    fs::write(
+        directory.path().join("broken.sh"),
+        "echo before-error\nterminal-rust-no-such-command\necho after-error\n",
+    )
+    .expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "source lib.sh",
+            "echo kept=$TR_GREETING",
+            ". ./lib.sh",
+            "source broken.sh",
+            "source missing.sh",
+            "source lib.sh extra",
+            "source",
+        ],
+    );
+
+    assert!(
+        printed.matches("from-file hello\n").count() == 2,
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("n=1\nn=2\n"), "{printed}");
+    assert!(
+        printed.contains("kept=hello\n"),
+        "variables stay in the shell: {printed}"
+    );
+    assert!(printed.contains("before-error\n"), "{printed}");
+    assert!(
+        !printed.contains("after-error"),
+        "an error stops the file: {printed}"
+    );
+    assert!(errors.contains("source: broken.sh:2:"), "{errors}");
+    assert!(errors.contains("source: missing.sh:"), "{errors}");
+    assert!(
+        errors.contains("arguments for the file are not supported"),
+        "{errors}"
+    );
+    assert!(errors.contains("source: expected a file"), "{errors}");
+}
+
+#[test]
+fn read_stores_a_line_from_a_pipe_a_redirection_or_the_next_input_line() {
+    let directory = TestDirectory::new("read line");
+    fs::write(directory.path().join("empty.txt"), "").expect("fixture");
+    fs::write(directory.path().join("one.txt"), "alpha beta gamma\n").expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo hello big world | read first rest",
+            "echo first=$first rest=$rest",
+            "read a b < one.txt",
+            "echo a=$a b=$b",
+            "read single < one.txt",
+            "echo single=$single",
+            "read < one.txt",
+            "echo reply=$REPLY",
+            "gone=old",
+            "read gone < empty.txt",
+            "echo eof-status=$? gone=[$gone]",
+            "echo piped | read -p 'HIDDEN-PROMPT ' quiet",
+            "echo quiet=$quiet",
+            "read -p 'Name: ' who",
+            "Alice",
+            "echo typed=$who",
+            "read bad-name < one.txt",
+            "read -s x",
+        ],
+    );
+
+    for expected in [
+        "first=hello rest=big world\n",
+        "a=alpha b=beta gamma\n",
+        "single=alpha beta gamma\n",
+        "reply=alpha beta gamma\n",
+        "eof-status=1 gone=[]\n",
+        "typed=Alice\n",
+        "quiet=piped\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(
+        errors.contains("Name: "),
+        "the prompt goes to the error stream: {errors}"
+    );
+    assert!(
+        !errors.contains("HIDDEN-PROMPT"),
+        "a pipe does not see the prompt: {errors}"
+    );
+    assert!(
+        errors.contains("read: not a valid name: bad-name"),
+        "{errors}"
+    );
+    assert!(errors.contains("read: unsupported option '-s'"), "{errors}");
+}

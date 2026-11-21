@@ -18,6 +18,7 @@ pub mod nproc;
 pub mod plugins;
 pub mod printenv;
 pub mod pwd;
+pub mod read_command;
 pub mod rm;
 pub mod test_command;
 pub mod theme;
