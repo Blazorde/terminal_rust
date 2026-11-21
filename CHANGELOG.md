@@ -5,6 +5,14 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Fixed
+
+- A block that follows `&&` or `||` ran its first command with the connector of the
+  block itself: `cmd || { echo failed; }` printed nothing, `false || if false; then …`
+  took its branch, and `false || while …` never ended. The first command of a block
+  (`{`, `if`, `while`, `until`, `case`, a function body) now runs unconditionally once the
+  block is entered.
+
 ## [1.8.0] - 2026-11-21
 
 ### Added

@@ -3444,3 +3444,50 @@ fn a_function_keeps_the_exact_exit_code_of_its_last_program() {
         );
     }
 }
+
+#[test]
+fn a_block_after_and_or_runs_its_first_command_whatever_led_to_it() {
+    let directory = TestDirectory::new("block connector");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "false || { echo or-group; }",
+            "true && { echo and-group; }",
+            "true || { echo NEVER-group; }",
+            "false && { echo NEVER-and-group; }",
+            "false || if true; then echo or-if; fi",
+            "false || if false; then echo WRONG-if; else echo or-else; fi",
+            "true && if false; then echo WRONG-and-if; elif true; then echo and-elif; fi",
+            "false || while false; do echo WRONG-while; done",
+            "echo after-while=$?",
+            "false || case x in x) echo or-case;; esac",
+            "false || for i in 1 2; do echo or-for$i; done",
+            "false || f() { echo or-function; }",
+            "f",
+            "cmd-that-fails() { false; }",
+            "cmd-that-fails || { echo recovered; echo second-line; }",
+        ],
+    );
+
+    for expected in [
+        "or-group\n",
+        "and-group\n",
+        "or-if\n",
+        "or-else\n",
+        "and-elif\n",
+        "after-while=0\n",
+        "or-case\n",
+        "or-for1\nor-for2\n",
+        "or-function\n",
+        "recovered\nsecond-line\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    for unexpected in ["NEVER", "WRONG"] {
+        assert!(!printed.contains(unexpected), "{unexpected:?} in {printed}");
+    }
+}
