@@ -1300,7 +1300,7 @@ mod tests {
     /// whatever the mix of quotes, loops, substitutions and redirections.
     #[test]
     fn random_lines_of_harmless_commands_never_panic_or_hang() {
-        use std::sync::mpsc;
+        use std::sync::mpsc::{self, RecvTimeoutError};
         use std::time::Duration;
 
         const PIECES: [&str; 38] = [
@@ -1343,9 +1343,9 @@ mod tests {
             "$((",
             "))",
         ];
-        let _guard = crate::test_support::cwd_lock()
+        let guard = crate::test_support::cwd_lock()
             .lock()
-            .expect("cwd lock is poisoned");
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = std::env::temp_dir().join(format!(
             "terminal-rust-fuzz-{}",
             SystemTime::now()
@@ -1379,19 +1379,29 @@ mod tests {
         });
 
         let mut last = String::new();
-        let mut finished = false;
-        while let Ok(line) = receiver.recv_timeout(Duration::from_secs(20)) {
-            last = line;
+        let mut hung = false;
+        loop {
+            match receiver.recv_timeout(Duration::from_secs(20)) {
+                Ok(line) => last = line,
+                Err(RecvTimeoutError::Timeout) => {
+                    hung = true;
+                    break;
+                }
+                // The sender is gone because the worker ended or panicked: it
+                // may not be finished a moment later, so wait for it.
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
         }
-        // The sender is gone when the worker ended; a worker still running means
-        // it hung on `last`.
-        if worker.is_finished() {
-            finished = true;
-        }
-        let result = if finished { worker.join() } else { Ok(()) };
+        let result = (!hung).then(|| worker.join());
+        // Leave the fixture and release the lock before any assertion: a failure
+        // while holding it would poison it and fail every test that uses it.
         std::env::set_current_dir(original).expect("restore cwd");
         let _ = std::fs::remove_dir_all(&root);
-        assert!(finished, "the shell hung on {last:?}");
-        assert!(result.is_ok(), "the shell panicked on {last:?}");
+        drop(guard);
+        assert!(!hung, "the shell hung on {last:?}");
+        assert!(
+            result.is_some_and(|result| result.is_ok()),
+            "the shell panicked on {last:?}"
+        );
     }
 }
