@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::app::help;
-use crate::app::parser::{Connector, Stage, parse_args, split_chain, split_stages};
+use crate::app::parser::{Stage, parse_args, split_chain, split_stages};
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, external, fastfetch,
     git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, rm, theme, touch, uptime,
@@ -17,6 +17,7 @@ use crate::utils::shell_env;
 
 mod aliases;
 mod braces;
+mod flow;
 mod jobs;
 mod pipeline;
 mod scripts;
@@ -34,6 +35,9 @@ pub struct ShellState {
     /// The code the shell leaves with, once `exit` has run.
     exit_code: Option<u8>,
     jobs: jobs::Jobs,
+    /// How many loops are running, and what `break` or `continue` asked for.
+    loop_depth: u32,
+    loop_signal: Option<flow::LoopSignal>,
 }
 
 impl ShellState {
@@ -52,6 +56,8 @@ impl ShellState {
             last_status: 0,
             exit_code: None,
             jobs: jobs::Jobs::default(),
+            loop_depth: 0,
+            loop_signal: None,
         }
     }
 
@@ -335,6 +341,34 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_neovim,
     },
     CommandSpec {
+        name: "true",
+        usage: "true",
+        summary: "do nothing, successfully",
+        max_args: None,
+        handler: run_true,
+    },
+    CommandSpec {
+        name: "false",
+        usage: "false",
+        summary: "do nothing, unsuccessfully",
+        max_args: None,
+        handler: run_false,
+    },
+    CommandSpec {
+        name: "break",
+        usage: "break",
+        summary: "leave the innermost for, while or until loop",
+        max_args: Some(0),
+        handler: run_break,
+    },
+    CommandSpec {
+        name: "continue",
+        usage: "continue",
+        summary: "skip to the next turn of the innermost loop",
+        max_args: Some(0),
+        handler: run_continue,
+    },
+    CommandSpec {
         name: "jobs",
         usage: "jobs",
         summary: "list the background jobs",
@@ -427,39 +461,26 @@ pub(crate) fn run_line(input: &str, state: &mut ShellState) -> CommandResult {
         Ok(segments) => segments,
         Err(error) => return syntax_error(error, state),
     };
-    // A syntax error anywhere rejects the whole line before anything runs.
-    let mut lines = Vec::with_capacity(segments.len());
-    for segment in segments {
-        match split_stages(&segment.text) {
-            Ok(stages) => lines.push((segment, stages)),
-            Err(error) => return syntax_error(error, state),
-        }
-    }
+    // A syntax error anywhere, in a compound command too, rejects the whole
+    // input before anything runs.
+    let nodes = match flow::parse(segments) {
+        Ok(nodes) => nodes,
+        Err(error) => return syntax_error(error, state),
+    };
+    flow::run_nodes(&nodes, state)
+}
 
-    let mut last = CommandResult::Continue;
-    for (segment, stages) in lines {
-        let failed = matches!(last, CommandResult::Error(_));
-        let run = match segment.connector {
-            Connector::Then => true,
-            Connector::And => !failed,
-            Connector::Or => failed,
-        };
-        if !run {
-            continue;
-        }
-        if let CommandResult::Error(error) = &last
-            && !error.is_empty()
-        {
-            let _ = render::stderr_line(error);
-        }
+/// Whether `input` opens a `for`, `while`, `until` or `if` that is not closed:
+/// the front ends read the next line before running it.
+pub(crate) fn input_is_incomplete(input: &str) -> bool {
+    flow::is_incomplete(input)
+}
 
-        last = run_segment(&segment.text, &stages, segment.background, state);
-        state.record_status(matches!(last, CommandResult::Error(_)));
-        if last == CommandResult::Exit {
-            break;
-        }
-    }
-    last
+/// The words after `in` of a `for`, expanded like the arguments of a command.
+fn expand_words(text: &str, state: &mut ShellState) -> Result<Vec<String>, String> {
+    let braced = braces::expand(text)?;
+    let expanded = substitution::expand(&braced, state)?;
+    parse_args(&expanded, &|name| state.variable(name))
 }
 
 /// A line that cannot be parsed fails without running anything.
@@ -905,6 +926,31 @@ fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
     map_result(help::print_help(command_help()), |error| {
         format!("help: {error}")
     })
+}
+
+fn run_true(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    CommandResult::Continue
+}
+
+/// An empty message: the command failed, and there is nothing to report.
+fn run_false(_args: &[String], _state: &mut ShellState) -> CommandResult {
+    CommandResult::Error(String::new())
+}
+
+fn loop_control(name: &str, signal: flow::LoopSignal, state: &mut ShellState) -> CommandResult {
+    if state.loop_depth == 0 {
+        return CommandResult::Error(format!("{name}: only meaningful in a loop"));
+    }
+    state.loop_signal = Some(signal);
+    CommandResult::Continue
+}
+
+fn run_break(_args: &[String], state: &mut ShellState) -> CommandResult {
+    loop_control("break", flow::LoopSignal::Break, state)
+}
+
+fn run_continue(_args: &[String], state: &mut ShellState) -> CommandResult {
+    loop_control("continue", flow::LoopSignal::Continue, state)
 }
 
 fn run_jobs(_args: &[String], state: &mut ShellState) -> CommandResult {

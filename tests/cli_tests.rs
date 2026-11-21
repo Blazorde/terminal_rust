@@ -2017,3 +2017,320 @@ fn cat_prints_every_file_of_a_pattern_and_keeps_going_after_a_missing_one() {
         "{printed}\n{errors}"
     );
 }
+
+#[test]
+fn a_for_loop_runs_once_per_word_pattern_and_substitution() {
+    let directory = TestDirectory::new("flow for");
+    for file in ["a.txt", "b.txt"] {
+        fs::write(directory.path().join(file), "").expect("fixture");
+    }
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "for f in x y z; do echo word $f; done",
+            "for f in *.txt; do echo file $f; done",
+            "for n in {1..3}; do echo n=$n; done",
+            "for w in $(echo p q); do echo sub $w; done",
+            "for f in nothing-here-*; do echo literal $f; done",
+            "for f in; do echo never; done",
+            "echo last=$f",
+        ],
+    );
+
+    assert!(
+        printed.contains("word x\nword y\nword z\n"),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("file a.txt\nfile b.txt\n"), "{printed}");
+    assert!(printed.contains("n=1\nn=2\nn=3\n"), "{printed}");
+    assert!(printed.contains("sub p\nsub q\n"), "{printed}");
+    assert!(printed.contains("literal nothing-here-*\n"), "{printed}");
+    assert!(!printed.contains("never"), "{printed}");
+    // The variable keeps the last value after the loop.
+    assert!(printed.contains("last=nothing-here-*\n"), "{printed}");
+}
+
+#[test]
+fn loops_nest_and_hold_chains_and_pipes() {
+    let directory = TestDirectory::new("flow nest");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "for a in 1 2; do for b in x y; do echo $a$b; done; done",
+            "for w in hi yo; do echo $w | cat && echo ok-$w; done",
+        ],
+    );
+
+    assert!(printed.contains("1x\n1y\n2x\n2y\n"), "{printed}\n{errors}");
+    assert!(printed.contains("hi\nok-hi\nyo\nok-yo\n"), "{printed}");
+}
+
+#[test]
+fn if_picks_the_first_branch_whose_condition_succeeds() {
+    let directory = TestDirectory::new("flow if");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "if true; then echo A; fi",
+            "if false; then echo no; else echo B; fi",
+            "if false; then echo no; elif false; then echo no; elif true; then echo C; else echo no; fi",
+            "if false; then echo no; fi",
+            "echo status=$?",
+            "if true && false; then echo no; else echo D; fi",
+            "if echo cond; then echo E; fi",
+        ],
+    );
+
+    for expected in ["A\n", "B\n", "C\n", "D\n", "cond\nE\n", "status=0\n"] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("no\n"), "{printed}");
+}
+
+#[test]
+fn while_and_until_loop_on_the_status_of_their_condition() {
+    let directory = TestDirectory::new("flow while");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "while test ! -f stop.txt; do echo turn; touch stop.txt; done",
+            "until test -f made.txt; do touch made.txt; echo made; done",
+            "while false; do echo never; done",
+            "echo after=$?",
+        ],
+    );
+
+    assert_eq!(printed.matches("turn\n").count(), 1, "{printed}\n{errors}");
+    assert_eq!(printed.matches("made\n").count(), 1, "{printed}");
+    assert!(!printed.contains("never"), "{printed}");
+    assert!(printed.contains("after=0\n"), "{printed}");
+}
+
+#[test]
+fn break_and_continue_control_the_innermost_loop() {
+    let directory = TestDirectory::new("flow break");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "for n in 1 2 3 4; do if test $n = 2; then continue; fi; if test $n = 4; then break; fi; echo n=$n; done",
+            "for a in 1 2; do for b in x y z; do if test $b = y; then break; fi; echo $a$b; done; done",
+            "break",
+            "continue",
+            "echo still-here",
+        ],
+    );
+
+    assert!(printed.contains("n=1\nn=3\n"), "{printed}\n{errors}");
+    assert!(
+        !printed.contains("n=2") && !printed.contains("n=4"),
+        "{printed}"
+    );
+    assert!(printed.contains("1x\n2x\n"), "{printed}");
+    assert!(
+        !printed.contains("1y") && !printed.contains("1z"),
+        "{printed}"
+    );
+    assert!(
+        errors.contains("break: only meaningful in a loop"),
+        "{errors}"
+    );
+    assert!(
+        errors.contains("continue: only meaningful in a loop"),
+        "{errors}"
+    );
+    assert!(printed.contains("still-here\n"), "{printed}");
+}
+
+#[test]
+fn a_failing_condition_is_quiet_but_a_missing_command_is_reported() {
+    let directory = TestDirectory::new("flow quiet");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "if cat missing-file.txt; then echo no; else echo handled; fi",
+            "if terminal-rust-no-such-program; then echo no; else echo fallback; fi",
+        ],
+    );
+
+    assert!(
+        printed.contains("handled\n") && printed.contains("fallback\n"),
+        "{printed}"
+    );
+    assert!(!errors.contains("missing-file.txt"), "{errors}");
+    assert!(
+        errors.contains("unknown command: terminal-rust-no-such-program"),
+        "{errors}"
+    );
+}
+
+#[test]
+fn the_status_of_a_loop_is_the_one_of_its_last_command() {
+    let directory = TestDirectory::new("flow status");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "for x in 1 2; do echo $x; done && echo chained",
+            "for x in 1 2; do cat nowhere.txt; done || echo recovered",
+            "echo code=$?",
+        ],
+    );
+
+    assert!(printed.contains("1\n2\nchained\n"), "{printed}\n{errors}");
+    assert!(printed.contains("recovered\n"), "{printed}");
+    assert!(errors.matches("nowhere.txt").count() == 2, "{errors}");
+}
+
+#[test]
+fn a_block_typed_over_several_lines_runs_when_it_is_closed() {
+    let directory = TestDirectory::new("flow lines");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "for n in 1 2",
+            "do",
+            "  if test $n = 1",
+            "  then",
+            "    echo one",
+            "  else",
+            "    echo other",
+            "  fi",
+            "done",
+            "echo after",
+        ],
+    );
+
+    assert!(printed.contains("one\nother\n"), "{printed}\n{errors}");
+    assert!(printed.contains("> after\n"), "{printed}");
+}
+
+#[test]
+fn an_unfinished_or_misplaced_block_rejects_the_input_before_running_anything() {
+    let directory = TestDirectory::new("flow syntax");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo first ; for x in a; do echo inside",
+            "done",
+            "echo second",
+        ],
+    );
+
+    // The first two lines are one unfinished block, closed by the stray `done`
+    // on the next line: they run as a whole. A real stray keyword is an error.
+    assert!(
+        printed.contains("first\n") || errors.contains("syntax error"),
+        "{printed}\n{errors}"
+    );
+
+    let (printed, errors) = shell_lines(&directory, &["echo before ; done", "echo ok"]);
+    assert!(!printed.contains("before"), "{printed}");
+    assert!(errors.contains("unexpected token 'done'"), "{errors}");
+    assert!(printed.contains("ok\n"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn exit_inside_a_loop_leaves_the_shell_with_its_code() {
+    let directory = TestDirectory::new("flow exit");
+
+    let output = run_interactive(
+        directory.path(),
+        "for x in 1 2 3; do echo turn $x; exit 3; done\necho unreachable\n",
+    );
+
+    assert_eq!(output.status.code(), Some(3), "{}", stderr(&output));
+    assert!(stdout(&output).contains("turn 1\n"));
+    assert!(!stdout(&output).contains("turn 2") && !stdout(&output).contains("unreachable"));
+}
+
+#[cfg(unix)]
+#[test]
+fn ctrl_c_stops_a_loop_and_the_shell_carries_on() {
+    use std::io::Read;
+    let directory = TestDirectory::new("flow interrupt");
+    let mut child = shell_command()
+        .current_dir(directory.path())
+        .env("USER", "terminal-rust-test")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the terminal_rust binary should start");
+    let mut stdin = child.stdin.take().expect("stdin should be piped");
+    stdin
+        .write_all(b"while true; do echo spinning; sleep 0.1; done\n")
+        .expect("the loop should be sent");
+    stdin.flush().expect("flush");
+    std::thread::sleep(Duration::from_millis(700));
+
+    // The signal goes to the shell only; the loop must notice it by itself.
+    Command::new("kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .expect("kill should run");
+    std::thread::sleep(Duration::from_millis(500));
+    stdin
+        .write_all(b"echo carried-on\nexit\n")
+        .expect("the next lines should be sent");
+    drop(stdin);
+
+    // Read in the background so a loop that never stops cannot freeze the test.
+    let mut stdout_pipe = child.stdout.take().expect("stdout");
+    let reader = std::thread::spawn(move || {
+        let mut output = String::new();
+        let _ = stdout_pipe.read_to_string(&mut output);
+        output
+    });
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let status = loop {
+        if let Some(status) = child
+            .try_wait()
+            .expect("the shell status should be readable")
+        {
+            break Some(status);
+        }
+        if std::time::Instant::now() > deadline {
+            child.kill().expect("the stuck shell should be stopped");
+            let _ = child.wait();
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    let output = reader.join().expect("the output reader should end");
+
+    assert!(
+        status.is_some(),
+        "the loop never stopped after Ctrl+C: {output}"
+    );
+    assert!(output.contains("carried-on"), "{output}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_script_can_hold_a_loop_over_several_lines() {
+    let directory = TestDirectory::new("flow script");
+    fs::write(
+        directory.path().join("loop.trs"),
+        "# a loop in a script\nfor n in 1 2 3\ndo\n  echo script-$n\ndone\necho script-end\n",
+    )
+    .expect("script fixture");
+
+    let (printed, errors) = shell_lines(&directory, &["script run loop.trs"]);
+
+    assert!(
+        printed.contains("script-1\nscript-2\nscript-3\nscript-end\n"),
+        "{printed}\n{errors}"
+    );
+}

@@ -8,6 +8,7 @@ use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use rustyline::{ColorMode, CompletionType, Config, Editor};
 
+use crate::app::command::input_is_incomplete;
 use crate::app::completion::ShellHelper;
 use crate::app::parser::{continuation_prefix, normalize_multiline_input};
 use crate::app::prompt::{GUI_PROMPT_ENV, Prompt};
@@ -41,6 +42,12 @@ fn read_editor_command<P: rustyline::Prompt + ?Sized>(
         let continuation = editor.readline(">> ")?;
         input.push(' ');
         input.push_str(&normalize_multiline_input(&continuation));
+    }
+    // A `for`, `while` or `if` goes on until its `done` or `fi`.
+    while input_is_incomplete(&input) {
+        let more = editor.readline(">> ")?;
+        input.push('\n');
+        input.push_str(&more);
     }
     Ok(input)
 }
@@ -238,6 +245,17 @@ fn read_plain_command(reader: &mut impl BufRead, input: &mut String) -> io::Resu
         }
         input.push(' ');
         input.push_str(continuation.trim_end_matches(['\r', '\n']));
+    }
+    // A `for`, `while` or `if` goes on until its `done` or `fi`; the end of the
+    // input then leaves it unfinished, and running it reports that.
+    while input_is_incomplete(input) {
+        render::stdout(">> ")?;
+        let mut more = String::new();
+        if reader.read_line(&mut more)? == 0 {
+            break;
+        }
+        input.push('\n');
+        input.push_str(more.trim_end_matches(['\r', '\n']));
     }
     Ok(true)
 }
