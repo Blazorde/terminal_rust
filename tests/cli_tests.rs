@@ -2412,3 +2412,93 @@ fn test_reports_its_status_and_its_mistakes() {
     // A false condition (`[ 1 -eq 2 ]`, `test`) says nothing: only the two mistakes.
     assert_eq!(errors.lines().count(), 2, "{errors}");
 }
+
+#[test]
+fn type_says_what_each_name_runs() {
+    let directory = TestDirectory::new("type names");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "alias where pwd",
+            "type for echo where which",
+            "type terminal-rust-no-such-program",
+            "echo status=$?",
+            "type echo terminal-rust-no-such-program",
+            "which cat",
+        ],
+    );
+
+    assert!(
+        printed.contains("for is a shell keyword\n"),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("echo is a shell builtin\n"), "{printed}");
+    assert!(
+        printed.contains("where is an alias for 'pwd'\n"),
+        "{printed}"
+    );
+    assert!(printed.contains("which is a shell builtin\n"), "{printed}");
+    assert!(printed.contains("status=1\n"), "{printed}");
+    assert!(
+        errors
+            .matches("type: terminal-rust-no-such-program: not found")
+            .count()
+            == 2,
+        "{errors}"
+    );
+    // `echo` is found even when another name in the list is not.
+    assert!(
+        printed.matches("echo is a shell builtin").count() >= 2,
+        "{printed}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn type_gives_the_path_of_a_program() {
+    let directory = TestDirectory::new("type path");
+
+    let (printed, errors) = shell_lines(&directory, &["type sh", "type /bin/sh"]);
+
+    assert!(
+        printed.contains("sh is /") && printed.contains("/sh\n"),
+        "{printed}\n{errors}"
+    );
+    assert!(printed.contains("/bin/sh is /bin/sh\n"), "{printed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn type_only_finds_executable_files_that_exist() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = TestDirectory::new("type executable");
+    let bin = directory.path().join("bin");
+    fs::create_dir(&bin).expect("fixture");
+    fs::write(bin.join("runme"), "#!/bin/sh\n").expect("fixture");
+    fs::write(bin.join("plainfile"), "data").expect("fixture");
+    fs::set_permissions(bin.join("runme"), fs::Permissions::from_mode(0o755)).expect("chmod");
+    fs::set_permissions(bin.join("plainfile"), fs::Permissions::from_mode(0o644)).expect("chmod");
+
+    let export = format!("export PATH=\"{}:$PATH\"", bin.display());
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            &export,
+            "type runme",
+            "type plainfile",
+            "type /terminal-rust/no/such/program",
+        ],
+    );
+
+    assert!(
+        printed.contains(&format!("runme is {}/runme\n", bin.display())),
+        "{printed}\n{errors}"
+    );
+    assert!(errors.contains("type: plainfile: not found"), "{errors}");
+    assert!(
+        errors.contains("type: /terminal-rust/no/such/program: not found"),
+        "{errors}"
+    );
+    assert!(!printed.contains("plainfile is"), "{printed}");
+}

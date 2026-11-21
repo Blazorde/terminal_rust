@@ -341,6 +341,20 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_neovim,
     },
     CommandSpec {
+        name: "type",
+        usage: "type <name>...",
+        summary: "say what a name runs: keyword, built-in, alias, plugin or program",
+        max_args: None,
+        handler: run_type,
+    },
+    CommandSpec {
+        name: "which",
+        usage: "which <name>...",
+        summary: "same as type",
+        max_args: None,
+        handler: run_type,
+    },
+    CommandSpec {
         name: "test",
         usage: "test <expression>",
         summary: "check a condition on files, strings or integers (status 0 if true)",
@@ -942,6 +956,50 @@ fn run_help(_args: &[String], _state: &mut ShellState) -> CommandResult {
     })
 }
 
+/// What running `name` would do, in the order the shell looks it up.
+fn describe_name(name: &str, state: &ShellState) -> Option<String> {
+    if flow::is_keyword(name) {
+        return Some(format!("{name} is a shell keyword"));
+    }
+    if find_command(name).is_some() {
+        return Some(format!("{name} is a shell builtin"));
+    }
+    if let Some(command) = state.user_commands.get(name) {
+        let words = std::iter::once(command.target.as_str())
+            .chain(command.args.iter().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join(" ");
+        return Some(match command.kind {
+            UserCommandKind::Builtin => format!("{name} is an alias for '{words}'"),
+            UserCommandKind::Process => format!("{name} is a custom command running '{words}'"),
+        });
+    }
+    if state.plugin_commands.get(name).is_some() {
+        return Some(format!("{name} is a plugin command"));
+    }
+    external::locate(name).map(|path| format!("{name} is {}", path.display()))
+}
+
+fn run_type(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args.is_empty() {
+        return CommandResult::Error("type: usage: type <name>...".to_string());
+    }
+    let mut missing = Vec::new();
+    for name in args {
+        match describe_name(name, state) {
+            Some(line) => {
+                let _ = render::stdout_line(line);
+            }
+            None => missing.push(format!("type: {name}: not found")),
+        }
+    }
+    if missing.is_empty() {
+        CommandResult::Continue
+    } else {
+        CommandResult::Error(missing.join("\n"))
+    }
+}
+
 /// A condition: success when true, a silent failure (status 1) when false, and a
 /// message with status 2 when the expression is wrong.
 fn condition(outcome: test_command::Outcome) -> CommandResult {
@@ -1130,6 +1188,22 @@ mod tests {
                     .to_string()
             )
         );
+    }
+
+    #[test]
+    fn type_says_what_a_name_runs() {
+        let mut state = test_state();
+        let _ = render::capture_output(|| {
+            execute(&string_args(&["alias", "where", "pwd"]), &mut state)
+        });
+        let say = |name: &str, state: &mut ShellState| {
+            describe_name(name, state).unwrap_or_else(|| "none".to_string())
+        };
+
+        assert_eq!(say("for", &mut state), "for is a shell keyword");
+        assert_eq!(say("echo", &mut state), "echo is a shell builtin");
+        assert_eq!(say("where", &mut state), "where is an alias for 'pwd'");
+        assert_eq!(say("terminal-rust-no-such-program", &mut state), "none");
     }
 
     #[test]

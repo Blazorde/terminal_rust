@@ -44,6 +44,16 @@ The program shares the terminal, the environment and the current directory.
 takes precedence over a program of the same name. See
 [Pipes and redirections](#pipes-and-redirections) and [Variables](#variables).
 
+`type name...` (or `which`) says what a name would run, in the order the shell
+looks it up: a keyword (`for`), a built-in, an alias or custom command, a plugin
+command, then the program found in `PATH` with its full path. A name that is
+none of these prints `type: name: not found` and the status is `1`; the other
+names of the list are still described.
+
+```text
+type for echo ls cargo     # for is a shell keyword ... cargo is /usr/bin/cargo
+```
+
 ## Variables
 
 `$NAME`, `${NAME}` and `$?` (`0` after a success, the exit code of a program
