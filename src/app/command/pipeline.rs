@@ -468,7 +468,7 @@ fn start_program(
         Sink::OtherDefault => {
             command.stdout(Stdio::from(io::stderr()));
         }
-        Sink::Default if !is_last || (capture_last && is_last) => {
+        Sink::Default if !is_last || capture_last => {
             let (reader, writer) = io::pipe().map_err(|error| format!("{name}: {error}"))?;
             command.stdout(Stdio::from(
                 writer
