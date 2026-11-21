@@ -5,6 +5,16 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- Command substitution ([ADR-0014](docs/decisions/0014-command-substitution.md)):
+  `$(command)` is replaced by the output of the command, which can be a whole
+  line with pipes and chains, and substitutions nest. Unquoted results are split
+  into words (and never matched against file names), quoted ones stay whole, and
+  a result can never inject an operator. Programs and Git write into the
+  substitution like built-in commands do. Backquotes and `$((...))` are not
+  supported.
+
 ### Security
 
 - The error messages of the shell quote what you typed and the names it could
