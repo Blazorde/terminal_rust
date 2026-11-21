@@ -401,6 +401,9 @@ impl Parser {
             self.position += 1;
         } else {
             self.segments[self.position].text = rest;
+            // What is left is the first command inside the block: it runs after
+            // the keyword, whatever `&&` or `||` led to the block itself.
+            self.segments[self.position].connector = Connector::Then;
         }
     }
 
@@ -543,6 +546,7 @@ impl Parser {
                 self.position += 1;
             } else {
                 self.segments[self.position].text = rest;
+                self.segments[self.position].connector = Connector::Then;
             }
         } else {
             self.position += 1;
@@ -604,6 +608,7 @@ impl Parser {
                         self.position += 1;
                     } else {
                         self.segments[self.position].text = rest.to_string();
+                        self.segments[self.position].connector = Connector::Then;
                     }
                     let body = self.list(&[";;", "esac"])?;
                     arms.push((patterns, body));
