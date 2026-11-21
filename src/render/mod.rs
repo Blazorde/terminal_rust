@@ -149,8 +149,15 @@ pub fn stdout_line(message: impl fmt::Display) -> io::Result<()> {
     with_stdout(|writer| write_text(writer, message))
 }
 
+/// What the shell writes on standard error is its own diagnostics, which quote
+/// file names and user input: control characters in them are made harmless, as
+/// for any other text from outside (see `printable`).
+fn diagnostic(message: &str) -> String {
+    printable::printable_multiline(message).into_owned()
+}
+
 pub fn stderr_line(message: impl fmt::Display) -> io::Result<()> {
-    let message = format!("{message}\n");
+    let message = format!("{}\n", diagnostic(&message.to_string()));
     if capture_text(OutputStream::Stderr, &message) {
         return Ok(());
     }
@@ -159,7 +166,7 @@ pub fn stderr_line(message: impl fmt::Display) -> io::Result<()> {
 }
 
 pub fn stderr(message: impl fmt::Display) -> io::Result<()> {
-    let message = message.to_string();
+    let message = diagnostic(&message.to_string());
     if capture_text(OutputStream::Stderr, &message) {
         return Ok(());
     }

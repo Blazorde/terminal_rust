@@ -5,6 +5,14 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Security
+
+- The error messages of the shell quote what you typed and the names it could
+  not find (`cd`, `cat`, an unknown command...). A name holding a terminal escape
+  sequence now has its control characters replaced by `?` there too, in the text
+  written on standard error and in the error returned by the engine. Names shown
+  by `ls`, `pwd` and the prompt were already protected.
+
 ### Fixed
 
 - Desktop: two copies of the application starting together could delete and
