@@ -31,11 +31,9 @@ impl Completer for ShellHelper {
         pos: usize,
         context: &Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Pair>)> {
-        let safe_pos = pos.min(line.len());
-        let before_cursor = &line[..safe_pos];
-        let command_start = before_cursor
-            .rfind(char::is_whitespace)
-            .map_or(0, |index| index + 1);
+        let pos = floor_char_boundary(line, pos);
+        let before_cursor = &line[..pos];
+        let command_start = word_start(before_cursor);
         let current_word = &before_cursor[command_start..];
 
         if command_start == 0 {
@@ -44,6 +42,25 @@ impl Completer for ShellHelper {
 
         self.filename_completer.complete(line, pos, context)
     }
+}
+
+/// The largest index not after `pos` that falls between two characters.
+fn floor_char_boundary(text: &str, pos: usize) -> usize {
+    let mut index = pos.min(text.len());
+    while !text.is_char_boundary(index) {
+        index -= 1;
+    }
+    index
+}
+
+/// Byte index where the last word of `text` starts. A whitespace character can
+/// take several bytes (a no-break space takes two), so its width is used rather
+/// than assuming one.
+fn word_start(text: &str) -> usize {
+    text.char_indices()
+        .rev()
+        .find(|(_, character)| character.is_whitespace())
+        .map_or(0, |(index, character)| index + character.len_utf8())
 }
 
 fn command_completions(command_names: &[String], prefix: &str) -> Vec<Pair> {
@@ -230,5 +247,57 @@ mod tests {
         assert!(matches[0].replacement.ends_with(MAIN_SEPARATOR));
 
         fs::remove_dir_all(root).expect("completion fixture should be removed");
+    }
+
+    #[test]
+    fn a_word_starts_after_a_multi_byte_whitespace() {
+        // U+00A0 (no-break space) and U+3000 (ideographic space) take 2 and 3 bytes.
+        assert_eq!(word_start("ls\u{a0}"), "ls\u{a0}".len());
+        assert_eq!(word_start("ls\u{3000}fi"), "ls\u{3000}".len());
+        assert_eq!(word_start("ls  fi"), 4);
+        assert_eq!(word_start("ls"), 0);
+        assert_eq!(word_start(""), 0);
+        assert_eq!(word_start("\u{e9}cho x"), "\u{e9}cho ".len());
+    }
+
+    #[test]
+    fn a_cursor_inside_a_character_is_moved_back_to_its_start() {
+        let text = "caf\u{e9}";
+
+        assert_eq!(floor_char_boundary(text, text.len()), text.len());
+        assert_eq!(floor_char_boundary(text, 4), 3);
+        assert_eq!(floor_char_boundary(text, 99), text.len());
+        assert_eq!(floor_char_boundary("", 5), 0);
+    }
+
+    #[test]
+    fn completing_after_a_no_break_space_does_not_panic() {
+        let history = DefaultHistory::new();
+        let context = Context::new(&history);
+        let helper = ShellHelper::with_command_names(vec!["ls".into()]);
+
+        for line in ["ls\u{a0}", "ls\u{3000}", "\u{a0}", "caf\u{e9}\u{a0}"] {
+            for pos in 0..=line.len() + 2 {
+                // Positions inside a character must not panic either.
+                let result = helper.complete(line, pos, &context);
+
+                assert!(result.is_ok(), "{line:?} at {pos}");
+            }
+        }
+    }
+
+    #[test]
+    fn command_names_still_complete_at_the_start_of_the_line() {
+        let history = DefaultHistory::new();
+        let context = Context::new(&history);
+        let helper = ShellHelper::with_command_names(vec!["pwd".into(), "ls".into()]);
+
+        let (start, pairs) = helper
+            .complete("pw", 2, &context)
+            .expect("completion should succeed");
+
+        assert_eq!(start, 0);
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].replacement, "pwd ");
     }
 }

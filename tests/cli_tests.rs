@@ -821,3 +821,147 @@ fn a_pipe_is_refused_with_a_clear_message() {
     );
     assert!(!stdout(&output).contains("hello"), "{}", stdout(&output));
 }
+
+/// Run the interactive shell on a piped stdin and give up after `limit`, so a
+/// shell that blocks fails the test instead of hanging it.
+fn run_interactive_with_timeout(
+    current_dir: &Path,
+    input: &str,
+    limit: std::time::Duration,
+) -> Option<Output> {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_terminal_rust"))
+        .current_dir(current_dir)
+        .env("USER", "terminal-rust-test")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the terminal_rust binary should start");
+    child
+        .stdin
+        .take()
+        .expect("stdin should be piped")
+        .write_all(input.as_bytes())
+        .expect("interactive input should be written");
+
+    let deadline = std::time::Instant::now() + limit;
+    loop {
+        if child
+            .try_wait()
+            .expect("the shell status should be readable")
+            .is_some()
+        {
+            return Some(
+                child
+                    .wait_with_output()
+                    .expect("the shell output should be readable"),
+            );
+        }
+        if std::time::Instant::now() >= deadline {
+            child.kill().expect("a blocked shell should be stopped");
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn rm_reads_its_confirmation_from_a_piped_stdin_without_blocking() {
+    let directory = TestDirectory::new("rm confirmation");
+    fs::create_dir(directory.path().join("doomed")).expect("fixture directory should be created");
+
+    let output = run_interactive_with_timeout(
+        directory.path(),
+        "rm -r doomed\ny\nexit\n",
+        std::time::Duration::from_secs(15),
+    );
+
+    assert!(
+        output.is_some(),
+        "the shell blocked while rm waited for its confirmation"
+    );
+    assert!(!directory.path().join("doomed").exists());
+}
+
+#[test]
+fn rm_refuses_dot_and_dot_dot_and_removes_nothing() {
+    let directory = TestDirectory::new("rm protected");
+    let inner = directory.path().join("inner");
+    fs::create_dir(&inner).expect("fixture directory should be created");
+    fs::write(inner.join("precious.txt"), "keep").expect("fixture file should be written");
+
+    let output = run_interactive_with_timeout(
+        &inner,
+        "rm -rf .\nrm -rf ..\nrm -rf ./\nexit\n",
+        std::time::Duration::from_secs(15),
+    )
+    .expect("the shell should answer");
+
+    assert!(inner.join("precious.txt").exists());
+    let errors = stderr(&output);
+    assert!(errors.contains("refusing to remove '.'"), "{errors}");
+    assert!(errors.contains("refusing to remove '..'"), "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_failing_process_command_names_its_exit_status() {
+    let directory = TestDirectory::new("process status");
+    let config = directory.path().join("config.toml");
+    fs::write(
+        &config,
+        "version = 1\n[commands.fail]\nkind = \"process\"\ntarget = \"sh\"\nargs = [\"-c\", \"exit 3\"]\nappend_args = false\n",
+    )
+    .expect("configuration should be written");
+
+    let output = run_cli_with_config(directory.path(), &["fail"], &config);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("fail: exited with status 3"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+// A directory name can hold an escape sequence. Shown as it is, this one would set
+// the window title; every display of a name must neutralize it.
+#[cfg(unix)]
+const HOSTILE_NAME: &str = "evil\u{1b}]0;PWNED\u{7}name";
+
+#[cfg(unix)]
+#[test]
+fn ls_neutralizes_control_characters_in_file_names() {
+    let directory = TestDirectory::new("ls hostile");
+    fs::create_dir(directory.path().join(HOSTILE_NAME)).expect("hostile directory should exist");
+    fs::write(directory.path().join("plain.txt"), "x").expect("plain file should exist");
+
+    let output = run_cli(directory.path(), &["ls"]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("evil?]0;PWNED?name"), "{text:?}");
+    assert!(text.contains("plain.txt"), "{text:?}");
+    assert!(
+        !text.contains('\u{1b}') && !text.contains('\u{7}'),
+        "{text:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn pwd_neutralizes_control_characters_in_the_current_directory() {
+    let directory = TestDirectory::new("pwd hostile");
+    let hostile = directory.path().join(HOSTILE_NAME);
+    fs::create_dir(&hostile).expect("hostile directory should exist");
+
+    let output = run_cli(&hostile, &["pwd"]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("evil?]0;PWNED?name"), "{text:?}");
+    assert!(
+        !text.contains('\u{1b}') && !text.contains('\u{7}'),
+        "{text:?}"
+    );
+}

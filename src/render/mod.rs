@@ -7,6 +7,7 @@ use crate::prompt::segment::{PromptSegment, SegmentKind};
 pub mod ansi;
 pub mod icons;
 pub mod palette;
+pub mod printable;
 pub mod separators;
 
 use palette::Palette;

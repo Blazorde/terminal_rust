@@ -5,6 +5,48 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-21
+
+### Security
+
+- A file or directory name holding a terminal escape sequence could rewrite the
+  window title or the screen when listed with `ls`, shown by `pwd`, in the prompt
+  path, in the dashboard or in `plugins list`. Control characters (C0, C1, DEL,
+  bidirectional overrides) in these texts, and in the response of a plugin
+  command, are now replaced by `?` before they are displayed.
+
+### Fixed
+
+- Saving the shell state (permanent aliases, startup script) or the desktop
+  settings is now atomic. The old code moved the existing file to a `.bak` before
+  moving the new one, so a crash in between left no file at all, and two shells
+  saving at once shared the same temporary name and could corrupt each other. The
+  data is now written to a unique temporary file, flushed, and renamed over the
+  target in one step, keeping the file's permissions. No `.bak` file is left.
+- The desktop tab froze for good, and its memory grew without limit, when a
+  program printed an `ESC ] 777 ;` sequence that was not a prompt layout, such as
+  the standard notification `printf '\e]777;notify;Build;done\a'`. The prompt
+  filter now ends at the sequence terminator (BEL or `ESC \`), passes anything
+  else through to the terminal, and releases a sequence longer than 4 KiB.
+  The filter is a separate module with its own tests (`npm test`).
+- Custom commands and aliases of the `process` kind ran with their output
+  captured and no standard input, so interactive programs (a prompt, `python`,
+  `ssh`, `less`) could not work and the output only appeared at the end. They now
+  share the terminal like any other program, and a failure reports the exact exit
+  status (`name: exited with status 3`) instead of a doubled message.
+- Pressing Tab after a no-break space or another multi-byte whitespace crashed
+  the shell, because the completion assumed a whitespace takes one byte. The
+  word start is now computed from the character width and the cursor position is
+  moved back to a character boundary.
+- The remove command could delete what the user did not mean to: asking it to
+  remove the current directory or its parent emptied them. Those two targets and
+  the root directory are now refused, before anything is removed, as in GNU `rm`.
+- `rm` now keeps going after a failure and reports every failing target instead of
+  stopping at the first one, can remove a broken symlink, and never follows a
+  symlink to a directory.
+- A `rm` confirmation read from a piped standard input blocked the shell for ever,
+  and the question was not shown in a terminal until after the answer.
+
 ## [1.2.1] - 2026-11-20
 
 ### Added

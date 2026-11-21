@@ -40,7 +40,7 @@ pub fn keep_shell_alive_on_interrupt() {
     let _ = ctrlc::set_handler(|| {});
 }
 
-fn describe_exit(name: &str, status: ExitStatus) -> String {
+pub(crate) fn describe_exit(name: &str, status: ExitStatus) -> String {
     match status.code() {
         Some(code) => format!("{name}: exited with status {code}"),
         None => format!("{name}: terminated by a signal"),

@@ -78,6 +78,7 @@ step() {
 
 step "npm ci"             npm ci --prefix desktop --silent
 step "frontend build"     npm run build --prefix desktop
+step "frontend tests"     npm test --prefix desktop
 step "notices:check"      npm run notices:check --prefix desktop
 step "npm audit"          npm audit --prefix desktop --audit-level=high
 step "cargo fmt"          cargo fmt --all -- --check

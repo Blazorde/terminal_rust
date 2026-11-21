@@ -16,3 +16,4 @@ mod utils;
 mod test_support;
 
 pub use core::{DirectoryChange, ExecutionResult, ExecutionStatus, ShellEngine};
+pub use utils::atomic::write_atomically;
