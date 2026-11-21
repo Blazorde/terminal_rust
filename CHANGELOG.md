@@ -5,6 +5,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-21
+
 ### Added
 
 - File name patterns ([ADR-0012](docs/decisions/0012-filename-patterns.md)): `*`,
@@ -19,6 +21,7 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   file), the status of a pipeline is the one of its last command, and a syntax
   error rejects the line before anything runs. Background jobs (`&`) are still
   rejected.
+
 ### Changed
 
 - Builds are reproducible: the crates declare `rust-version = "1.95"`, the lowest
