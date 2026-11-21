@@ -5,6 +5,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-21
+
 ### Added
 
 - History: `history [N]` lists the lines typed at the prompt, and `!!`, `!$`, `!^`,
