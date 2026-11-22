@@ -82,6 +82,10 @@ value comes back afterwards.
 `$PWD` is the current directory and `$OLDPWD` the one you left; `cd` keeps them up
 to date for the programs it starts, and `cd -` goes back and prints where it went.
 
+A variable is never split into several arguments, so a value with spaces is safe to use
+(`cd $HOME` works with `C:\Users\Jane Doe`). When you do want a list of words, ask for it
+with `${=NAME}`: `FLAGS="-a -l"; ls ${=FLAGS}`, `for f in ${=FILES}; do …; done`.
+
 Inside `${…}` you can give a default, test for a value, or take a length. With a
 colon an empty value counts as unset; without it only an unset variable does:
 

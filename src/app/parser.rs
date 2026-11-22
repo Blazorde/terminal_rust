@@ -62,7 +62,18 @@ pub fn parse_args(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
     Ok(args)
 }
 
-/// Turn the separators of an expanded `$@` into word breaks: the text before the
+/// Whether the expansion that starts after a `$` gives one word per piece: `$@`
+/// and `${=NAME}`.
+fn splits_into_words(characters: &std::iter::Peekable<std::str::Chars<'_>>) -> bool {
+    let mut ahead = characters.clone();
+    match ahead.next() {
+        Some('@') => true,
+        Some('{') => ahead.next() == Some('='),
+        _ => false,
+    }
+}
+
+/// Turn the separators of an expanded `$@` or `${=NAME}` into word breaks: the text before the
 /// first one joins the word being written, and each later parameter starts a word.
 fn split_parameters(current: &mut String, args: &mut Vec<Word>, wildcards: &mut Vec<usize>) {
     if !current.contains(PARAMETER_SEPARATOR) {
@@ -112,10 +123,13 @@ pub fn parse_words(input: &str, lookup: Lookup) -> Result<Vec<Word>, String> {
                 }
             }
             (Some(Quote::Double), '$') => {
+                let splits = splits_into_words(&characters);
                 let parameters = characters.peek() == Some(&'@');
                 let added = expand_variable(&mut characters, lookup, &mut current)?;
-                if parameters {
+                if splits {
                     split_parameters(&mut current, &mut args, &mut wildcards);
+                }
+                if parameters {
                     // `"$@"` with no parameter is no word, not an empty one.
                     drop_empty_quotes = !added && current.is_empty() && !started_before_quote;
                 }
@@ -149,11 +163,11 @@ pub fn parse_words(input: &str, lookup: Lookup) -> Result<Vec<Word>, String> {
                 started_argument = true;
             }
             (None, '$') => {
-                let parameters = characters.peek() == Some(&'@');
+                let splits = splits_into_words(&characters);
                 if expand_variable(&mut characters, lookup, &mut current)? {
                     started_argument = true;
                 }
-                if parameters {
+                if splits {
                     split_parameters(&mut current, &mut args, &mut wildcards);
                 }
             }
@@ -261,6 +275,18 @@ fn expand_variable(
 /// word, `NAME:-w` and `NAME-w` (default), `NAME:+w` and `NAME+w` (alternative),
 /// `NAME:?w` and `NAME?w` (error). With a colon, an empty value counts as unset.
 fn expand_braced(content: &str, lookup: Lookup, output: &mut String) -> Result<bool, String> {
+    // `${=NAME}`: split the value at blanks into separate words, as `$@` does. This is
+    // the explicit form of what other shells do to every unquoted variable (ADR-0009).
+    if let Some(rest) = content.strip_prefix('=') {
+        let mut value = String::new();
+        expand_braced(rest, lookup, &mut value)?;
+        let words = value
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(&PARAMETER_SEPARATOR.to_string());
+        output.push_str(&words);
+        return Ok(!words.is_empty());
+    }
     let valid = |name: &str| {
         crate::utils::shell_env::is_valid_name(name)
             || matches!(name, "?" | "#" | "@" | "*")
@@ -1473,6 +1499,40 @@ mod tests {
             with("echo \"[$@]\""),
             words(&["echo", "[one", "two words]"])
         );
+    }
+
+    #[test]
+    fn an_equals_sign_splits_the_value_into_words_on_request() {
+        let list = |name: &str| match name {
+            "LIST" => Some("a  b\tc".to_string()),
+            "ONE" => Some("single".to_string()),
+            "PAD" => Some("  x  ".to_string()),
+            "EMPTY" => Some(String::new()),
+            "SPACED" => Some("two words".to_string()),
+            _ => None,
+        };
+        let split = |input: &str| parse_with(input, &list);
+
+        assert_eq!(split("echo ${=LIST}"), words(&["echo", "a", "b", "c"]));
+        // Without it nothing is split, quoted or not.
+        assert_eq!(split("echo $LIST"), words(&["echo", "a  b\tc"]));
+        assert_eq!(split("echo \"$LIST\""), words(&["echo", "a  b\tc"]));
+        // Joined to other text, the first and last pieces stay attached to it.
+        assert_eq!(split("echo x${=LIST}y"), words(&["echo", "xa", "b", "cy"]));
+        assert_eq!(split("echo ${=ONE}"), words(&["echo", "single"]));
+        assert_eq!(split("echo ${=PAD}"), words(&["echo", "x"]));
+        // Nothing to split gives no word, an unset name too.
+        assert_eq!(split("echo ${=EMPTY} end"), words(&["echo", "end"]));
+        assert_eq!(split("echo ${=MISSING} end"), words(&["echo", "end"]));
+        // It also works on the result of the other forms and in double quotes.
+        assert_eq!(split("echo ${=MISSING:-p q}"), words(&["echo", "p", "q"]));
+        assert_eq!(split("echo ${=SPACED}"), words(&["echo", "two", "words"]));
+        assert_eq!(split("echo \"${=LIST}\""), words(&["echo", "a", "b", "c"]));
+        // A pattern character in a value is never a pattern.
+        let star = |name: &str| (name == "G").then(|| "*.rs *.md".to_string());
+        let parsed = parse_words("echo ${=G}", &star).expect("parses");
+        assert_eq!(parsed.len(), 3);
+        assert!(parsed.iter().all(|word| word.pattern.is_none()));
     }
 
     #[test]

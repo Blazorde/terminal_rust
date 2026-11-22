@@ -3942,3 +3942,41 @@ fn ls_accepts_the_color_option_of_the_usual_alias() {
     );
     assert!(errors.contains("--color=sparkly"), "{errors}");
 }
+
+#[test]
+fn an_equals_sign_in_braces_splits_a_variable_into_arguments_on_request() {
+    let directory = TestDirectory::new("explicit split");
+    fs::write(directory.path().join("a.txt"), "x").expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "LIST=\"one two  three\"",
+            "for w in $LIST; do echo plain=[$w]; done",
+            "for w in ${=LIST}; do echo split=[$w]; done",
+            "FLAGS=\"-a -l\"",
+            "ls ${=FLAGS} > flags.txt",
+            "cat flags.txt",
+            "echo \"[${=LIST}]\"",
+            "echo count=$(echo ${=LIST} | wc -w)",
+            "set-none() { for w in ${=1}; do echo arg=$w; done; echo end; }",
+            "set-none \"p q\"",
+            "set-none \"\"",
+        ],
+    );
+
+    for expected in [
+        "plain=[one two  three]\n",
+        "split=[one]\nsplit=[two]\nsplit=[three]\n",
+        "a.txt",
+        "arg=p\narg=q\nend\n",
+        "end\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("plain=[one]"), "{printed}");
+    assert!(errors.is_empty(), "{errors}");
+}
