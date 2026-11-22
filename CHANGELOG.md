@@ -7,6 +7,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- `[[ expression ]]` conditions (ADR-0026): patterns with `==` and `!=`, regular expressions with
+  `=~`, `<` and `>` on strings, `&&`, `||`, `!` and parentheses, no word splitting.
+
+### Added
+
 - `! command` turns the status of a command around (`if ! test -f x; then …`), `command -v`,
   `command -V` and `command name args` (skips a function of the same name), `exec command`
   (runs it and leaves the shell with its status), `$PPID` and `$RANDOM` (ADR-0025).

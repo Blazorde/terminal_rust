@@ -5102,6 +5102,7 @@ dependencies = [
  "ctrlc",
  "jiff",
  "nix 0.31.3",
+ "regex",
  "rustix 1.1.6",
  "rustyline",
  "semver",

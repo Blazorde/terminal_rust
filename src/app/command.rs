@@ -18,6 +18,7 @@ use crate::utils::shell_env;
 mod aliases;
 mod arithmetic;
 mod braces;
+mod double_bracket;
 mod flow;
 mod functions;
 mod heredoc;
@@ -729,6 +730,13 @@ fn run_segment(
     background: bool,
     state: &mut ShellState,
 ) -> CommandResult {
+    // `[[ expression ]]` reads its own words: no braces, no splitting, no patterns.
+    if let Some(body) = double_bracket::body(text) {
+        return match body {
+            Ok(body) => condition(double_bracket::evaluate(body, state)),
+            Err(error) => CommandResult::Error(error),
+        };
+    }
     // Braces first, then command substitutions, which run now: each rewrites the
     // text, which is then split again.
     let braced = match braces::expand(text) {
