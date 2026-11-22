@@ -39,7 +39,7 @@ Create the following tree in the
 [local plugin directory](../../docs/plugins/registry.md), then copy the manifest:
 
 ```text
-terminal-rust/plugins/example.hello/1.11.0/terminal-rust-plugin.toml
+terminal-rust/plugins/example.hello/1.12.0/terminal-rust-plugin.toml
 ```
 
 Enable and authorize the declarative command, then run:
