@@ -7,6 +7,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- `trap 'command' EXIT` runs a command when the shell ends (`trap - EXIT` removes it, `trap`
+  shows it) and `a ** b` is the power in `$(( ))` (ADR-0028). Signal traps are refused with a message.
 - Subshells `( commands )` (ADR-0027): the variables, functions, directory and exports
   they change are put back when they end, and `exit` leaves only them.
 - `[[ expression ]]` conditions (ADR-0026): patterns with `==` and `!=`, regular expressions with

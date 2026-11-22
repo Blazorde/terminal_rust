@@ -105,6 +105,15 @@ impl ShellEngine {
         self.state.exit_code()
     }
 
+    /// Run what `trap 'command' EXIT` asked for, once, as the shell ends. A front end
+    /// shows the result like any other.
+    pub fn finish(&mut self) -> ExecutionResult {
+        match self.state.take_exit_trap() {
+            Some(command) => self.run_captured(|state| command::run_line(&command, state)),
+            None => self.empty_result(),
+        }
+    }
+
     /// The lines typed at the prompt, oldest first.
     pub(crate) fn history(&self) -> &[String] {
         self.state.history()
