@@ -5,6 +5,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- `${=NAME}` splits the value of a variable into one word per blank-separated piece
+  (ADR-0009): `FLAGS="-a -l"; ls ${=FLAGS}`, `for f in ${=LIST}; do …; done`. Plain
+  `$NAME` stays a single word, so a value with spaces is still safe.
+
 ### Changed
 
 - The release workflow retries the downloads of the bundled runtime (Nano sources and
