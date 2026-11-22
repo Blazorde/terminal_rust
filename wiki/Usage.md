@@ -109,6 +109,25 @@ several arguments or matched against files. `${NAME:=word}` (assigning while
 expanding) and the trimming forms (`${NAME%x}`, `${NAME#x}`, `${NAME/a/b}`) are
 not available: write `NAME=value` instead.
 
+## Arrays
+
+`name=(a b c)` makes a list of words, expanded like the arguments of a command (`files=(*.rs)`,
+`n=({1..3})`). `name+=(d)` appends and `name[2]=x` sets one element:
+
+```text
+files=(*.rs)
+echo ${files[0]} ${files[-1]}        # first and last
+echo ${#files[@]}                    # how many
+for f in "${files[@]}"; do wc -l "$f"; done
+files+=(extra.txt)
+echo ${!files[@]}                    # the indices: 0 1 2 …
+```
+
+`"${name[@]}"` is one word per element (none for an empty array), `"${name[*]}"` joins them
+with spaces, `$name` is the first element, and an index can be a variable (`${files[$i]}`).
+`unset name` removes the array. There are no associative arrays, slices, `declare -a` or
+`read -a`.
+
 ## Leaving the shell
 
 `trap 'command' EXIT` remembers a command that runs once when the shell ends (`exit`, the end

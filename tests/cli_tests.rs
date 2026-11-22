@@ -4469,3 +4469,76 @@ fn the_power_operator_works_in_arithmetic_expansion() {
     assert!(printed.contains("sq=10\n"), "{printed}");
     assert!(errors.contains("negative exponent"), "{errors}");
 }
+
+#[test]
+fn arrays_hold_words_and_expand_by_element_or_whole() {
+    let directory = TestDirectory::new("arrays");
+    fs::write(directory.path().join("a.rs"), "x").expect("fixture");
+    fs::write(directory.path().join("b.rs"), "x").expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "x=(a b c)",
+            "echo first=${x[0]} last=${x[2]} neg=${x[-1]}",
+            "echo count=${#x[@]} all=${x[@]} star=\"${x[*]}\" plain=$x",
+            "for i in \"${x[@]}\"; do echo item=$i; done",
+            "x+=(d e)",
+            "echo after-append=${#x[@]} ${x[4]}",
+            "x[1]=B",
+            "echo changed=${x[@]}",
+            "i=2",
+            "echo by-var=${x[$i]},${x[i]}",
+            "echo indices=${!x[@]}",
+            "files=(*.rs)",
+            "echo files=${files[@]}",
+            "words=(\"two words\" plain)",
+            "for w in \"${words[@]}\"; do echo \"[$w]\"; done",
+            "echo len=${#words[0]}",
+            "y=(1 2 3)",
+            "unset y",
+            "echo gone=${#y[@]}",
+            "empty=()",
+            "echo empty=${#empty[@]}",
+            "for z in \"${empty[@]}\"; do echo never-runs; done",
+            "(sub=(p q); echo in-sub=${sub[1]})",
+            "echo out-sub=[${sub[1]}]",
+            "far[3]=end",
+            "echo far=${#far[@]} [${far[0]}] ${far[3]}",
+            "echo dflt=${x[9]:-fallback}",
+            "braced=({1..3} z)",
+            "echo braced=${braced[@]}",
+            "n=$(echo ${#x[@]})",
+            "echo sub-count=$n",
+            "echo text x=(1 2)",
+        ],
+    );
+
+    for expected in [
+        "first=a last=c neg=c\n",
+        "count=3 all=a b c star=a b c plain=a\n",
+        "item=a\nitem=b\nitem=c\n",
+        "after-append=5 e\n",
+        "changed=a B c d e\n",
+        "by-var=c,c\n",
+        "indices=0 1 2 3 4\n",
+        "files=a.rs b.rs\n",
+        "[two words]\n[plain]\n",
+        "len=9\n",
+        "gone=0\n",
+        "empty=0\n",
+        "in-sub=q\n",
+        "out-sub=[]\n",
+        "far=4 [] end\n",
+        "dflt=fallback\n",
+        "braced=1 2 3 z\n",
+        "sub-count=5\n",
+        "text x=(1 2)\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("never-runs"), "{printed}");
+}

@@ -7,6 +7,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Indexed arrays (ADR-0029): `files=(*.rs)`, `files+=(x)`, `files[2]=x`, `${files[1]}`, `${files[@]}`,
+  `${#files[@]}`, `${!files[@]}`, and `"${files[@]}"` gives one word per element.
 - `trap 'command' EXIT` runs a command when the shell ends (`trap - EXIT` removes it, `trap`
   shows it) and `a ** b` is the power in `$(( ))` (ADR-0028). Signal traps are refused with a message.
 - Subshells `( commands )` (ADR-0027): the variables, functions, directory and exports

@@ -68,9 +68,23 @@ fn splits_into_words(characters: &std::iter::Peekable<std::str::Chars<'_>>) -> b
     let mut ahead = characters.clone();
     match ahead.next() {
         Some('@') => true,
-        Some('{') => ahead.next() == Some('='),
+        Some('{') => ahead.next() == Some('=') || is_all_elements(characters),
         _ => false,
     }
+}
+
+/// Whether what follows a `$` is `{name[@]}` or `{!name[@]}`: every element of an array,
+/// one word each.
+fn is_all_elements(characters: &std::iter::Peekable<std::str::Chars<'_>>) -> bool {
+    let mut ahead = characters.clone();
+    if ahead.next() != Some('{') {
+        return false;
+    }
+    let content: String = ahead.take_while(|character| *character != '}').collect();
+    content.ends_with("[@]")
+        && crate::utils::shell_env::is_valid_name(
+            content.trim_start_matches('!').trim_end_matches("[@]"),
+        )
 }
 
 /// Turn the separators of an expanded `$@` or `${=NAME}` into word breaks: the text before the
@@ -124,7 +138,7 @@ pub fn parse_words(input: &str, lookup: Lookup) -> Result<Vec<Word>, String> {
             }
             (Some(Quote::Double), '$') => {
                 let splits = splits_into_words(&characters);
-                let parameters = characters.peek() == Some(&'@');
+                let parameters = characters.peek() == Some(&'@') || is_all_elements(&characters);
                 let added = expand_variable(&mut characters, lookup, &mut current)?;
                 if splits {
                     split_parameters(&mut current, &mut args, &mut wildcards);
@@ -291,19 +305,43 @@ fn expand_braced(content: &str, lookup: Lookup, output: &mut String) -> Result<b
         crate::utils::shell_env::is_valid_name(name)
             || matches!(name, "?" | "#" | "@" | "*" | "$" | "!")
             || (!name.is_empty() && name.chars().all(|character| character.is_ascii_digit()))
+            || is_array_reference(name)
     };
+    // `${#name[@]}` is the number of elements, `${!name[@]}` the list of indices.
     if let Some(name) = content.strip_prefix('#')
         && valid(name)
     {
-        output.push_str(&lookup(name).unwrap_or_default().chars().count().to_string());
+        let all = is_array_reference(name) && (name.ends_with("[@]") || name.ends_with("[*]"));
+        let counted = if all {
+            lookup(&format!("#{name}")).unwrap_or_default()
+        } else {
+            lookup(name).unwrap_or_default().chars().count().to_string()
+        };
+        output.push_str(&counted);
         return Ok(true);
+    }
+    if let Some(name) = content.strip_prefix('!')
+        && name.ends_with("[@]")
+        && is_array_reference(name)
+    {
+        let indices = lookup(&format!("!{name}")).unwrap_or_default();
+        output.push_str(&indices);
+        return Ok(!indices.is_empty());
     }
     let name_end = if content.starts_with(['?', '#', '@', '*', '$', '!']) {
         1
     } else {
-        content
+        let identifier = content
             .find(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
-            .unwrap_or(content.len())
+            .unwrap_or(content.len());
+        // `name[index]`: the brackets belong to the name.
+        match content[identifier..]
+            .strip_prefix('[')
+            .and_then(|rest| rest.find(']'))
+        {
+            Some(close) => identifier + 1 + close + 1,
+            None => identifier,
+        }
     };
     let (name, operation) = content.split_at(name_end);
     if !valid(name) {
@@ -343,6 +381,17 @@ fn expand_braced(content: &str, lookup: Lookup, output: &mut String) -> Result<b
     };
     output.push_str(&text);
     Ok(!text.is_empty())
+}
+
+/// `name[index]`, `name[@]` or `name[*]`: a reference to an element or to all of an array.
+pub fn is_array_reference(name: &str) -> bool {
+    let Some((identifier, rest)) = name.split_once('[') else {
+        return false;
+    };
+    let Some(index) = rest.strip_suffix(']') else {
+        return false;
+    };
+    crate::utils::shell_env::is_valid_name(identifier) && !index.is_empty() && !index.contains(']')
 }
 
 /// Expand the word of a `${NAME:-word}`: variables, quotes and escapes, but no
@@ -405,6 +454,8 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
     let mut in_test = false;
     // How many `( … )` subshells are open: a `(` that starts a command opens one.
     let mut subshells = 0_usize;
+    // The `(` inside a command of a subshell (`x=(1 2)`), whose `)` is not the subshell's.
+    let mut literal_parens = 0_usize;
 
     while let Some(character) = characters.next() {
         if in_test && quote.is_none() && closes_double_bracket(&current, character) {
@@ -452,6 +503,14 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
             (None, '(') if starts_command(&current) && !in_test => {
                 current.push_str("( ");
                 subshells += 1;
+            }
+            (None, '(') if subshells > 0 => {
+                current.push(character);
+                literal_parens += 1;
+            }
+            (None, ')') if literal_parens > 0 => {
+                current.push(character);
+                literal_parens -= 1;
             }
             (None, ')') if subshells > 0 && !current.ends_with('(') => {
                 finish_segment(&mut segments, &mut current, connector, ")")?;
@@ -928,6 +987,33 @@ pub fn normalize_multiline_input(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn array_references_are_names_and_all_elements_split_into_words() {
+        for name in ["a[0]", "a[@]", "a[*]", "a[$i]", "_x1[12]"] {
+            assert!(is_array_reference(name), "{name}");
+        }
+        for name in ["a", "a[]", "a[1", "1a[0]", "a[1]]", "[0]", "a b[0]"] {
+            assert!(!is_array_reference(name), "{name}");
+        }
+        let lookup = |name: &str| match name {
+            "a[@]" => Some(format!("one{PARAMETER_SEPARATOR}two words")),
+            "a[1]" => Some("two words".to_string()),
+            "#a[@]" => Some("2".to_string()),
+            "!a[@]" => Some(format!("0{PARAMETER_SEPARATOR}1")),
+            _ => None,
+        };
+        let words = |text: &str| parse_args(text, &lookup).expect("parses");
+        // Like `$@`, an element is never split again, quoted or not.
+        assert_eq!(words("${a[@]}"), vec!["one", "two words"]);
+        assert_eq!(words("\"${a[@]}\""), vec!["one", "two words"]);
+        assert_eq!(words("\"${a[1]}\" x"), vec!["two words", "x"]);
+        assert_eq!(words("${#a[@]}"), vec!["2"]);
+        assert_eq!(words("${!a[@]}"), vec!["0", "1"]);
+        // A missing array gives no word when it is all of them, and nothing otherwise.
+        assert!(words("${b[@]}").is_empty());
+        assert!(words("\"${b[@]}\"").is_empty());
+    }
 
     #[test]
     fn a_paren_that_starts_a_command_opens_a_subshell() {
