@@ -5,6 +5,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-22
+
 ### Added
 
 - Indexed arrays (ADR-0029): `files=(*.rs)`, `files+=(x)`, `files[2]=x`, `${files[1]}`, `${files[@]}`,
