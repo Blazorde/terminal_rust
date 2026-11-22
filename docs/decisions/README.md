@@ -35,6 +35,7 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0026](0026-double-bracket-conditions.md) | Accepted | `[[ expression ]]` conditions |
 | [0027](0027-subshells.md) | Accepted | Subshells `( list )` |
 | [0028](0028-exit-trap-and-power.md) | Accepted | `trap … EXIT` and `**` in arithmetic |
+| [0029](0029-arrays.md) | Accepted | Indexed arrays |
 
 ## Lifecycle
 

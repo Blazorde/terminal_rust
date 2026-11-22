@@ -30,6 +30,7 @@ mod substitution;
 /// The state a subshell restores when it ends.
 struct SubshellSnapshot {
     variables: HashMap<String, String>,
+    arrays: HashMap<String, Vec<String>>,
     functions: HashMap<String, functions::Body>,
     frames: Vec<functions::Frame>,
     previous_dir: Option<PathBuf>,
@@ -44,6 +45,8 @@ pub struct ShellState {
     startup_script: Option<String>,
     script_depth: usize,
     variables: HashMap<String, String>,
+    /// The arrays, `name=(a b c)`: `${name[1]}`, `${name[@]}` (ADR-0029).
+    arrays: HashMap<String, Vec<String>>,
     /// The status of the last command, the value of `$?`.
     last_status: i32,
     /// The code the shell leaves with, once `exit` has run.
@@ -82,6 +85,7 @@ impl ShellState {
             startup_script,
             script_depth: 0,
             variables: HashMap::new(),
+            arrays: HashMap::new(),
             last_status: 0,
             exit_code: None,
             jobs: jobs::Jobs::default(),
@@ -134,6 +138,10 @@ impl ShellState {
                     .unwrap_or_default(),
             );
         }
+        // An element of an array, all of them, their number or their indices.
+        if name.contains('[') {
+            return self.array_value(name);
+        }
         // The parent of the shell, and a number from 0 to 32767 that changes at each use.
         // A variable of the same name that the user set wins.
         if name == "PPID" && !self.variables.contains_key("PPID") {
@@ -167,7 +175,59 @@ impl ShellState {
         self.variables
             .get(name)
             .cloned()
+            // `$name` of an array is its first element.
+            .or_else(|| {
+                self.arrays
+                    .get(name)
+                    .map(|elements| elements.first().cloned().unwrap_or_default())
+            })
             .or_else(|| shell_env::value(name))
+    }
+
+    /// `name[index]`, `name[@]`, `name[*]`, `#name[@]` and `!name[@]`.
+    fn array_value(&self, reference: &str) -> Option<String> {
+        let (count, indices, reference) = match reference.strip_prefix('#') {
+            Some(rest) => (true, false, rest),
+            None => match reference.strip_prefix('!') {
+                Some(rest) => (false, true, rest),
+                None => (false, false, reference),
+            },
+        };
+        let (name, index) = reference.split_once('[')?;
+        let index = index.strip_suffix(']')?;
+        let elements = self.arrays.get(name);
+        if count {
+            return Some(elements.map_or(0, Vec::len).to_string());
+        }
+        let elements = elements?;
+        match index {
+            _ if indices => Some(
+                (0..elements.len())
+                    .map(|position| position.to_string())
+                    .collect::<Vec<_>>()
+                    .join(&crate::app::parser::PARAMETER_SEPARATOR.to_string()),
+            ),
+            "@" => Some(elements.join(&crate::app::parser::PARAMETER_SEPARATOR.to_string())),
+            "*" => Some(elements.join(" ")),
+            _ => {
+                // A number, or a variable that holds one: `${a[$i]}` and `${a[i]}`.
+                let index = index.trim();
+                let number = match index.parse::<i64>() {
+                    Ok(number) => number,
+                    Err(_) => self
+                        .variable(index.trim_start_matches('$'))?
+                        .trim()
+                        .parse::<i64>()
+                        .ok()?,
+                };
+                let position = if number < 0 {
+                    elements.len().checked_sub(usize::try_from(-number).ok()?)?
+                } else {
+                    usize::try_from(number).ok()?
+                };
+                Some(elements.get(position).cloned().unwrap_or_default())
+            }
+        }
     }
 
     /// Record the outcome of a command as `$?`: 0, or the exit code of the
@@ -189,6 +249,7 @@ impl ShellState {
     fn subshell_snapshot(&self) -> SubshellSnapshot {
         SubshellSnapshot {
             variables: self.variables.clone(),
+            arrays: self.arrays.clone(),
             functions: self.functions.clone(),
             frames: self.frames.clone(),
             previous_dir: self.previous_dir.clone(),
@@ -199,6 +260,7 @@ impl ShellState {
 
     fn subshell_restore(&mut self, saved: SubshellSnapshot) {
         self.variables = saved.variables;
+        self.arrays = saved.arrays;
         self.functions = saved.functions;
         self.frames = saved.frames;
         self.previous_dir = saved.previous_dir;
@@ -781,6 +843,10 @@ fn run_segment(
     background: bool,
     state: &mut ShellState,
 ) -> CommandResult {
+    // `name=(a b c)`, `name+=(d)` and `name[2]=value` build an array.
+    if let Some(result) = array_assignment(text, background, state) {
+        return result;
+    }
     // `[[ expression ]]` reads its own words: no braces, no splitting, no patterns.
     if let Some(body) = double_bracket::body(text) {
         return match body {
@@ -1184,6 +1250,70 @@ fn split_assignment(argument: &str) -> Option<(&str, &str)> {
     shell_env::is_valid_name(name).then_some((name, value))
 }
 
+/// Handle `name=(words)`, `name+=(words)` and `name[index]=word`. `None` when the text is
+/// not one of them. The words are expanded like the arguments of a command.
+fn array_assignment(text: &str, background: bool, state: &mut ShellState) -> Option<CommandResult> {
+    let text = text.trim();
+    let name_end =
+        text.find(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))?;
+    let (name, rest) = text.split_at(name_end);
+    if !shell_env::is_valid_name(name) || background {
+        return None;
+    }
+    if let Some(list) = rest
+        .strip_prefix("+=(")
+        .or_else(|| rest.strip_prefix("=("))
+        .and_then(|list| list.strip_suffix(')'))
+    {
+        let append = rest.starts_with('+');
+        let words = match expand_words(list, state) {
+            Ok(words) => words,
+            Err(error) => return Some(CommandResult::Error(error)),
+        };
+        let elements = state.arrays.entry(name.to_string()).or_default();
+        if append {
+            elements.extend(words);
+        } else {
+            *elements = words;
+        }
+        // An array replaces a plain variable of the same name.
+        state.variables.remove(name);
+        state.record_status(false);
+        return Some(CommandResult::Continue);
+    }
+    let (index, value) = rest.strip_prefix('[')?.split_once("]=")?;
+    let index = match expand_case_word(index, state) {
+        Ok(index) => index,
+        Err(error) => return Some(CommandResult::Error(error)),
+    };
+    let number = match index.trim().parse::<i64>() {
+        Ok(number) if number >= 0 => number as usize,
+        _ => match state
+            .variable(index.trim())
+            .and_then(|value| value.trim().parse::<usize>().ok())
+        {
+            Some(number) => number,
+            None => {
+                state.record_status(true);
+                return Some(CommandResult::Error(format!(
+                    "{name}[{index}]: bad array subscript"
+                )));
+            }
+        },
+    };
+    let value = match expand_case_word(value, state) {
+        Ok(value) => value,
+        Err(error) => return Some(CommandResult::Error(error)),
+    };
+    let elements = state.arrays.entry(name.to_string()).or_default();
+    if elements.len() <= number {
+        elements.resize(number + 1, String::new());
+    }
+    elements[number] = value;
+    state.record_status(false);
+    Some(CommandResult::Continue)
+}
+
 fn assign_variable(name: &str, value: &str, state: &mut ShellState) -> CommandResult {
     if shell_env::is_exported(name) {
         shell_env::export(name, value);
@@ -1236,6 +1366,7 @@ fn run_unset(args: &[String], state: &mut ShellState) -> CommandResult {
             return CommandResult::Error(format!("unset: not a valid name: {name}"));
         }
         state.variables.remove(name.as_str());
+        state.arrays.remove(name.as_str());
         shell_env::remove(name);
     }
     CommandResult::Continue
