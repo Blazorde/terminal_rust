@@ -5,6 +5,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-11-22
+
 ### Added
 
 - `$$` (the process id of the shell), `$!` (the process id of the last job started with
