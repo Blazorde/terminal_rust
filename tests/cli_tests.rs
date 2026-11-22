@@ -4722,3 +4722,110 @@ fn set_e_leaves_the_shell_when_a_command_fails_outside_a_condition() {
         stdout(&output)
     );
 }
+
+#[test]
+fn pushd_popd_and_dirs_keep_a_stack_of_directories() {
+    let directory = TestDirectory::new("dirs stack");
+    fs::create_dir(directory.path().join("alpha")).expect("fixture");
+    fs::create_dir(directory.path().join("beta")).expect("fixture");
+    let base = directory.path().display().to_string();
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "popd",
+            "pushd",
+            "pushd alpha",
+            "pushd ../beta",
+            "dirs",
+            "popd",
+            "pushd",
+            "popd",
+            "popd",
+            "pushd nowhere",
+            "dirs",
+        ],
+    );
+
+    // Each line shows the current directory, then the ones that were set aside.
+    for expected in [
+        format!("{base}/alpha {base}\n"),
+        format!("{base}/beta {base}/alpha {base}\n"),
+        format!("{base} {base}/alpha\n"),
+        format!("{base}/alpha\n"),
+    ] {
+        assert!(
+            printed.contains(&expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert_eq!(
+        printed
+            .matches(&format!("{base}/beta {base}/alpha {base}\n"))
+            .count(),
+        2,
+        "{printed}"
+    );
+    assert_eq!(
+        errors.matches("popd: directory stack empty").count(),
+        2,
+        "{errors}"
+    );
+    assert!(errors.contains("pushd: no other directory"), "{errors}");
+    assert!(
+        errors.contains("pushd: cd: cannot change directory to 'nowhere'"),
+        "{errors}"
+    );
+}
+
+#[test]
+fn time_shows_how_long_a_command_took_and_keeps_its_status() {
+    let directory = TestDirectory::new("time");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "time sleep 0.2",
+            "time sh -c 'exit 3'",
+            "echo status=$?",
+            "time",
+        ],
+    );
+
+    assert!(errors.contains("real\t0m0.2"), "{errors}");
+    assert_eq!(errors.matches("real\t").count(), 3, "{errors}");
+    assert!(printed.contains("status=3\n"), "{printed}\n{errors}");
+}
+
+#[test]
+fn dollar_quotes_read_the_escapes_of_c() {
+    let directory = TestDirectory::new("ansi c quotes");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo $'tab\\there|nl\\nnext'",
+            "echo $'\\x41\\u00e9\\101' $'\\\\' $'q\\\"q'",
+            "x=$'a\\tb'",
+            "echo \"[$x]\"",
+            "echo $'unknown\\q' \"$'not ansi'\" '$'\"'\"'not ansi'\"'\"",
+            "echo $'esc\\e[0m' | od -c | head -1",
+            "echo $'open",
+        ],
+    );
+
+    for expected in [
+        "tab\there|nl\nnext\n",
+        "Aé",
+        "\\ q\"q\n",
+        "[a\tb]\n",
+        "unknown\\q $'not ansi'",
+        "033",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(errors.contains("missing closing quote"), "{errors}");
+}

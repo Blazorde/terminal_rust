@@ -197,6 +197,12 @@ pub fn parse_words(input: &str, lookup: Lookup) -> Result<Vec<Word>, String> {
                 current.push(character);
                 started_argument = true;
             }
+            // `$'text'`: a quoted string where `\n`, `\t`, `\x41` and the other escapes are read.
+            (None, '$') if characters.peek() == Some(&'\'') => {
+                characters.next();
+                ansi_c_quoted(&mut characters, &mut current)?;
+                started_argument = true;
+            }
             (None, '$') => {
                 let splits = splits_into_words(&characters);
                 if expand_variable(&mut characters, lookup, &mut current)? {
@@ -243,6 +249,80 @@ pub fn parse_words(input: &str, lookup: Lookup) -> Result<Vec<Word>, String> {
     }
 
     Ok(args)
+}
+
+/// The text of `$'…'` after its opening quote, with the escapes read: `\n \t \r \a \b \e \f \v \\ \" \0NNN
+/// \xHH \uHHHH \UHHHHHHHH`. An escape that is not known is kept as typed. `\'` is not available.
+fn ansi_c_quoted(
+    characters: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    output: &mut String,
+) -> Result<(), String> {
+    while let Some(character) = characters.next() {
+        match character {
+            '\'' => return Ok(()),
+            '\\' => {
+                let Some(escape) = characters.next() else {
+                    return Err("missing closing quote".to_string());
+                };
+                match escape {
+                    'n' => output.push('\n'),
+                    't' => output.push('\t'),
+                    'r' => output.push('\r'),
+                    'a' => output.push('\u{7}'),
+                    'b' => output.push('\u{8}'),
+                    'e' | 'E' => output.push('\u{1b}'),
+                    'f' => output.push('\u{c}'),
+                    'v' => output.push('\u{b}'),
+                    '\\' => output.push('\\'),
+                    '"' => output.push('"'),
+                    '0'..='7' => {
+                        let mut value = escape.to_digit(8).unwrap_or(0);
+                        for _ in 0..2 {
+                            match characters.peek().and_then(|next| next.to_digit(8)) {
+                                Some(digit) => {
+                                    value = value * 8 + digit;
+                                    characters.next();
+                                }
+                                None => break,
+                            }
+                        }
+                        output.push(char::from_u32(value).unwrap_or('\u{fffd}'));
+                    }
+                    'x' | 'u' | 'U' => {
+                        let width = match escape {
+                            'x' => 2,
+                            'u' => 4,
+                            _ => 8,
+                        };
+                        let mut value = 0_u32;
+                        let mut digits = 0;
+                        while digits < width {
+                            match characters.peek().and_then(|next| next.to_digit(16)) {
+                                Some(digit) => {
+                                    value = value.wrapping_mul(16).wrapping_add(digit);
+                                    characters.next();
+                                    digits += 1;
+                                }
+                                None => break,
+                            }
+                        }
+                        if digits == 0 {
+                            output.push('\\');
+                            output.push(escape);
+                        } else {
+                            output.push(char::from_u32(value).unwrap_or('\u{fffd}'));
+                        }
+                    }
+                    other => {
+                        output.push('\\');
+                        output.push(other);
+                    }
+                }
+            }
+            other => output.push(other),
+        }
+    }
+    Err("missing closing quote".to_string())
 }
 
 /// Expand the variable after a `$` that was just read. Returns whether text was
@@ -1049,6 +1129,30 @@ pub fn normalize_multiline_input(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ansi_c_quotes_read_their_escapes() {
+        let read = |text: &str| {
+            let mut characters = text.chars().peekable();
+            let mut output = String::new();
+            ansi_c_quoted(&mut characters, &mut output).map(|()| output)
+        };
+        assert_eq!(read("a\\tb\\nc'"), Ok("a\tb\nc".to_string()));
+        assert_eq!(read("\\x41\\x4a!'"), Ok("AJ!".to_string()));
+        // Two hexadecimal digits at most after `\x`, four after `\u`.
+        assert_eq!(read("\\x41B\\u00e9a'"), Ok("ABéa".to_string()));
+        assert_eq!(read("\\u00e9\\U0001F600'"), Ok("é😀".to_string()));
+        assert_eq!(read("\\101\\0\\12'"), Ok("A\0\n".to_string()));
+        assert_eq!(
+            read("\\e\\a\\b\\f\\v\\r'"),
+            Ok("\u{1b}\u{7}\u{8}\u{c}\u{b}\r".to_string())
+        );
+        assert_eq!(read("\\\\ \\\"'"), Ok("\\ \"".to_string()));
+        // What is not an escape stays as typed, a bad hexadecimal escape too.
+        assert_eq!(read("\\q\\xZZ'"), Ok("\\q\\xZZ".to_string()));
+        assert!(read("no end").is_err());
+        assert!(read("trailing\\").is_err());
+    }
 
     #[test]
     fn array_references_are_names_and_all_elements_split_into_words() {
