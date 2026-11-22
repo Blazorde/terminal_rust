@@ -403,6 +403,8 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
     let mut characters = input.chars().peekable();
     // Inside `[[ … ]]`, `&&`, `||`, `<`, `>`, `(` and `)` are operators of the test.
     let mut in_test = false;
+    // How many `( … )` subshells are open: a `(` that starts a command opens one.
+    let mut subshells = 0_usize;
 
     while let Some(character) = characters.next() {
         if in_test && quote.is_none() && closes_double_bracket(&current, character) {
@@ -443,6 +445,19 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
             (None, '\\') => {
                 current.push(character);
                 current.extend(characters.next());
+            }
+            // `( list )`: the `(` is a word of its own, and the `)` that closes it starts a
+            // new command, so the flow parser reads them like `{` and `}`. The `()` of
+            // `name()` and a `)` with no subshell open (a `case` pattern) are plain text.
+            (None, '(') if starts_command(&current) && !in_test => {
+                current.push_str("( ");
+                subshells += 1;
+            }
+            (None, ')') if subshells > 0 && !current.ends_with('(') => {
+                finish_segment(&mut segments, &mut current, connector, ")")?;
+                connector = Connector::Then;
+                current.push(')');
+                subshells -= 1;
             }
             // `;;` ends an arm of a `case`: it is a segment of its own.
             (None, ';') if characters.peek() == Some(&';') => {
@@ -525,6 +540,24 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
     }
 
     Ok(segments)
+}
+
+/// Whether what has been read of a command is empty or only keywords that are followed
+/// by a command (`if`, `then`, `do`, `{`, …): a `(` here opens a subshell.
+fn starts_command(current: &str) -> bool {
+    let mut words = current.split_whitespace().peekable();
+    if words.peek().is_none() {
+        return true;
+    }
+    current.ends_with(char::is_whitespace)
+        && words.all(|word| {
+            // `name() {` before the `(`: the `()` of a function header is a word too.
+            word.ends_with("()")
+                || matches!(
+                    word,
+                    "if" | "then" | "elif" | "else" | "do" | "while" | "until" | "{" | "("
+                )
+        })
 }
 
 /// Whether `text` is a `[[ … ]]` command (it starts with the word `[[`).
@@ -895,6 +928,41 @@ pub fn normalize_multiline_input(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_paren_that_starts_a_command_opens_a_subshell() {
+        let texts = |line: &str| {
+            split_chain(line)
+                .expect("splits")
+                .into_iter()
+                .map(|segment| segment.text.trim().to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            texts("(cd d && ls) || echo no"),
+            vec!["( cd d", "ls", ")", "echo no"]
+        );
+        assert_eq!(texts("(a; b)"), vec!["( a", "b", ")"]);
+        assert_eq!(
+            texts("if (a); then b; fi"),
+            vec!["if ( a", ")", "then b", "fi"]
+        );
+        assert_eq!(texts("(a) > f"), vec!["( a", ") > f"]);
+        // Not a subshell: the `()` of a function header, a `(` inside a command, a `)`
+        // with nothing open (a `case` pattern), and the parentheses of `$(...)`.
+        assert_eq!(texts("f() { echo; }"), vec!["f() { echo", "}"]);
+        assert_eq!(
+            texts("(f() { echo; }; f)"),
+            vec!["( f() { echo", "}", "f", ")"]
+        );
+        assert_eq!(texts("echo a (b) c"), vec!["echo a (b) c"]);
+        assert_eq!(
+            texts("case x in a) echo; esac"),
+            vec!["case x in a) echo", "esac"]
+        );
+        assert_eq!(texts("echo $(a; b)"), vec!["echo $(a; b)"]);
+        assert_eq!(texts("echo \"(a)\""), vec!["echo \"(a)\""]);
+    }
 
     #[test]
     fn a_double_bracket_keeps_its_operators_and_ends_at_the_closing_brackets() {

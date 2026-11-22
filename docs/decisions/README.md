@@ -33,6 +33,7 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0024](0024-job-control.md) | Accepted | Job control: Ctrl+Z, `bg` and `fg` in safe Rust |
 | [0025](0025-negation-command-exec.md) | Accepted | `!`, `command`, `exec`, `$PPID` and `$RANDOM` |
 | [0026](0026-double-bracket-conditions.md) | Accepted | `[[ expression ]]` conditions |
+| [0027](0027-subshells.md) | Accepted | Subshells `( list )` |
 
 ## Lifecycle
 

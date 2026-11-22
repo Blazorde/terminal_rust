@@ -4318,3 +4318,85 @@ fn double_brackets_report_mistakes_with_status_two() {
     assert!(errors.contains("invalid regular expression"), "{errors}");
     assert!(printed.contains("recovered\n"), "{printed}");
 }
+
+#[test]
+fn a_subshell_keeps_its_changes_to_itself() {
+    let directory = TestDirectory::new("subshell");
+    fs::create_dir(directory.path().join("inner")).expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "x=outer",
+            "(x=inner; echo in=$x)",
+            "echo out=$x",
+            "(cd inner && echo cd-done)",
+            "test -d inner && echo still-here",
+            "pwd | grep -c inner",
+            "f() { echo original; }",
+            "(f() { echo changed; }; f)",
+            "f",
+            "export E=1",
+            "(export E=2; echo exported=$E)",
+            "echo after=$E",
+            "(exit 3)",
+            "echo status=$?",
+            "(echo one; echo two) | wc -l",
+            "(echo to-file) > sub.txt",
+            "cat sub.txt",
+            "(false) || echo or-ran",
+            "(true) && echo and-ran",
+            "(echo multi",
+            "echo line)",
+            "if (test -d inner); then echo in-if; fi",
+            "for i in 1 2; do (echo turn$i); done",
+            "g() { (echo from-g); }",
+            "g",
+            "h() { y=1; (y=2); echo y=$y; }",
+            "h",
+            "for i in 1 2; do (break); echo brk$i; done",
+            "r() { (return 5); echo after-return; }",
+            "r",
+            "(echo a; (echo b; (echo c)))",
+            "(echo $(echo nested))",
+            "echo \"(not a subshell)\"",
+            "echo a ( b",
+        ],
+    );
+
+    for expected in [
+        "in=inner\n",
+        "out=outer\n",
+        "cd-done\n",
+        "still-here\n",
+        "original\n",
+        "changed\n",
+        "exported=2\n",
+        "after=1\n",
+        "status=3\n",
+        "2\n",
+        "to-file\n",
+        "or-ran\n",
+        "and-ran\n",
+        "multi\n",
+        "line\n",
+        "in-if\n",
+        "turn1\n",
+        "turn2\n",
+        "from-g\n",
+        "y=1\n",
+        "brk1\nbrk2\n",
+        "after-return\n",
+        "a\nb\nc\n",
+        "nested\n",
+        "(not a subshell)\n",
+        "a ( b\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    // The directory was restored: the shell is not in `inner`.
+    assert!(printed.contains("0\n"), "{printed}");
+}

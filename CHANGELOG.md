@@ -7,6 +7,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Subshells `( commands )` (ADR-0027): the variables, functions, directory and exports
+  they change are put back when they end, and `exit` leaves only them.
 - `[[ expression ]]` conditions (ADR-0026): patterns with `==` and `!=`, regular expressions with
   `=~`, `<` and `>` on strings, `&&`, `||`, `!` and parentheses, no word splitting.
 

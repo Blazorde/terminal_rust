@@ -9,8 +9,8 @@ use std::env;
 use std::process::Command;
 use std::sync::{Mutex, MutexGuard};
 
-#[derive(Default)]
-struct Exports {
+#[derive(Clone, Default)]
+pub struct Exports {
     set: BTreeMap<String, String>,
     removed: BTreeSet<String>,
 }
@@ -39,6 +39,16 @@ pub fn export(name: &str, value: &str) {
     let mut table = exports();
     table.removed.remove(name);
     table.set.insert(name.to_string(), value.to_string());
+}
+
+/// The table of exports, to give back with [`restore`] (a subshell, ADR-0027).
+pub fn snapshot() -> Exports {
+    exports().clone()
+}
+
+/// Put back a table taken with [`snapshot`].
+pub fn restore(saved: Exports) {
+    *exports() = saved;
 }
 
 /// Remove `name` from the children's environment, even when it was inherited.

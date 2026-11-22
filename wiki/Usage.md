@@ -160,6 +160,16 @@ can be typed over several lines: the shell asks for more (`>> `) until `done` or
 `fi`. `Ctrl+C` stops a loop. A failing condition is not an error, so its message
 is not shown. `break 2` is not available.
 
+`( commands )` runs them in a copy of the shell: what they change (variables, functions, the
+directory, `export`) is given back when the parentheses close, `exit` leaves only them, and the
+status is the one of the last command. It can be chained, redirected and piped like any command:
+
+```text
+(cd build && make) || echo "build failed"
+(export CC=clang; make) > build.log
+if (test -d src); then echo found; fi
+```
+
 `[[ expression ]]` is the roomier test: its words are never split or matched against files, and it
 groups with `&&`, `||`, `!` and parentheses:
 
