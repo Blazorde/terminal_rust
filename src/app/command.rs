@@ -34,12 +34,15 @@ struct SubshellSnapshot {
     functions: HashMap<String, functions::Body>,
     frames: Vec<functions::Frame>,
     previous_dir: Option<PathBuf>,
+    dir_stack: Vec<PathBuf>,
     directory: Option<PathBuf>,
     exports: shell_env::Exports,
 }
 
 pub struct ShellState {
     previous_dir: Option<PathBuf>,
+    /// The directories that `pushd` set aside, the most recent first (see `dirs`).
+    dir_stack: Vec<PathBuf>,
     plugin_commands: DeclarativeCommandRegistry,
     user_commands: user::UserCommandRegistry,
     startup_script: Option<String>,
@@ -95,6 +98,7 @@ impl ShellState {
     ) -> Self {
         Self {
             previous_dir: None,
+            dir_stack: Vec::new(),
             plugin_commands,
             user_commands,
             startup_script,
@@ -284,6 +288,7 @@ impl ShellState {
             functions: self.functions.clone(),
             frames: self.frames.clone(),
             previous_dir: self.previous_dir.clone(),
+            dir_stack: self.dir_stack.clone(),
             directory: std::env::current_dir().ok(),
             exports: shell_env::snapshot(),
         }
@@ -295,6 +300,7 @@ impl ShellState {
         self.functions = saved.functions;
         self.frames = saved.frames;
         self.previous_dir = saved.previous_dir;
+        self.dir_stack = saved.dir_stack;
         if let Some(directory) = saved.directory {
             let _ = std::env::set_current_dir(directory);
         }
@@ -622,6 +628,34 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "say what a name runs: keyword, built-in, alias, plugin or program",
         max_args: None,
         handler: run_type,
+    },
+    CommandSpec {
+        name: "pushd",
+        usage: "pushd [dir]",
+        summary: "go to a directory and remember the one that was left",
+        max_args: Some(1),
+        handler: run_pushd,
+    },
+    CommandSpec {
+        name: "popd",
+        usage: "popd",
+        summary: "go back to the directory that pushd remembered",
+        max_args: Some(0),
+        handler: run_popd,
+    },
+    CommandSpec {
+        name: "dirs",
+        usage: "dirs",
+        summary: "show the current directory and the ones pushd remembered",
+        max_args: Some(0),
+        handler: run_dirs,
+    },
+    CommandSpec {
+        name: "time",
+        usage: "time command [args...]",
+        summary: "run a command and show how long it took",
+        max_args: None,
+        handler: run_time,
     },
     CommandSpec {
         name: "eval",
@@ -1587,6 +1621,103 @@ fn run_command(args: &[String], state: &mut ShellState) -> CommandResult {
             result
         }
     }
+}
+
+/// `cd` to `target` for `pushd` and `popd`, keeping `cd -` and `$PWD` up to date.
+fn change_directory(target: &str, state: &mut ShellState) -> Result<(), String> {
+    let previous =
+        cd::cd(Some(target), state.previous_dir.as_deref()).map_err(|error| error.to_string())?;
+    if previous.is_some() {
+        state.previous_dir = previous;
+    }
+    cd::record_change(state.previous_dir.as_deref());
+    Ok(())
+}
+
+/// The directory stack as `dirs` shows it: the current directory, then the others, with
+/// the home directory written `~`.
+fn directory_stack_line(state: &ShellState) -> String {
+    let home = crate::utils::path::home_directory();
+    std::env::current_dir()
+        .into_iter()
+        .chain(state.dir_stack.iter().cloned())
+        .map(|directory| match &home {
+            Some(home) if directory.starts_with(home) => {
+                let rest = directory.strip_prefix(home).unwrap_or(&directory);
+                if rest.as_os_str().is_empty() {
+                    "~".to_string()
+                } else {
+                    format!("~/{}", rest.display())
+                }
+            }
+            _ => directory.display().to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn run_dirs(_args: &[String], state: &mut ShellState) -> CommandResult {
+    map_prefixed_error("dirs", render::stdout_line(directory_stack_line(state)))
+}
+
+/// `pushd dir` goes to `dir` and remembers where it was; `pushd` alone swaps with the last one.
+fn run_pushd(args: &[String], state: &mut ShellState) -> CommandResult {
+    let here = std::env::current_dir().ok();
+    match optional_arg(args) {
+        Some(target) => {
+            if let Err(error) = change_directory(target, state) {
+                return CommandResult::Error(format!("pushd: {error}"));
+            }
+            if let Some(here) = here {
+                state.dir_stack.insert(0, here);
+            }
+        }
+        None => {
+            if state.dir_stack.is_empty() {
+                return CommandResult::Error("pushd: no other directory".to_string());
+            }
+            let top = state.dir_stack.remove(0);
+            if let Err(error) = change_directory(&top.to_string_lossy(), state) {
+                state.dir_stack.insert(0, top);
+                return CommandResult::Error(format!("pushd: {error}"));
+            }
+            if let Some(here) = here {
+                state.dir_stack.insert(0, here);
+            }
+        }
+    }
+    run_dirs(&[], state)
+}
+
+/// `popd` goes back to the directory that `pushd` remembered last.
+fn run_popd(_args: &[String], state: &mut ShellState) -> CommandResult {
+    if state.dir_stack.is_empty() {
+        return CommandResult::Error("popd: directory stack empty".to_string());
+    }
+    let top = state.dir_stack.remove(0);
+    if let Err(error) = change_directory(&top.to_string_lossy(), state) {
+        state.dir_stack.insert(0, top);
+        return CommandResult::Error(format!("popd: {error}"));
+    }
+    run_dirs(&[], state)
+}
+
+/// `time command args...` runs the command and shows the time it took on standard error.
+fn run_time(args: &[String], state: &mut ShellState) -> CommandResult {
+    let started = std::time::Instant::now();
+    let result = if args.is_empty() {
+        CommandResult::Continue
+    } else {
+        execute(args, state)
+    };
+    let elapsed = started.elapsed().as_secs_f64();
+    let minutes = (elapsed / 60.0).floor();
+    let _ = render::stderr_line(format!(
+        "\nreal\t{}m{:.3}s",
+        minutes as u64,
+        elapsed - minutes * 60.0
+    ));
+    result
 }
 
 /// `eval args...` joins the arguments with spaces and runs the result as a command line, so
