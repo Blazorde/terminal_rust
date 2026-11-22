@@ -19,6 +19,7 @@ pub(super) const MAX_CALL_DEPTH: usize = 64;
 pub(super) type Body = Arc<Vec<flow::Node>>;
 
 /// One call of a function, or one `source` of a file with arguments.
+#[derive(Clone)]
 pub(super) struct Frame {
     /// `$1`, `$2`, ... in order.
     pub(super) positional: Vec<String>,

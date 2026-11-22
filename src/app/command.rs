@@ -27,6 +27,16 @@ mod pipeline;
 mod scripts;
 mod substitution;
 
+/// The state a subshell restores when it ends.
+struct SubshellSnapshot {
+    variables: HashMap<String, String>,
+    functions: HashMap<String, functions::Body>,
+    frames: Vec<functions::Frame>,
+    previous_dir: Option<PathBuf>,
+    directory: Option<PathBuf>,
+    exports: shell_env::Exports,
+}
+
 pub struct ShellState {
     previous_dir: Option<PathBuf>,
     plugin_commands: DeclarativeCommandRegistry,
@@ -172,6 +182,32 @@ impl ShellState {
     }
 
     /// The notices for the background jobs that ended since the last call.
+    /// What a subshell must give back: see [`flow::run_subshell`].
+    fn subshell_snapshot(&self) -> SubshellSnapshot {
+        SubshellSnapshot {
+            variables: self.variables.clone(),
+            functions: self.functions.clone(),
+            frames: self.frames.clone(),
+            previous_dir: self.previous_dir.clone(),
+            directory: std::env::current_dir().ok(),
+            exports: shell_env::snapshot(),
+        }
+    }
+
+    fn subshell_restore(&mut self, saved: SubshellSnapshot) {
+        self.variables = saved.variables;
+        self.functions = saved.functions;
+        self.frames = saved.frames;
+        self.previous_dir = saved.previous_dir;
+        if let Some(directory) = saved.directory {
+            let _ = std::env::set_current_dir(directory);
+        }
+        shell_env::restore(saved.exports);
+        // A `break`, `continue` or `return` inside the subshell ends there.
+        self.loop_signal = None;
+        self.returning = None;
+    }
+
     pub(crate) fn adopt_stopped_jobs(&mut self) {
         for notice in self.jobs.adopt_stopped() {
             let _ = render::stderr_line(notice);
