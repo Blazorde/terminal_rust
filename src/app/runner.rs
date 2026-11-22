@@ -163,6 +163,8 @@ fn run_interactive_editor() -> ExitCode {
         }
     };
 
+    finish_shell(&mut engine);
+
     if let Some(path) = history_path.as_deref()
         && let Err(error) = editor.save_history(path)
     {
@@ -188,12 +190,24 @@ fn show_job_notices(engine: &mut ShellEngine) {
     }
 }
 
+/// Run the `EXIT` trap and show what it printed.
+fn finish_shell(engine: &mut ShellEngine) {
+    let result = engine.finish();
+    emit_result(&result);
+}
+
 fn run_interactive_plain() -> ExitCode {
-    let mut input = String::new();
     let (mut engine, mut shell_prompt) = load_interactive_shell();
+    let code = plain_loop(&mut engine, &mut shell_prompt);
+    finish_shell(&mut engine);
+    code
+}
+
+fn plain_loop(engine: &mut ShellEngine, shell_prompt: &mut Prompt) -> ExitCode {
+    let mut input = String::new();
 
     loop {
-        show_job_notices(&mut engine);
+        show_job_notices(engine);
         if let Err(error) = shell_prompt.print() {
             let _ = render::stderr_line(format_args!("prompt: {error}"));
             return ExitCode::FAILURE;
@@ -211,7 +225,7 @@ fn run_interactive_plain() -> ExitCode {
             }
         }
 
-        if handle_input(&input, &mut engine, &mut shell_prompt) == ExecutionStatus::Exit {
+        if handle_input(&input, engine, shell_prompt) == ExecutionStatus::Exit {
             return ExitCode::from(engine.exit_code());
         }
     }

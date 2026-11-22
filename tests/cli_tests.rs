@@ -4400,3 +4400,72 @@ fn a_subshell_keeps_its_changes_to_itself() {
     // The directory was restored: the shell is not in `inner`.
     assert!(printed.contains("0\n"), "{printed}");
 }
+
+#[test]
+fn an_exit_trap_runs_once_when_the_shell_ends() {
+    let directory = TestDirectory::new("exit trap");
+
+    let output = run_interactive(
+        directory.path(),
+        "trap 'echo bye-trap' EXIT\ntrap\necho body\nexit 4\necho never\n",
+    );
+    let printed = stdout(&output);
+    assert!(
+        printed.contains("trap -- 'echo bye-trap' EXIT\n"),
+        "{printed}"
+    );
+    assert!(printed.contains("body\n"), "{printed}");
+    assert_eq!(printed.matches("bye-trap\n").count(), 1, "{printed}");
+    assert!(!printed.contains("never"), "{printed}");
+    // The trap does not change the status the shell leaves with.
+    assert_eq!(output.status.code(), Some(4), "{}", stderr(&output));
+
+    // End of input runs it too.
+    let output = run_interactive(directory.path(), "trap 'echo eof-trap' EXIT\necho x\n");
+    assert!(
+        stdout(&output).contains("eof-trap\n"),
+        "{}",
+        stdout(&output)
+    );
+
+    // Removed, it does not run.
+    let output = run_interactive(directory.path(), "trap 'echo removed' EXIT\ntrap - EXIT\n");
+    assert!(
+        !stdout(&output).contains("removed\n"),
+        "{}",
+        stdout(&output)
+    );
+
+    // Replaced, only the last one runs.
+    let output = run_interactive(
+        directory.path(),
+        "trap 'echo second' EXIT\ntrap 'echo third' EXIT\ntrap 'echo INT' INT\n",
+    );
+    let printed = stdout(&output);
+    assert!(!printed.contains("second\n"), "{printed}");
+    assert!(printed.contains("third\n"), "{printed}");
+    assert!(
+        stderr(&output).contains("only EXIT is supported"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn the_power_operator_works_in_arithmetic_expansion() {
+    let directory = TestDirectory::new("power");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo 2**10=$((2**10))",
+            "n=3",
+            "echo sq=$((n**2 + 1))",
+            "echo bad=$((2**-1))",
+        ],
+    );
+
+    assert!(printed.contains("2**10=1024\n"), "{printed}\n{errors}");
+    assert!(printed.contains("sq=10\n"), "{printed}");
+    assert!(errors.contains("negative exponent"), "{errors}");
+}

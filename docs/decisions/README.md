@@ -34,6 +34,7 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0025](0025-negation-command-exec.md) | Accepted | `!`, `command`, `exec`, `$PPID` and `$RANDOM` |
 | [0026](0026-double-bracket-conditions.md) | Accepted | `[[ expression ]]` conditions |
 | [0027](0027-subshells.md) | Accepted | Subshells `( list )` |
+| [0028](0028-exit-trap-and-power.md) | Accepted | `trap … EXIT` and `**` in arithmetic |
 
 ## Lifecycle
 

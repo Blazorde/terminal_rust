@@ -65,6 +65,8 @@ pub struct ShellState {
     exit_warned: bool,
     /// The process id of the last job started with `&`, for `$!`.
     pub(crate) last_background: Option<u32>,
+    /// The command that `trap 'command' EXIT` runs when the shell ends.
+    exit_trap: Option<String>,
 }
 
 impl ShellState {
@@ -91,6 +93,7 @@ impl ShellState {
             returning: None,
             exit_warned: false,
             last_background: None,
+            exit_trap: None,
         }
     }
 
@@ -206,6 +209,11 @@ impl ShellState {
         // A `break`, `continue` or `return` inside the subshell ends there.
         self.loop_signal = None;
         self.returning = None;
+    }
+
+    /// The `EXIT` trap, taken so that it runs once.
+    pub(crate) fn take_exit_trap(&mut self) -> Option<String> {
+        self.exit_trap.take()
     }
 
     pub(crate) fn adopt_stopped_jobs(&mut self) {
@@ -521,6 +529,13 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "say what a name runs: keyword, built-in, alias, plugin or program",
         max_args: None,
         handler: run_type,
+    },
+    CommandSpec {
+        name: "trap",
+        usage: "trap [command] EXIT | trap - EXIT | trap",
+        summary: "run a command when the shell ends",
+        max_args: None,
+        handler: run_trap,
     },
     CommandSpec {
         name: "command",
@@ -1396,6 +1411,47 @@ fn run_command(args: &[String], state: &mut ShellState) -> CommandResult {
             result
         }
     }
+}
+
+/// `trap 'command' EXIT` runs the command when the shell ends (`exit`, end of input, `Ctrl+D`);
+/// `trap - EXIT` removes it, and `trap` alone shows it. Signal traps are not available.
+fn run_trap(args: &[String], state: &mut ShellState) -> CommandResult {
+    let is_exit = |name: &str| matches!(name, "EXIT" | "0");
+    match args {
+        [] => {
+            if let Some(command) = &state.exit_trap {
+                let quoted = command.replace('\'', "'\\''");
+                return map_prefixed_error(
+                    "trap",
+                    render::stdout_line(format!("trap -- '{quoted}' EXIT")),
+                );
+            }
+            CommandResult::Continue
+        }
+        [dash, names @ ..] if dash == "-" && !names.is_empty() => {
+            for name in names {
+                if !is_exit(name) {
+                    return CommandResult::Error(trap_unsupported(name));
+                }
+            }
+            state.exit_trap = None;
+            CommandResult::Continue
+        }
+        [command, names @ ..] if !names.is_empty() => {
+            for name in names {
+                if !is_exit(name) {
+                    return CommandResult::Error(trap_unsupported(name));
+                }
+            }
+            state.exit_trap = Some(command.clone()).filter(|command| !command.trim().is_empty());
+            CommandResult::Continue
+        }
+        _ => CommandResult::Error("trap: usage: trap [command] EXIT | trap - EXIT".to_string()),
+    }
+}
+
+fn trap_unsupported(name: &str) -> String {
+    format!("trap: {name}: only EXIT is supported (no signal traps)")
 }
 
 /// `exec command args...` runs the command and leaves the shell with its status; without

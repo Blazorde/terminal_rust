@@ -1054,6 +1054,7 @@ fn ctrl_z_stops_the_program_and_bg_and_fg_continue_it() {
     step(b"sleep 60\r", "sleep 60");
     thread::sleep(Duration::from_millis(500));
     step(b"\x1a", "Stopped  sleep 60");
+    step(b"trap 'echo trap-ran' EXIT\r", "trap 'echo trap-ran' EXIT");
     step(b"exit\r", "There are stopped jobs.");
 
     let exit_deadline = Instant::now() + Duration::from_secs(10);
@@ -1076,6 +1077,21 @@ fn ctrl_z_stops_the_program_and_bg_and_fg_continue_it() {
         }
         thread::sleep(Duration::from_millis(20));
     }
+
+    // The `EXIT` trap ran as the shell ended, at the prompt of the editor too.
+    let drain_deadline = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < drain_deadline {
+        match receiver.recv_timeout(Duration::from_millis(50)) {
+            Ok(chunk) => output.extend(chunk),
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+        }
+    }
+    let text = String::from_utf8_lossy(&output).into_owned();
+    assert!(
+        text.contains("\r\ntrap-ran\r\n"),
+        "the exit trap did not run: {text:?}"
+    );
 }
 
 #[test]

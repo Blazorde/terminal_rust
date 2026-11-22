@@ -111,6 +111,11 @@ not available: write `NAME=value` instead.
 
 ## Leaving the shell
 
+`trap 'command' EXIT` remembers a command that runs once when the shell ends (`exit`, the end
+of a script or of the input, `Ctrl+D`), for example `trap 'rm -f "$tmp"' EXIT`. `trap - EXIT`
+removes it and `trap` alone shows it. The status the shell leaves with is not changed by the
+trap. Traps on signals (`INT`, `TERM`, `ERR`…) are refused with a message.
+
 `exit` closes the shell with the status of the last command. `exit 3` closes it
 with code 3 (the code is taken modulo 256, so `exit -1` is 255), which scripts
 and callers can test. `exit soon` is an error and the shell stays open. When the
@@ -334,13 +339,14 @@ echo "half: $((total / 2))"
 echo $(( (a + b) % 10 ))
 ```
 
-Numbers are 64-bit integers (decimal or `0x` hexadecimal). Available: `+ - * / %`,
+Numbers are 64-bit integers (decimal or `0x` hexadecimal). Available: `+ - * / %`, the
+power `**` (`2 ** 10`, right to left, no negative exponent),
 parentheses, the signs `-` `+` and `!`, the comparisons `== != < <= > >=` and the
 logical `&&` `||`, which give `1` or `0`. A variable is written `n` or `$n`; an
 unset or empty one is `0`. A division by zero, an overflow or a bad expression is
 an error and the command does not run. There is no assignment inside the
-expression (`i=$((i+1))` is an ordinary assignment), no `**`, no bit operators and
-no `$(...)` inside it.
+expression (`i=$((i+1))` is an ordinary assignment), no bit operators and no
+`$(...)` inside it.
 
 ## File name patterns
 
