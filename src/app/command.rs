@@ -120,6 +120,14 @@ impl ShellState {
                     .unwrap_or_default(),
             );
         }
+        // The parent of the shell, and a number from 0 to 32767 that changes at each use.
+        // A variable of the same name that the user set wins.
+        if name == "PPID" && !self.variables.contains_key("PPID") {
+            return Some(parent_process_id());
+        }
+        if name == "RANDOM" && !self.variables.contains_key("RANDOM") {
+            return Some(next_random().to_string());
+        }
         // The positional parameters of the running function, or of the file that
         // `source` is reading. Outside any: none, and `$#` is 0.
         let positional = self
@@ -476,6 +484,20 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "say what a name runs: keyword, built-in, alias, plugin or program",
         max_args: None,
         handler: run_type,
+    },
+    CommandSpec {
+        name: "command",
+        usage: "command [-v|-V] name [args...]",
+        summary: "run a command without its function, or say what a name is",
+        max_args: None,
+        handler: run_command,
+    },
+    CommandSpec {
+        name: "exec",
+        usage: "exec [command [args...]]",
+        summary: "run a command and leave the shell with its status",
+        max_args: None,
+        handler: run_exec,
     },
     CommandSpec {
         name: "which",
@@ -1252,6 +1274,101 @@ fn describe_name(name: &str, state: &ShellState) -> Option<String> {
         return Some(format!("{name} is a plugin command"));
     }
     external::locate(name).map(|path| format!("{name} is {}", path.display()))
+}
+
+/// The process id of the parent of the shell, empty where it is not known.
+fn parent_process_id() -> String {
+    #[cfg(unix)]
+    {
+        std::os::unix::process::parent_id().to_string()
+    }
+    #[cfg(not(unix))]
+    {
+        String::new()
+    }
+}
+
+/// `$RANDOM`: xorshift, seeded from the clock and the process id the first time.
+fn next_random() -> u32 {
+    use std::cell::Cell;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    thread_local! {
+        static STATE: Cell<u64> = const { Cell::new(0) };
+    }
+    STATE.with(|cell| {
+        let mut value = cell.get();
+        if value == 0 {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.as_nanos() as u64);
+            value = nanos ^ (u64::from(std::process::id()) << 32) | 1;
+        }
+        value ^= value << 13;
+        value ^= value >> 7;
+        value ^= value << 17;
+        cell.set(value);
+        ((value >> 33) % 32768) as u32
+    })
+}
+
+/// `command -v name...` prints what each name runs, `command -V name...` says it like
+/// `type`, and `command name args...` runs the command without the function of that name.
+fn run_command(args: &[String], state: &mut ShellState) -> CommandResult {
+    match args.first().map(String::as_str) {
+        None => CommandResult::Error("command: usage: command [-v|-V] name [args...]".into()),
+        Some("-V") => run_type(&args[1..], state),
+        Some("-v") => {
+            let mut missing = false;
+            for name in &args[1..] {
+                let shown = if flow::is_keyword(name)
+                    || state.functions.contains_key(name)
+                    || find_command(name).is_some()
+                    || state.user_commands.get(name).is_some()
+                {
+                    Some(name.clone())
+                } else {
+                    external::locate(name).map(|path| path.display().to_string())
+                };
+                match shown {
+                    Some(line) => {
+                        let _ = render::stdout_line(line);
+                    }
+                    None => missing = true,
+                }
+            }
+            if missing || args.len() == 1 {
+                CommandResult::Error(String::new())
+            } else {
+                CommandResult::Continue
+            }
+        }
+        Some(name) => {
+            // A function does not shadow the command that is asked for by name.
+            let shadowed = state.functions.remove(name);
+            let result = execute(args, state);
+            if let Some(function) = shadowed {
+                state.functions.entry(name.to_string()).or_insert(function);
+            }
+            result
+        }
+    }
+}
+
+/// `exec command args...` runs the command and leaves the shell with its status; without
+/// a command it does nothing. The shell is not replaced by the program.
+fn run_exec(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args.is_empty() {
+        return CommandResult::Continue;
+    }
+    let result = execute(args, state);
+    if let CommandResult::Error(message) = &result
+        && !message.is_empty()
+    {
+        let _ = render::stderr_line(message);
+    }
+    state.record_status(matches!(result, CommandResult::Error(_)));
+    state.exit_code = Some(status_byte(i64::from(state.last_status)));
+    CommandResult::Exit
 }
 
 fn run_type(args: &[String], state: &mut ShellState) -> CommandResult {

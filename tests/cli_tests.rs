@@ -4062,3 +4062,143 @@ fn backquotes_substitute_a_command_like_dollar_parenthesis() {
         "an unclosed backquote is an error: {errors}"
     );
 }
+
+#[test]
+fn a_leading_bang_turns_the_status_of_a_command_around() {
+    let directory = TestDirectory::new("negation");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "! false",
+            "echo after-false=$?",
+            "! true",
+            "echo after-true=$?",
+            "if ! test -f no-such-file; then echo missing; fi",
+            "if ! test -d .; then echo wrong; else echo kept; fi",
+            "! false && echo and-runs",
+            "! true || echo or-runs",
+            "! echo shown-once",
+            "echo after-shown=$?",
+            "!",
+            "echo \"a ! b\"",
+        ],
+    );
+
+    for expected in [
+        "after-false=0\n",
+        "after-true=1\n",
+        "missing\n",
+        "kept\n",
+        "and-runs\n",
+        "or-runs\n",
+        "shown-once\n",
+        "after-shown=1\n",
+        "a ! b\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("wrong"), "{printed}");
+    assert!(
+        errors.contains("expected a command after '!'"),
+        "a lone bang is an error: {errors}"
+    );
+}
+
+#[test]
+fn command_skips_functions_and_exec_leaves_with_the_status() {
+    let directory = TestDirectory::new("command exec");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "pwd() { echo wrapped; }",
+            "pwd",
+            "command pwd",
+            "command -v cd",
+            "command -v no-such-program-zz",
+            "echo missing=$?",
+            "command -V cd",
+            "exec",
+            "echo still-here",
+            "exec sh -c 'exit 7'",
+            "echo never-reached",
+        ],
+    );
+
+    for expected in [
+        "wrapped\n",
+        "cd\n",
+        "missing=1\n",
+        "cd is a shell builtin\n",
+        "still-here\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("never-reached"), "{printed}");
+    // `pwd` runs the function, `command pwd` the built-in: only one line is the function's.
+    assert_eq!(
+        printed.matches("wrapped\n").count(),
+        1,
+        "{printed}\n{errors}"
+    );
+}
+
+#[test]
+fn exec_gives_its_status_to_the_shell_process() {
+    let directory = TestDirectory::new("exec status");
+
+    let output = run_interactive(directory.path(), "exec sh -c 'exit 7'\necho never\n");
+
+    assert_eq!(output.status.code(), Some(7), "{}", stderr(&output));
+    assert!(!stdout(&output).contains("never"));
+}
+
+#[cfg(unix)]
+#[test]
+fn ppid_is_the_parent_and_random_changes_within_its_range() {
+    let directory = TestDirectory::new("ppid random");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo parent=$PPID",
+            "for i in {1..300}; do echo r=$RANDOM; done",
+            "RANDOM=5",
+            "echo fixed=$RANDOM",
+        ],
+    );
+
+    let value = |prefix: &str| -> Vec<u32> {
+        printed
+            .split(prefix)
+            .skip(1)
+            .map(|rest| {
+                rest.lines()
+                    .next()
+                    .unwrap_or_default()
+                    .parse()
+                    .expect("number")
+            })
+            .collect()
+    };
+    let parent = value("parent=");
+    assert_eq!(parent, vec![std::process::id()], "{printed}\n{errors}");
+    let randoms = value("r=");
+    assert_eq!(randoms.len(), 300);
+    // 300 draws from 0..32768 reach above 30000 and below 2000 with certainty in practice.
+    assert!(randoms.iter().any(|number| *number > 30000), "{randoms:?}");
+    assert!(randoms.iter().any(|number| *number < 2000), "{randoms:?}");
+    assert!(randoms.iter().all(|number| *number < 32768), "{randoms:?}");
+    assert!(
+        randoms.windows(2).any(|pair| pair[0] != pair[1]),
+        "RANDOM never changed: {randoms:?}"
+    );
+    assert!(printed.contains("fixed=5\n"), "{printed}");
+}
