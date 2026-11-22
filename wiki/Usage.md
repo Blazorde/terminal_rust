@@ -97,11 +97,19 @@ colon an empty value counts as unset; without it only an unset variable does:
 | `${NAME:+word}` / `${NAME+word}` | `word` when set (and not empty, with the colon), else nothing |
 | `${NAME:?message}` / `${NAME?message}` | the value, or an error `NAME: message` and nothing runs |
 | `${#NAME}` | the number of characters of the value |
+| `${NAME#pat}` / `${NAME##pat}` | the value without the shortest / longest prefix that matches `pat` |
+| `${NAME%pat}` / `${NAME%%pat}` | the value without the shortest / longest suffix that matches `pat` |
+| `${NAME/pat/text}` / `${NAME//pat/text}` | the value with the first / every match of `pat` replaced (`/#` at the start, `/%` at the end) |
+| `${NAME:off}` / `${NAME:off:len}` | a part of the value, in characters (`${NAME: -3}` counts from the end) |
+| `${NAME^}` / `${NAME^^}` / `${NAME,}` / `${NAME,,}` | the first character or all of them in upper or lower case |
 
 ```text
 echo ${EDITOR:-nano}          # nano when EDITOR is not set
 cd ${PROJECT:-.}/src
 echo "${#PATH} characters in PATH"
+f=report.final.txt; echo ${f%.*} ${f%%.*} ${f##*.}   # report.final  report  txt
+echo ${PWD##*/}               # the name of the current folder
+echo ${f/final/draft}         # report.draft.txt
 ```
 
 The `word` may hold variables, quotes and another `${…}`. It is never split into
