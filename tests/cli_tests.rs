@@ -4202,3 +4202,119 @@ fn ppid_is_the_parent_and_random_changes_within_its_range() {
     );
     assert!(printed.contains("fixed=5\n"), "{printed}");
 }
+
+#[test]
+fn double_brackets_test_files_patterns_strings_and_integers() {
+    let directory = TestDirectory::new("double bracket");
+    fs::write(directory.path().join("a.rs"), "x").expect("fixture");
+    fs::write(directory.path().join("b.txt"), "x").expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "f=a.rs",
+            "[[ $f == *.rs ]] && echo glob-yes",
+            "[[ $f == *.txt ]] || echo glob-no",
+            "[[ $f != *.txt ]] && echo neq-yes",
+            "[[ $f == \"*.rs\" ]] || echo literal-star",
+            "x=\"a b\"",
+            "[[ $x == a* ]] && echo nosplit",
+            "[[ \"a b\" == \"a b\" ]] && echo quoted",
+            "[[ -f a.rs && -f b.txt ]] && echo both",
+            "[[ -f a.rs && -f nope ]] || echo not-both",
+            "[[ -f nope || -f b.txt ]] && echo either",
+            "[[ ! -f nope ]] && echo bang",
+            "[[ ( -f a.rs || -f nope ) && -f b.txt ]] && echo paren",
+            "[[ abc < abd ]] && echo less",
+            "[[ b > a ]] && echo greater",
+            "[[ 5 -gt 3 ]] && echo integer",
+            "[[ $f =~ ^a\\.r ]] && echo regex",
+            "[[ $f =~ ^z ]] || echo regex-no",
+            "[[ -n $unset ]] || echo empty",
+            "[[ $unset ]] || echo empty-word",
+            "if [[ $f == *.rs ]]; then echo in-if; fi",
+            "echo [[ not a test ]]",
+            "[[ x == x ]]",
+            "echo yes=$?",
+            "[[ x == y ]]",
+            "echo no=$?",
+        ],
+    );
+
+    for expected in [
+        "glob-yes\n",
+        "glob-no\n",
+        "neq-yes\n",
+        "literal-star\n",
+        "nosplit\n",
+        "quoted\n",
+        "both\n",
+        "not-both\n",
+        "either\n",
+        "bang\n",
+        "paren\n",
+        "less\n",
+        "greater\n",
+        "integer\n",
+        "regex\n",
+        "regex-no\n",
+        "empty\n",
+        "empty-word\n",
+        "in-if\n",
+        "[[ not a test ]]\n",
+        "yes=0\n",
+        "no=1\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+}
+
+#[test]
+fn double_brackets_do_not_evaluate_the_side_that_is_skipped() {
+    let directory = TestDirectory::new("double bracket lazy");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "[[ -f nope && $(echo ran > and.txt) ]]",
+            "[[ -d . || $(echo ran > or.txt) ]]",
+            "test -f and.txt || echo and-skipped",
+            "test -f or.txt || echo or-skipped",
+            "[[ -d . && $(echo ran > both.txt; echo x) ]]",
+            "test -f both.txt && echo both-ran",
+        ],
+    );
+
+    for expected in ["and-skipped\n", "or-skipped\n", "both-ran\n"] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+}
+
+#[test]
+fn double_brackets_report_mistakes_with_status_two() {
+    let directory = TestDirectory::new("double bracket errors");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "[[ a == b",
+            "[[ x -eq 1 ]]",
+            "echo int=$?",
+            "[[ ( a == a ]]",
+            "[[ a =~ ( ]]",
+            "[[ a == a ]] && echo recovered",
+        ],
+    );
+
+    assert!(errors.contains("missing ']]'"), "{errors}");
+    assert!(printed.contains("int=2\n"), "{printed}\n{errors}");
+    assert!(errors.contains("missing ')'"), "{errors}");
+    assert!(errors.contains("invalid regular expression"), "{errors}");
+    assert!(printed.contains("recovered\n"), "{printed}");
+}

@@ -401,9 +401,20 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
     let mut connector = Connector::Then;
     let mut quote: Option<Quote> = None;
     let mut characters = input.chars().peekable();
+    // Inside `[[ … ]]`, `&&`, `||`, `<`, `>`, `(` and `)` are operators of the test.
+    let mut in_test = false;
 
     while let Some(character) = characters.next() {
+        if in_test && quote.is_none() && closes_double_bracket(&current, character) {
+            in_test = false;
+        }
+        if !in_test && quote.is_none() && character.is_whitespace() && current.trim() == "[[" {
+            in_test = true;
+        }
         match (quote, character) {
+            (None, '&' | '|' | ';') if in_test && !closes_double_bracket(&current, character) => {
+                current.push(character);
+            }
             (Some(Quote::Single), '\'') | (Some(Quote::Double), '"') => {
                 quote = None;
                 current.push(character);
@@ -516,6 +527,18 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
     Ok(segments)
 }
 
+/// Whether `text` is a `[[ … ]]` command (it starts with the word `[[`).
+fn opens_double_bracket(text: &str) -> bool {
+    text.trim_start()
+        .strip_prefix("[[")
+        .is_some_and(|rest| rest.starts_with(char::is_whitespace))
+}
+
+/// Whether the text read so far ends with the closing `]]` and `next` ends that word.
+fn closes_double_bracket(current: &str, next: char) -> bool {
+    current.ends_with(" ]]") && (next.is_whitespace() || matches!(next, '&' | '|' | ';'))
+}
+
 /// Read the rest of a `$(...)` whose `$(` was already consumed, up to and
 /// including the matching `)`. Parentheses inside quotes do not count, and the
 /// substitution has its own quoting: `"$(echo ")")"` is one substitution. `next`
@@ -582,6 +605,13 @@ pub struct Stage {
 /// Split the text of a segment at the unquoted `|` and pull the redirections out
 /// of each stage.
 pub fn split_stages(input: &str) -> Result<Vec<Stage>, String> {
+    // `[[ a < b || c ]]` is one command: its `<`, `>`, `|` and `&` are operators of its own.
+    if opens_double_bracket(input) {
+        return Ok(vec![Stage {
+            text: input.to_string(),
+            redirects: Vec::new(),
+        }]);
+    }
     let characters: Vec<char> = input.chars().collect();
     let mut position = 0;
     let mut stages = Vec::new();
@@ -865,6 +895,36 @@ pub fn normalize_multiline_input(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_double_bracket_keeps_its_operators_and_ends_at_the_closing_brackets() {
+        let texts = |line: &str| {
+            split_chain(line)
+                .expect("splits")
+                .into_iter()
+                .map(|segment| segment.text.trim().to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(texts("[[ -f a && -f b ]]"), vec!["[[ -f a && -f b ]]"]);
+        assert_eq!(
+            texts("[[ a || b ]] && echo x"),
+            vec!["[[ a || b ]]", "echo x"]
+        );
+        assert_eq!(texts("[[ a ]]&& echo x"), vec!["[[ a ]]", "echo x"]);
+        assert_eq!(texts("[[ a ]]; echo x"), vec!["[[ a ]]", "echo x"]);
+        // Only a command that starts with the word `[[` is a test.
+        assert_eq!(texts("echo [[ a && b"), vec!["echo [[ a", "b"]);
+        assert_eq!(texts("echo [[a && b"), vec!["echo [[a", "b"]);
+        // A quoted word that looks like the closing brackets does not end it.
+        assert_eq!(
+            texts("[[ a == \"]]\" && b ]]"),
+            vec!["[[ a == \"]]\" && b ]]"]
+        );
+
+        let stages = split_stages("[[ a < b | c > d ]]").expect("one stage");
+        assert_eq!(stages.len(), 1);
+        assert!(stages[0].redirects.is_empty());
+    }
 
     fn parse_input(input: &str) -> Result<Vec<String>, String> {
         parse_with(input, &|_| None)

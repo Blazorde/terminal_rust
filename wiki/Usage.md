@@ -160,6 +160,19 @@ can be typed over several lines: the shell asks for more (`>> `) until `done` or
 `fi`. `Ctrl+C` stops a loop. A failing condition is not an error, so its message
 is not shown. `break 2` is not available.
 
+`[[ expression ]]` is the roomier test: its words are never split or matched against files, and it
+groups with `&&`, `||`, `!` and parentheses:
+
+```text
+[[ $name == *.rs && -f $name ]] && echo "a Rust file"
+[[ $answer =~ ^[yY] ]] || echo "not a yes"
+if [[ ( -d src || -d lib ) && ! -f stop ]]; then make; fi
+```
+
+`==` and `!=` compare with a pattern (quote the right side to compare literally), `<` and `>`
+compare strings, `=~` matches a regular expression, and `-f`, `-d`, `-eq` and the others work as in
+`test`. The side of `&&` or `||` that is skipped is not evaluated. A mistake gives status 2.
+
 A block can be redirected and piped as a whole, so the usual loops work:
 
 ```text
