@@ -806,11 +806,15 @@ pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult
         report(&last);
 
         last = match node {
-            Node::Simple { segment, stages } => {
-                let result = run_segment(&segment.text, stages, segment.background, state);
-                state.record_status(matches!(result, CommandResult::Error(_)));
-                result
-            }
+            Node::Simple { segment, stages } => match negated(&segment.text) {
+                // `! command`: the status is turned around, so `if ! test -f x` reads well.
+                Some(rest) => run_negated(rest, segment.background, state),
+                None => {
+                    let result = run_segment(&segment.text, stages, segment.background, state);
+                    state.record_status(matches!(result, CommandResult::Error(_)));
+                    result
+                }
+            },
             Node::For {
                 variable,
                 words,
@@ -846,6 +850,35 @@ pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult
         }
     }
     last
+}
+
+/// The command that follows a leading `!` word, when the text starts with one.
+fn negated(text: &str) -> Option<&str> {
+    let rest = text.trim_start().strip_prefix('!')?;
+    (rest.is_empty() || rest.starts_with(char::is_whitespace)).then_some(rest.trim_start())
+}
+
+/// Run `rest` and turn its status around: a failure becomes a success and the other way.
+fn run_negated(rest: &str, background: bool, state: &mut ShellState) -> CommandResult {
+    if rest.is_empty() {
+        return CommandResult::Error("expected a command after '!'".to_string());
+    }
+    let stages = match split_stages(rest) {
+        Ok(stages) => stages,
+        Err(error) => return CommandResult::Error(error),
+    };
+    let result = run_segment(rest, &stages, background, state);
+    // The message of a failure is still shown: only the status is turned around.
+    report(&result);
+    let failed = matches!(result, CommandResult::Error(_));
+    state.record_status(failed);
+    if failed {
+        state.last_status = 0;
+        CommandResult::Continue
+    } else {
+        state.last_status = 1;
+        CommandResult::Error(String::new())
+    }
 }
 
 /// Run one node as if it were a list of its own.

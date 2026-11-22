@@ -5,6 +5,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+### Added
+
+- `! command` turns the status of a command around (`if ! test -f x; then …`), `command -v`,
+  `command -V` and `command name args` (skips a function of the same name), `exec command`
+  (runs it and leaves the shell with its status), `$PPID` and `$RANDOM` (ADR-0025).
+
 ## [1.11.0] - 2026-11-22
 
 ### Added

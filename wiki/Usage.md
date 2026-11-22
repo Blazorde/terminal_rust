@@ -59,7 +59,8 @@ type for echo ls cargo     # for is a shell keyword ... cargo is /usr/bin/cargo
 `$NAME`, `${NAME}` and `$?` (`0` after a success, the exit code of a program
 that failed, `127` for an unknown program, `1` for a failure inside the shell) are
 expanded in command lines, and a leading `~` stands for your home directory. `$$` is the
-process id of the shell and `$!` the one of the last job started with `&` (empty before any).
+process id of the shell, `$!` the one of the last job started with `&` (empty before any),
+`$PPID` the one of its parent, and `$RANDOM` a number from 0 to 32767 that changes each time.
 Double quotes expand variables, single quotes do not, and `\$` writes a literal
 dollar sign:
 
@@ -130,6 +131,14 @@ make || echo "build failed"
 succeeded, and `||` only if it failed. They are evaluated from left to right and
 `exit` stops the line. Quote an operator to use it as text. A trailing `&` runs
 a command in the background, see [Background jobs](#background-jobs).
+
+A leading `!` turns the status around, which reads well in a condition:
+`if ! test -f build.log; then …`, `! grep -q error out.txt && echo clean`. `$?` is `0`
+after a failed command and `1` after a successful one.
+
+`command -v name` prints what a name runs (and fails if there is nothing), `command -V name`
+describes it like `type`, and `command name args` runs it without a function of the same
+name. `exec command args` runs the command and ends the shell with its status.
 
 ## Loops and conditions
 
