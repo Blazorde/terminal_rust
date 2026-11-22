@@ -36,6 +36,8 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0027](0027-subshells.md) | Accepted | Subshells `( list )` |
 | [0028](0028-exit-trap-and-power.md) | Accepted | `trap … EXIT` and `**` in arithmetic |
 | [0029](0029-arrays.md) | Accepted | Indexed arrays |
+| [0030](0030-parameter-operators.md) | Accepted | Operators on the value of a parameter |
+| [0030](0030-parameter-operators.md) | Accepted | Operators on the value of a parameter |
 
 ## Lifecycle
 

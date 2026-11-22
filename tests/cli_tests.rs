@@ -4542,3 +4542,61 @@ fn arrays_hold_words_and_expand_by_element_or_whole() {
     }
     assert!(!printed.contains("never-runs"), "{printed}");
 }
+
+#[test]
+fn parameter_operators_cut_replace_slice_and_change_case() {
+    let directory = TestDirectory::new("parameter operators");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "v=hello.txt",
+            "echo cut=${v%.txt},${v#hel},${v%%.*},${v##*l}",
+            "path=/usr/local/bin/tool",
+            "echo path=${path##*/},${path%/*},${path%%/*}",
+            "echo sub=${v/l/L},${v//l/L},${v/#h/J},${v/%t/T},${v//[aeiou]/_},${v/l/}",
+            "echo part=${v:1:3},${v: -3},${v:0:-4},${v:3}",
+            "n=2",
+            "echo var=${v:$n},${v:n},${v:n:1}",
+            "echo case=${v^^},${v^},${v,,}",
+            "word=Hello",
+            "echo low=${word,,} up=${word^^} first=${word,}",
+            "url=http://host/a/b",
+            "echo url=${url#*//},${url%%/*}",
+            "echo kept=${unset:-dflt},${v:-no},${v:+yes}",
+            "arr=(a b c d)",
+            "echo slice=${arr[@]:1},${arr[@]:1:2},${arr[@]: -1}",
+            "for e in \"${arr[@]:1:2}\"; do echo \"<$e>\"; done",
+            "f() { echo pos=${@:2}; for a in \"${@:2}\"; do echo \"[$a]\"; done; }",
+            "f one \"two words\" three",
+            "echo utf=${word:1:2}${word/ll/LL}",
+            "echo bad=${v:x}",
+        ],
+    );
+
+    for expected in [
+        "cut=hello,lo.txt,hello,o.txt\n",
+        "path=tool,/usr/local/bin,\n",
+        "sub=heLlo.txt,heLLo.txt,Jello.txt,hello.txT,h_ll_.txt,helo.txt\n",
+        "part=ell,txt,hello,lo.txt\n",
+        "var=llo.txt,llo.txt,l\n",
+        "case=HELLO.TXT,Hello.txt,hello.txt\n",
+        "low=hello up=HELLO first=hello\n",
+        "url=host/a/b,http:\n",
+        "kept=dflt,hello.txt,yes\n",
+        "slice=b c d,b c,d\n",
+        "<b>\n<c>\n",
+        "pos=two words three\n",
+        "[two words]\n[three]\n",
+        "utf=elHeLLo\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(
+        errors.contains("substring expression expected") || printed.contains("bad="),
+        "{errors}"
+    );
+}

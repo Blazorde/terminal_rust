@@ -81,10 +81,13 @@ fn is_all_elements(characters: &std::iter::Peekable<std::str::Chars<'_>>) -> boo
         return false;
     }
     let content: String = ahead.take_while(|character| *character != '}').collect();
-    content.ends_with("[@]")
-        && crate::utils::shell_env::is_valid_name(
-            content.trim_start_matches('!').trim_end_matches("[@]"),
-        )
+    // `name[@]`, `!name[@]`, and their slices `name[@]:1:2` and `@:2`.
+    let head = content.split(':').next().unwrap_or_default();
+    head == "@"
+        || (head.ends_with("[@]")
+            && crate::utils::shell_env::is_valid_name(
+                head.trim_start_matches('!').trim_end_matches("[@]"),
+            ))
 }
 
 /// Turn the separators of an expanded `$@` or `${=NAME}` into word breaks: the text before the
@@ -348,6 +351,38 @@ fn expand_braced(content: &str, lookup: Lookup, output: &mut String) -> Result<b
         return Err(format!("invalid variable name: {name}"));
     }
     let value = lookup(name);
+    // The operators that work on the value: `#`, `%`, `/`, `:offset`, `^`, `,`.
+    let expand = |text: &str| expand_word(text, lookup);
+    if (name.ends_with("[@]") || name == "@")
+        && let Some(slice) = operation.strip_prefix(':')
+        && super::parameter::is_substring(slice)
+    {
+        // A slice of an array: elements, not characters.
+        let separator = PARAMETER_SEPARATOR.to_string();
+        let value = value.unwrap_or_default();
+        let mut elements: Vec<String> = if value.is_empty() {
+            Vec::new()
+        } else {
+            value
+                .split(PARAMETER_SEPARATOR)
+                .map(str::to_string)
+                .collect()
+        };
+        // `${@:2}` counts from `$1` as 1: `$0` is the element before the first parameter.
+        if name == "@" {
+            elements.insert(0, lookup("0").unwrap_or_default());
+        }
+        let (start, end) = super::parameter::range(elements.len(), slice, &expand)?;
+        let text = elements[start..end].join(&separator);
+        output.push_str(&text);
+        return Ok(!text.is_empty());
+    }
+    if let Some(text) =
+        super::parameter::apply(operation, value.as_deref().unwrap_or_default(), &expand)?
+    {
+        output.push_str(&text);
+        return Ok(!text.is_empty());
+    }
     let (colon, operation) = match operation.strip_prefix(':') {
         Some(rest) => (true, rest),
         None => (false, operation),
@@ -1603,7 +1638,7 @@ mod tests {
             assign.contains("assigning in an expansion is not supported"),
             "{assign}"
         );
-        let bad = expanded("echo ${NAME%x}").unwrap_err();
+        let bad = expanded("echo ${NAME@Q}").unwrap_err();
         assert!(bad.contains("bad substitution"), "{bad}");
         assert!(
             expanded("echo ${NAME:}")
