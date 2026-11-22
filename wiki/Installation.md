@@ -2,7 +2,7 @@
 
 ## Download
 
-The [`v1.11.0` release](https://github.com/Blazorde/terminal_rust/releases/tag/v1.11.0)
+The [`v1.12.0` release](https://github.com/Blazorde/terminal_rust/releases/tag/v1.12.0)
 contains the following unsigned packages:
 
 | Platform | Packages |

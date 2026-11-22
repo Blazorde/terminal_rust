@@ -31,6 +31,11 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0022](0022-redirected-blocks.md) | Accepted | Redirections and pipes on blocks, `while read` |
 | [0023](0023-here-documents.md) | Accepted | Here-documents and here-strings |
 | [0024](0024-job-control.md) | Accepted | Job control: Ctrl+Z, `bg` and `fg` in safe Rust |
+| [0025](0025-negation-command-exec.md) | Accepted | `!`, `command`, `exec`, `$PPID` and `$RANDOM` |
+| [0026](0026-double-bracket-conditions.md) | Accepted | `[[ expression ]]` conditions |
+| [0027](0027-subshells.md) | Accepted | Subshells `( list )` |
+| [0028](0028-exit-trap-and-power.md) | Accepted | `trap … EXIT` and `**` in arithmetic |
+| [0029](0029-arrays.md) | Accepted | Indexed arrays |
 
 ## Lifecycle
 

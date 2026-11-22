@@ -1,6 +1,6 @@
 [package]
 name = "terminal_rust"
-version = "1.11.0"
+version = "1.12.0"
 edition = "2024"
 rust-version = "1.95"
 description = "Mini shell Rust for developers on macOS, Linux, and Windows. A simple command-line interface for executing commands and managing files."
@@ -32,6 +32,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 semver = { version = "1.0", features = ["serde"] }
 sysinfo = { version = "0.39.6", default-features = false, features = ["disk", "network", "system"] }
+regex = "1"
 toml = "1.1"
 unicode-width = "0.2"
 

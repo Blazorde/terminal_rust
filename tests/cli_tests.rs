@@ -4062,3 +4062,483 @@ fn backquotes_substitute_a_command_like_dollar_parenthesis() {
         "an unclosed backquote is an error: {errors}"
     );
 }
+
+#[test]
+fn a_leading_bang_turns_the_status_of_a_command_around() {
+    let directory = TestDirectory::new("negation");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "! false",
+            "echo after-false=$?",
+            "! true",
+            "echo after-true=$?",
+            "if ! test -f no-such-file; then echo missing; fi",
+            "if ! test -d .; then echo wrong; else echo kept; fi",
+            "! false && echo and-runs",
+            "! true || echo or-runs",
+            "! echo shown-once",
+            "echo after-shown=$?",
+            "!",
+            "echo \"a ! b\"",
+        ],
+    );
+
+    for expected in [
+        "after-false=0\n",
+        "after-true=1\n",
+        "missing\n",
+        "kept\n",
+        "and-runs\n",
+        "or-runs\n",
+        "shown-once\n",
+        "after-shown=1\n",
+        "a ! b\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("wrong"), "{printed}");
+    assert!(
+        errors.contains("expected a command after '!'"),
+        "a lone bang is an error: {errors}"
+    );
+}
+
+#[test]
+fn command_skips_functions_and_exec_leaves_with_the_status() {
+    let directory = TestDirectory::new("command exec");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "pwd() { echo wrapped; }",
+            "pwd",
+            "command pwd",
+            "command -v cd",
+            "command -v no-such-program-zz",
+            "echo missing=$?",
+            "command -V cd",
+            "exec",
+            "echo still-here",
+            "exec sh -c 'exit 7'",
+            "echo never-reached",
+        ],
+    );
+
+    for expected in [
+        "wrapped\n",
+        "cd\n",
+        "missing=1\n",
+        "cd is a shell builtin\n",
+        "still-here\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("never-reached"), "{printed}");
+    // `pwd` runs the function, `command pwd` the built-in: only one line is the function's.
+    assert_eq!(
+        printed.matches("wrapped\n").count(),
+        1,
+        "{printed}\n{errors}"
+    );
+}
+
+#[test]
+fn exec_gives_its_status_to_the_shell_process() {
+    let directory = TestDirectory::new("exec status");
+
+    let output = run_interactive(directory.path(), "exec sh -c 'exit 7'\necho never\n");
+
+    assert_eq!(output.status.code(), Some(7), "{}", stderr(&output));
+    assert!(!stdout(&output).contains("never"));
+}
+
+#[cfg(unix)]
+#[test]
+fn ppid_is_the_parent_and_random_changes_within_its_range() {
+    let directory = TestDirectory::new("ppid random");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo parent=$PPID",
+            "for i in {1..300}; do echo r=$RANDOM; done",
+            "RANDOM=5",
+            "echo fixed=$RANDOM",
+        ],
+    );
+
+    let value = |prefix: &str| -> Vec<u32> {
+        printed
+            .split(prefix)
+            .skip(1)
+            .map(|rest| {
+                rest.lines()
+                    .next()
+                    .unwrap_or_default()
+                    .parse()
+                    .expect("number")
+            })
+            .collect()
+    };
+    let parent = value("parent=");
+    assert_eq!(parent, vec![std::process::id()], "{printed}\n{errors}");
+    let randoms = value("r=");
+    assert_eq!(randoms.len(), 300);
+    // 300 draws from 0..32768 reach above 30000 and below 2000 with certainty in practice.
+    assert!(randoms.iter().any(|number| *number > 30000), "{randoms:?}");
+    assert!(randoms.iter().any(|number| *number < 2000), "{randoms:?}");
+    assert!(randoms.iter().all(|number| *number < 32768), "{randoms:?}");
+    assert!(
+        randoms.windows(2).any(|pair| pair[0] != pair[1]),
+        "RANDOM never changed: {randoms:?}"
+    );
+    assert!(printed.contains("fixed=5\n"), "{printed}");
+}
+
+#[test]
+fn double_brackets_test_files_patterns_strings_and_integers() {
+    let directory = TestDirectory::new("double bracket");
+    fs::write(directory.path().join("a.rs"), "x").expect("fixture");
+    fs::write(directory.path().join("b.txt"), "x").expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "f=a.rs",
+            "[[ $f == *.rs ]] && echo glob-yes",
+            "[[ $f == *.txt ]] || echo glob-no",
+            "[[ $f != *.txt ]] && echo neq-yes",
+            "[[ $f == \"*.rs\" ]] || echo literal-star",
+            "x=\"a b\"",
+            "[[ $x == a* ]] && echo nosplit",
+            "[[ \"a b\" == \"a b\" ]] && echo quoted",
+            "[[ -f a.rs && -f b.txt ]] && echo both",
+            "[[ -f a.rs && -f nope ]] || echo not-both",
+            "[[ -f nope || -f b.txt ]] && echo either",
+            "[[ ! -f nope ]] && echo bang",
+            "[[ ( -f a.rs || -f nope ) && -f b.txt ]] && echo paren",
+            "[[ abc < abd ]] && echo less",
+            "[[ b > a ]] && echo greater",
+            "[[ 5 -gt 3 ]] && echo integer",
+            "[[ $f =~ ^a\\.r ]] && echo regex",
+            "[[ $f =~ ^z ]] || echo regex-no",
+            "[[ -n $unset ]] || echo empty",
+            "[[ $unset ]] || echo empty-word",
+            "if [[ $f == *.rs ]]; then echo in-if; fi",
+            "echo [[ not a test ]]",
+            "[[ x == x ]]",
+            "echo yes=$?",
+            "[[ x == y ]]",
+            "echo no=$?",
+        ],
+    );
+
+    for expected in [
+        "glob-yes\n",
+        "glob-no\n",
+        "neq-yes\n",
+        "literal-star\n",
+        "nosplit\n",
+        "quoted\n",
+        "both\n",
+        "not-both\n",
+        "either\n",
+        "bang\n",
+        "paren\n",
+        "less\n",
+        "greater\n",
+        "integer\n",
+        "regex\n",
+        "regex-no\n",
+        "empty\n",
+        "empty-word\n",
+        "in-if\n",
+        "[[ not a test ]]\n",
+        "yes=0\n",
+        "no=1\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+}
+
+#[test]
+fn double_brackets_do_not_evaluate_the_side_that_is_skipped() {
+    let directory = TestDirectory::new("double bracket lazy");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "[[ -f nope && $(echo ran > and.txt) ]]",
+            "[[ -d . || $(echo ran > or.txt) ]]",
+            "test -f and.txt || echo and-skipped",
+            "test -f or.txt || echo or-skipped",
+            "[[ -d . && $(echo ran > both.txt; echo x) ]]",
+            "test -f both.txt && echo both-ran",
+        ],
+    );
+
+    for expected in ["and-skipped\n", "or-skipped\n", "both-ran\n"] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+}
+
+#[test]
+fn double_brackets_report_mistakes_with_status_two() {
+    let directory = TestDirectory::new("double bracket errors");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "[[ a == b",
+            "[[ x -eq 1 ]]",
+            "echo int=$?",
+            "[[ ( a == a ]]",
+            "[[ a =~ ( ]]",
+            "[[ a == a ]] && echo recovered",
+        ],
+    );
+
+    assert!(errors.contains("missing ']]'"), "{errors}");
+    assert!(printed.contains("int=2\n"), "{printed}\n{errors}");
+    assert!(errors.contains("missing ')'"), "{errors}");
+    assert!(errors.contains("invalid regular expression"), "{errors}");
+    assert!(printed.contains("recovered\n"), "{printed}");
+}
+
+#[test]
+fn a_subshell_keeps_its_changes_to_itself() {
+    let directory = TestDirectory::new("subshell");
+    fs::create_dir(directory.path().join("inner")).expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "x=outer",
+            "(x=inner; echo in=$x)",
+            "echo out=$x",
+            "(cd inner && echo cd-done)",
+            "test -d inner && echo still-here",
+            "pwd | grep -c inner",
+            "f() { echo original; }",
+            "(f() { echo changed; }; f)",
+            "f",
+            "export E=1",
+            "(export E=2; echo exported=$E)",
+            "echo after=$E",
+            "(exit 3)",
+            "echo status=$?",
+            "(echo one; echo two) | wc -l",
+            "(echo to-file) > sub.txt",
+            "cat sub.txt",
+            "(false) || echo or-ran",
+            "(true) && echo and-ran",
+            "(echo multi",
+            "echo line)",
+            "if (test -d inner); then echo in-if; fi",
+            "for i in 1 2; do (echo turn$i); done",
+            "g() { (echo from-g); }",
+            "g",
+            "h() { y=1; (y=2); echo y=$y; }",
+            "h",
+            "for i in 1 2; do (break); echo brk$i; done",
+            "r() { (return 5); echo after-return; }",
+            "r",
+            "(echo a; (echo b; (echo c)))",
+            "(echo $(echo nested))",
+            "echo \"(not a subshell)\"",
+            "echo a ( b",
+        ],
+    );
+
+    for expected in [
+        "in=inner\n",
+        "out=outer\n",
+        "cd-done\n",
+        "still-here\n",
+        "original\n",
+        "changed\n",
+        "exported=2\n",
+        "after=1\n",
+        "status=3\n",
+        "2\n",
+        "to-file\n",
+        "or-ran\n",
+        "and-ran\n",
+        "multi\n",
+        "line\n",
+        "in-if\n",
+        "turn1\n",
+        "turn2\n",
+        "from-g\n",
+        "y=1\n",
+        "brk1\nbrk2\n",
+        "after-return\n",
+        "a\nb\nc\n",
+        "nested\n",
+        "(not a subshell)\n",
+        "a ( b\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    // The directory was restored: the shell is not in `inner`.
+    assert!(printed.contains("0\n"), "{printed}");
+}
+
+#[test]
+fn an_exit_trap_runs_once_when_the_shell_ends() {
+    let directory = TestDirectory::new("exit trap");
+
+    let output = run_interactive(
+        directory.path(),
+        "trap 'echo bye-trap' EXIT\ntrap\necho body\nexit 4\necho never\n",
+    );
+    let printed = stdout(&output);
+    assert!(
+        printed.contains("trap -- 'echo bye-trap' EXIT\n"),
+        "{printed}"
+    );
+    assert!(printed.contains("body\n"), "{printed}");
+    assert_eq!(printed.matches("bye-trap\n").count(), 1, "{printed}");
+    assert!(!printed.contains("never"), "{printed}");
+    // The trap does not change the status the shell leaves with.
+    assert_eq!(output.status.code(), Some(4), "{}", stderr(&output));
+
+    // End of input runs it too.
+    let output = run_interactive(directory.path(), "trap 'echo eof-trap' EXIT\necho x\n");
+    assert!(
+        stdout(&output).contains("eof-trap\n"),
+        "{}",
+        stdout(&output)
+    );
+
+    // Removed, it does not run.
+    let output = run_interactive(directory.path(), "trap 'echo removed' EXIT\ntrap - EXIT\n");
+    assert!(
+        !stdout(&output).contains("removed\n"),
+        "{}",
+        stdout(&output)
+    );
+
+    // Replaced, only the last one runs.
+    let output = run_interactive(
+        directory.path(),
+        "trap 'echo second' EXIT\ntrap 'echo third' EXIT\ntrap 'echo INT' INT\n",
+    );
+    let printed = stdout(&output);
+    assert!(!printed.contains("second\n"), "{printed}");
+    assert!(printed.contains("third\n"), "{printed}");
+    assert!(
+        stderr(&output).contains("only EXIT is supported"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn the_power_operator_works_in_arithmetic_expansion() {
+    let directory = TestDirectory::new("power");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo 2**10=$((2**10))",
+            "n=3",
+            "echo sq=$((n**2 + 1))",
+            "echo bad=$((2**-1))",
+        ],
+    );
+
+    assert!(printed.contains("2**10=1024\n"), "{printed}\n{errors}");
+    assert!(printed.contains("sq=10\n"), "{printed}");
+    assert!(errors.contains("negative exponent"), "{errors}");
+}
+
+#[test]
+fn arrays_hold_words_and_expand_by_element_or_whole() {
+    let directory = TestDirectory::new("arrays");
+    fs::write(directory.path().join("a.rs"), "x").expect("fixture");
+    fs::write(directory.path().join("b.rs"), "x").expect("fixture");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "x=(a b c)",
+            "echo first=${x[0]} last=${x[2]} neg=${x[-1]}",
+            "echo count=${#x[@]} all=${x[@]} star=\"${x[*]}\" plain=$x",
+            "for i in \"${x[@]}\"; do echo item=$i; done",
+            "x+=(d e)",
+            "echo after-append=${#x[@]} ${x[4]}",
+            "x[1]=B",
+            "echo changed=${x[@]}",
+            "i=2",
+            "echo by-var=${x[$i]},${x[i]}",
+            "echo indices=${!x[@]}",
+            "files=(*.rs)",
+            "echo files=${files[@]}",
+            "words=(\"two words\" plain)",
+            "for w in \"${words[@]}\"; do echo \"[$w]\"; done",
+            "echo len=${#words[0]}",
+            "y=(1 2 3)",
+            "unset y",
+            "echo gone=${#y[@]}",
+            "empty=()",
+            "echo empty=${#empty[@]}",
+            "for z in \"${empty[@]}\"; do echo never-runs; done",
+            "(sub=(p q); echo in-sub=${sub[1]})",
+            "echo out-sub=[${sub[1]}]",
+            "far[3]=end",
+            "echo far=${#far[@]} [${far[0]}] ${far[3]}",
+            "echo dflt=${x[9]:-fallback}",
+            "braced=({1..3} z)",
+            "echo braced=${braced[@]}",
+            "n=$(echo ${#x[@]})",
+            "echo sub-count=$n",
+            "echo text x=(1 2)",
+        ],
+    );
+
+    for expected in [
+        "first=a last=c neg=c\n",
+        "count=3 all=a b c star=a b c plain=a\n",
+        "item=a\nitem=b\nitem=c\n",
+        "after-append=5 e\n",
+        "changed=a B c d e\n",
+        "by-var=c,c\n",
+        "indices=0 1 2 3 4\n",
+        "files=a.rs b.rs\n",
+        "[two words]\n[plain]\n",
+        "len=9\n",
+        "gone=0\n",
+        "empty=0\n",
+        "in-sub=q\n",
+        "out-sub=[]\n",
+        "far=4 [] end\n",
+        "dflt=fallback\n",
+        "braced=1 2 3 z\n",
+        "sub-count=5\n",
+        "text x=(1 2)\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(!printed.contains("never-runs"), "{printed}");
+}

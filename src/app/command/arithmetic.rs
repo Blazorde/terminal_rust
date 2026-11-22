@@ -133,19 +133,19 @@ impl Parser<'_> {
     }
 
     fn multiplicative(&mut self) -> Result<i64, String> {
-        let mut value = self.unary()?;
+        let mut value = self.power()?;
         loop {
             if self.eat("*") {
-                let right = self.unary()?;
+                let right = self.power()?;
                 value = value.checked_mul(right).ok_or_else(overflow)?;
             } else if self.eat("/") {
-                let right = self.unary()?;
+                let right = self.power()?;
                 if right == 0 {
                     return Err("arithmetic: division by 0".to_string());
                 }
                 value = value.checked_div(right).ok_or_else(overflow)?;
             } else if self.eat("%") {
-                let right = self.unary()?;
+                let right = self.power()?;
                 if right == 0 {
                     return Err("arithmetic: division by 0".to_string());
                 }
@@ -154,6 +154,20 @@ impl Parser<'_> {
                 return Ok(value);
             }
         }
+    }
+
+    /// `a ** b`: integer power, right to left (`2 ** 3 ** 2` is 512).
+    fn power(&mut self) -> Result<i64, String> {
+        let base = self.unary()?;
+        if !self.eat("**") {
+            return Ok(base);
+        }
+        let exponent = self.power()?;
+        if exponent < 0 {
+            return Err("arithmetic: negative exponent".to_string());
+        }
+        let exponent = u32::try_from(exponent).map_err(|_| overflow())?;
+        base.checked_pow(exponent).ok_or_else(overflow)
     }
 
     fn unary(&mut self) -> Result<i64, String> {
@@ -306,6 +320,23 @@ mod tests {
         assert_eq!(calc("-7/2"), Ok(-3));
         assert_eq!(calc("7%3"), Ok(1));
         assert_eq!(calc("-7%3"), Ok(-1));
+    }
+
+    #[test]
+    fn the_power_operator_goes_right_to_left_and_binds_tighter_than_multiplication() {
+        assert_eq!(calc("2**3"), Ok(8));
+        assert_eq!(calc("2 ** 10"), Ok(1024));
+        assert_eq!(calc("2 ** 3 ** 2"), Ok(512));
+        assert_eq!(calc("2*3**2"), Ok(18));
+        assert_eq!(calc("2**3*2"), Ok(16));
+        assert_eq!(calc("(1+1)**3"), Ok(8));
+        assert_eq!(calc("5**0"), Ok(1));
+        assert_eq!(calc("0**0"), Ok(1));
+        assert_eq!(calc("-2**2"), Ok(4));
+        assert_eq!(calc("3*4"), Ok(12));
+        assert!(calc("2**-1").unwrap_err().contains("negative exponent"));
+        assert!(calc("10**30").unwrap_err().contains("out of range"));
+        assert!(calc("2**").unwrap_err().contains("missing operand"));
     }
 
     #[test]

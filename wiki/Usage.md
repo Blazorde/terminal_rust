@@ -59,7 +59,8 @@ type for echo ls cargo     # for is a shell keyword ... cargo is /usr/bin/cargo
 `$NAME`, `${NAME}` and `$?` (`0` after a success, the exit code of a program
 that failed, `127` for an unknown program, `1` for a failure inside the shell) are
 expanded in command lines, and a leading `~` stands for your home directory. `$$` is the
-process id of the shell and `$!` the one of the last job started with `&` (empty before any).
+process id of the shell, `$!` the one of the last job started with `&` (empty before any),
+`$PPID` the one of its parent, and `$RANDOM` a number from 0 to 32767 that changes each time.
 Double quotes expand variables, single quotes do not, and `\$` writes a literal
 dollar sign:
 
@@ -108,7 +109,31 @@ several arguments or matched against files. `${NAME:=word}` (assigning while
 expanding) and the trimming forms (`${NAME%x}`, `${NAME#x}`, `${NAME/a/b}`) are
 not available: write `NAME=value` instead.
 
+## Arrays
+
+`name=(a b c)` makes a list of words, expanded like the arguments of a command (`files=(*.rs)`,
+`n=({1..3})`). `name+=(d)` appends and `name[2]=x` sets one element:
+
+```text
+files=(*.rs)
+echo ${files[0]} ${files[-1]}        # first and last
+echo ${#files[@]}                    # how many
+for f in "${files[@]}"; do wc -l "$f"; done
+files+=(extra.txt)
+echo ${!files[@]}                    # the indices: 0 1 2 …
+```
+
+`"${name[@]}"` is one word per element (none for an empty array), `"${name[*]}"` joins them
+with spaces, `$name` is the first element, and an index can be a variable (`${files[$i]}`).
+`unset name` removes the array. There are no associative arrays, slices, `declare -a` or
+`read -a`.
+
 ## Leaving the shell
+
+`trap 'command' EXIT` remembers a command that runs once when the shell ends (`exit`, the end
+of a script or of the input, `Ctrl+D`), for example `trap 'rm -f "$tmp"' EXIT`. `trap - EXIT`
+removes it and `trap` alone shows it. The status the shell leaves with is not changed by the
+trap. Traps on signals (`INT`, `TERM`, `ERR`…) are refused with a message.
 
 `exit` closes the shell with the status of the last command. `exit 3` closes it
 with code 3 (the code is taken modulo 256, so `exit -1` is 255), which scripts
@@ -131,6 +156,14 @@ succeeded, and `||` only if it failed. They are evaluated from left to right and
 `exit` stops the line. Quote an operator to use it as text. A trailing `&` runs
 a command in the background, see [Background jobs](#background-jobs).
 
+A leading `!` turns the status around, which reads well in a condition:
+`if ! test -f build.log; then …`, `! grep -q error out.txt && echo clean`. `$?` is `0`
+after a failed command and `1` after a successful one.
+
+`command -v name` prints what a name runs (and fails if there is nothing), `command -V name`
+describes it like `type`, and `command name args` runs it without a function of the same
+name. `exec command args` runs the command and ends the shell with its status.
+
 ## Loops and conditions
 
 ```text
@@ -150,6 +183,29 @@ turn, and `true` and `false` are built in. A newline works like `;`, so a block
 can be typed over several lines: the shell asks for more (`>> `) until `done` or
 `fi`. `Ctrl+C` stops a loop. A failing condition is not an error, so its message
 is not shown. `break 2` is not available.
+
+`( commands )` runs them in a copy of the shell: what they change (variables, functions, the
+directory, `export`) is given back when the parentheses close, `exit` leaves only them, and the
+status is the one of the last command. It can be chained, redirected and piped like any command:
+
+```text
+(cd build && make) || echo "build failed"
+(export CC=clang; make) > build.log
+if (test -d src); then echo found; fi
+```
+
+`[[ expression ]]` is the roomier test: its words are never split or matched against files, and it
+groups with `&&`, `||`, `!` and parentheses:
+
+```text
+[[ $name == *.rs && -f $name ]] && echo "a Rust file"
+[[ $answer =~ ^[yY] ]] || echo "not a yes"
+if [[ ( -d src || -d lib ) && ! -f stop ]]; then make; fi
+```
+
+`==` and `!=` compare with a pattern (quote the right side to compare literally), `<` and `>`
+compare strings, `=~` matches a regular expression, and `-f`, `-d`, `-eq` and the others work as in
+`test`. The side of `&&` or `||` that is skipped is not evaluated. A mistake gives status 2.
 
 A block can be redirected and piped as a whole, so the usual loops work:
 
@@ -302,13 +358,14 @@ echo "half: $((total / 2))"
 echo $(( (a + b) % 10 ))
 ```
 
-Numbers are 64-bit integers (decimal or `0x` hexadecimal). Available: `+ - * / %`,
+Numbers are 64-bit integers (decimal or `0x` hexadecimal). Available: `+ - * / %`, the
+power `**` (`2 ** 10`, right to left, no negative exponent),
 parentheses, the signs `-` `+` and `!`, the comparisons `== != < <= > >=` and the
 logical `&&` `||`, which give `1` or `0`. A variable is written `n` or `$n`; an
 unset or empty one is `0`. A division by zero, an overflow or a bad expression is
 an error and the command does not run. There is no assignment inside the
-expression (`i=$((i+1))` is an ordinary assignment), no `**`, no bit operators and
-no `$(...)` inside it.
+expression (`i=$((i+1))` is an ordinary assignment), no bit operators and no
+`$(...)` inside it.
 
 ## File name patterns
 

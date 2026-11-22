@@ -5,6 +5,25 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-22
+
+### Added
+
+- Indexed arrays (ADR-0029): `files=(*.rs)`, `files+=(x)`, `files[2]=x`, `${files[1]}`, `${files[@]}`,
+  `${#files[@]}`, `${!files[@]}`, and `"${files[@]}"` gives one word per element.
+- `trap 'command' EXIT` runs a command when the shell ends (`trap - EXIT` removes it, `trap`
+  shows it) and `a ** b` is the power in `$(( ))` (ADR-0028). Signal traps are refused with a message.
+- Subshells `( commands )` (ADR-0027): the variables, functions, directory and exports
+  they change are put back when they end, and `exit` leaves only them.
+- `[[ expression ]]` conditions (ADR-0026): patterns with `==` and `!=`, regular expressions with
+  `=~`, `<` and `>` on strings, `&&`, `||`, `!` and parentheses, no word splitting.
+
+### Added
+
+- `! command` turns the status of a command around (`if ! test -f x; then …`), `command -v`,
+  `command -V` and `command name args` (skips a function of the same name), `exec command`
+  (runs it and leaves the shell with its status), `$PPID` and `$RANDOM` (ADR-0025).
+
 ## [1.11.0] - 2026-11-22
 
 ### Added

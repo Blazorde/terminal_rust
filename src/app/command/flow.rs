@@ -13,9 +13,9 @@ use crate::commands::external;
 use crate::render;
 use crate::utils::shell_env;
 
-const KEYWORDS: [&str; 15] = [
+const KEYWORDS: [&str; 17] = [
     "for", "while", "until", "if", "then", "elif", "else", "fi", "do", "done", "case", "esac",
-    ";;", "{", "}",
+    ";;", "{", "}", "(", ")",
 ];
 
 /// What `break` and `continue` leave for the loop that runs the command.
@@ -61,6 +61,12 @@ pub(super) enum Node {
         connector: Connector,
         body: Vec<Node>,
     },
+    /// `( LIST )`: commands run together in a copy of the shell, so what they change
+    /// (variables, functions, the directory, exports) is not kept (ADR-0027).
+    Subshell {
+        connector: Connector,
+        body: Vec<Node>,
+    },
     /// A compound command with redirections after its closing keyword, or in a
     /// pipeline (`cmd | while read x; do …; done > file`): `stages` are the stages
     /// of the pipeline, one of which, [`COMPOUND_STAGE`], stands for `inner`.
@@ -86,6 +92,7 @@ impl Node {
             | Self::If { connector, .. }
             | Self::Case { connector, .. }
             | Self::Group { connector, .. }
+            | Self::Subshell { connector, .. }
             | Self::Pipeline { connector, .. }
             | Self::Function { connector, .. } => *connector,
         }
@@ -100,6 +107,7 @@ impl Node {
             | Self::If { connector, .. }
             | Self::Case { connector, .. }
             | Self::Group { connector, .. }
+            | Self::Subshell { connector, .. }
             | Self::Pipeline { connector, .. }
             | Self::Function { connector, .. } => *connector = Connector::Then,
         }
@@ -173,7 +181,7 @@ pub(super) fn is_incomplete(line: &str) -> bool {
             }
             match keyword(text) {
                 Some(("for" | "while" | "until" | "if", _)) => depth += 1,
-                Some(("{", rest)) => {
+                Some(("{" | "(", rest)) => {
                     depth += 1;
                     if !rest.is_empty() {
                         text = rest;
@@ -192,7 +200,7 @@ pub(super) fn is_incomplete(line: &str) -> bool {
                         continue;
                     }
                 }
-                Some(("done" | "fi" | "}", _)) => depth -= 1,
+                Some(("done" | "fi" | "}" | ")", _)) => depth -= 1,
                 Some(("esac", _)) => {
                     depth -= 1;
                     cases -= 1;
@@ -310,7 +318,7 @@ fn starts_redirection(text: &str) -> bool {
 
 /// Whether `word` starts a compound command.
 fn starts_compound(word: &str) -> bool {
-    matches!(word, "for" | "while" | "until" | "if" | "case" | "{")
+    matches!(word, "for" | "while" | "until" | "if" | "case" | "{" | "(")
 }
 
 /// In the text of a command, the position of the first `|` that is followed by a
@@ -513,7 +521,7 @@ impl Parser {
         while self.position < self.segments.len() {
             match self.current_keyword() {
                 Some((word, _)) if stops.contains(&word) => return Ok(nodes),
-                Some(("for" | "while" | "until" | "if" | "case" | "{", _)) => {
+                Some(("for" | "while" | "until" | "if" | "case" | "{" | "(", _)) => {
                     let node = self.compound()?;
                     nodes.push(self.with_tail(node, Vec::new())?);
                 }
@@ -626,6 +634,7 @@ impl Parser {
             Some(("if", _)) => self.conditional(),
             Some(("case", _)) => self.case_statement(),
             Some(("{", _)) => self.group(),
+            Some(("(", _)) => self.subshell(),
             _ => Err("syntax error: expected a compound command".to_string()),
         }
     }
@@ -655,6 +664,15 @@ impl Parser {
         let body = self.list(&["}"])?;
         self.finish_with_tail("}")?;
         Ok(Node::Group { connector, body })
+    }
+
+    /// `( LIST )`.
+    fn subshell(&mut self) -> Result<Node, String> {
+        let connector = self.segments[self.position].connector;
+        self.consume_keyword();
+        let body = self.list(&[")"])?;
+        self.finish_with_tail(")")?;
+        Ok(Node::Subshell { connector, body })
     }
 
     /// `name() { LIST; }`: the header was read, and `opens` says whether the `{` is
@@ -806,11 +824,15 @@ pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult
         report(&last);
 
         last = match node {
-            Node::Simple { segment, stages } => {
-                let result = run_segment(&segment.text, stages, segment.background, state);
-                state.record_status(matches!(result, CommandResult::Error(_)));
-                result
-            }
+            Node::Simple { segment, stages } => match negated(&segment.text) {
+                // `! command`: the status is turned around, so `if ! test -f x` reads well.
+                Some(rest) => run_negated(rest, segment.background, state),
+                None => {
+                    let result = run_segment(&segment.text, stages, segment.background, state);
+                    state.record_status(matches!(result, CommandResult::Error(_)));
+                    result
+                }
+            },
             Node::For {
                 variable,
                 words,
@@ -830,6 +852,7 @@ pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult
             } => run_if(branches, otherwise, state),
             Node::Case { word, arms, .. } => run_case(word, arms, state),
             Node::Group { body, .. } => run_nodes(body, state),
+            Node::Subshell { body, .. } => run_subshell(body, state),
             Node::Pipeline { inner, stages, .. } => run_pipeline(inner, stages, state),
             Node::Function { name, body, .. } => {
                 state
@@ -846,6 +869,56 @@ pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult
         }
     }
     last
+}
+
+/// The command that follows a leading `!` word, when the text starts with one.
+fn negated(text: &str) -> Option<&str> {
+    let rest = text.trim_start().strip_prefix('!')?;
+    (rest.is_empty() || rest.starts_with(char::is_whitespace)).then_some(rest.trim_start())
+}
+
+/// Run `rest` and turn its status around: a failure becomes a success and the other way.
+fn run_negated(rest: &str, background: bool, state: &mut ShellState) -> CommandResult {
+    if rest.is_empty() {
+        return CommandResult::Error("expected a command after '!'".to_string());
+    }
+    let stages = match split_stages(rest) {
+        Ok(stages) => stages,
+        Err(error) => return CommandResult::Error(error),
+    };
+    let result = run_segment(rest, &stages, background, state);
+    // The message of a failure is still shown: only the status is turned around.
+    report(&result);
+    let failed = matches!(result, CommandResult::Error(_));
+    state.record_status(failed);
+    if failed {
+        state.last_status = 0;
+        CommandResult::Continue
+    } else {
+        state.last_status = 1;
+        CommandResult::Error(String::new())
+    }
+}
+
+/// Run `body` in a copy of the shell: variables, functions, positional parameters, the
+/// current directory and the exports come back to what they were. `exit` leaves the
+/// subshell only, and its status is the status of the last command.
+fn run_subshell(body: &[Node], state: &mut ShellState) -> CommandResult {
+    let saved = state.subshell_snapshot();
+    let mut result = run_nodes(body, state);
+    if result == CommandResult::Exit {
+        let code = state.exit_code.take().map_or(state.last_status, i32::from);
+        state.last_status = code;
+        result = if code == 0 {
+            CommandResult::Continue
+        } else {
+            CommandResult::Error(String::new())
+        };
+    }
+    let status = state.last_status;
+    state.subshell_restore(saved);
+    state.last_status = status;
+    result
 }
 
 /// Run one node as if it were a list of its own.
@@ -1066,6 +1139,7 @@ mod tests {
                     format!("if {} else ({})", parts.join(" elif "), shape(otherwise))
                 }
                 Node::Group { body, .. } => format!("group ({})", shape(body)),
+                Node::Subshell { body, .. } => format!("subshell ({})", shape(body)),
                 Node::Pipeline { inner, stages, .. } => {
                     let parts: Vec<String> = stages
                         .iter()

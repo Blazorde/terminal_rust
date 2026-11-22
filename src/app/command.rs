@@ -18,6 +18,7 @@ use crate::utils::shell_env;
 mod aliases;
 mod arithmetic;
 mod braces;
+mod double_bracket;
 mod flow;
 mod functions;
 mod heredoc;
@@ -26,6 +27,17 @@ mod pipeline;
 mod scripts;
 mod substitution;
 
+/// The state a subshell restores when it ends.
+struct SubshellSnapshot {
+    variables: HashMap<String, String>,
+    arrays: HashMap<String, Vec<String>>,
+    functions: HashMap<String, functions::Body>,
+    frames: Vec<functions::Frame>,
+    previous_dir: Option<PathBuf>,
+    directory: Option<PathBuf>,
+    exports: shell_env::Exports,
+}
+
 pub struct ShellState {
     previous_dir: Option<PathBuf>,
     plugin_commands: DeclarativeCommandRegistry,
@@ -33,6 +45,8 @@ pub struct ShellState {
     startup_script: Option<String>,
     script_depth: usize,
     variables: HashMap<String, String>,
+    /// The arrays, `name=(a b c)`: `${name[1]}`, `${name[@]}` (ADR-0029).
+    arrays: HashMap<String, Vec<String>>,
     /// The status of the last command, the value of `$?`.
     last_status: i32,
     /// The code the shell leaves with, once `exit` has run.
@@ -54,6 +68,8 @@ pub struct ShellState {
     exit_warned: bool,
     /// The process id of the last job started with `&`, for `$!`.
     pub(crate) last_background: Option<u32>,
+    /// The command that `trap 'command' EXIT` runs when the shell ends.
+    exit_trap: Option<String>,
 }
 
 impl ShellState {
@@ -69,6 +85,7 @@ impl ShellState {
             startup_script,
             script_depth: 0,
             variables: HashMap::new(),
+            arrays: HashMap::new(),
             last_status: 0,
             exit_code: None,
             jobs: jobs::Jobs::default(),
@@ -80,6 +97,7 @@ impl ShellState {
             returning: None,
             exit_warned: false,
             last_background: None,
+            exit_trap: None,
         }
     }
 
@@ -120,6 +138,18 @@ impl ShellState {
                     .unwrap_or_default(),
             );
         }
+        // An element of an array, all of them, their number or their indices.
+        if name.contains('[') {
+            return self.array_value(name);
+        }
+        // The parent of the shell, and a number from 0 to 32767 that changes at each use.
+        // A variable of the same name that the user set wins.
+        if name == "PPID" && !self.variables.contains_key("PPID") {
+            return Some(parent_process_id());
+        }
+        if name == "RANDOM" && !self.variables.contains_key("RANDOM") {
+            return Some(next_random().to_string());
+        }
         // The positional parameters of the running function, or of the file that
         // `source` is reading. Outside any: none, and `$#` is 0.
         let positional = self
@@ -145,7 +175,59 @@ impl ShellState {
         self.variables
             .get(name)
             .cloned()
+            // `$name` of an array is its first element.
+            .or_else(|| {
+                self.arrays
+                    .get(name)
+                    .map(|elements| elements.first().cloned().unwrap_or_default())
+            })
             .or_else(|| shell_env::value(name))
+    }
+
+    /// `name[index]`, `name[@]`, `name[*]`, `#name[@]` and `!name[@]`.
+    fn array_value(&self, reference: &str) -> Option<String> {
+        let (count, indices, reference) = match reference.strip_prefix('#') {
+            Some(rest) => (true, false, rest),
+            None => match reference.strip_prefix('!') {
+                Some(rest) => (false, true, rest),
+                None => (false, false, reference),
+            },
+        };
+        let (name, index) = reference.split_once('[')?;
+        let index = index.strip_suffix(']')?;
+        let elements = self.arrays.get(name);
+        if count {
+            return Some(elements.map_or(0, Vec::len).to_string());
+        }
+        let elements = elements?;
+        match index {
+            _ if indices => Some(
+                (0..elements.len())
+                    .map(|position| position.to_string())
+                    .collect::<Vec<_>>()
+                    .join(&crate::app::parser::PARAMETER_SEPARATOR.to_string()),
+            ),
+            "@" => Some(elements.join(&crate::app::parser::PARAMETER_SEPARATOR.to_string())),
+            "*" => Some(elements.join(" ")),
+            _ => {
+                // A number, or a variable that holds one: `${a[$i]}` and `${a[i]}`.
+                let index = index.trim();
+                let number = match index.parse::<i64>() {
+                    Ok(number) => number,
+                    Err(_) => self
+                        .variable(index.trim_start_matches('$'))?
+                        .trim()
+                        .parse::<i64>()
+                        .ok()?,
+                };
+                let position = if number < 0 {
+                    elements.len().checked_sub(usize::try_from(-number).ok()?)?
+                } else {
+                    usize::try_from(number).ok()?
+                };
+                Some(elements.get(position).cloned().unwrap_or_default())
+            }
+        }
     }
 
     /// Record the outcome of a command as `$?`: 0, or the exit code of the
@@ -163,6 +245,39 @@ impl ShellState {
     }
 
     /// The notices for the background jobs that ended since the last call.
+    /// What a subshell must give back: see [`flow::run_subshell`].
+    fn subshell_snapshot(&self) -> SubshellSnapshot {
+        SubshellSnapshot {
+            variables: self.variables.clone(),
+            arrays: self.arrays.clone(),
+            functions: self.functions.clone(),
+            frames: self.frames.clone(),
+            previous_dir: self.previous_dir.clone(),
+            directory: std::env::current_dir().ok(),
+            exports: shell_env::snapshot(),
+        }
+    }
+
+    fn subshell_restore(&mut self, saved: SubshellSnapshot) {
+        self.variables = saved.variables;
+        self.arrays = saved.arrays;
+        self.functions = saved.functions;
+        self.frames = saved.frames;
+        self.previous_dir = saved.previous_dir;
+        if let Some(directory) = saved.directory {
+            let _ = std::env::set_current_dir(directory);
+        }
+        shell_env::restore(saved.exports);
+        // A `break`, `continue` or `return` inside the subshell ends there.
+        self.loop_signal = None;
+        self.returning = None;
+    }
+
+    /// The `EXIT` trap, taken so that it runs once.
+    pub(crate) fn take_exit_trap(&mut self) -> Option<String> {
+        self.exit_trap.take()
+    }
+
     pub(crate) fn adopt_stopped_jobs(&mut self) {
         for notice in self.jobs.adopt_stopped() {
             let _ = render::stderr_line(notice);
@@ -478,6 +593,27 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_type,
     },
     CommandSpec {
+        name: "trap",
+        usage: "trap [command] EXIT | trap - EXIT | trap",
+        summary: "run a command when the shell ends",
+        max_args: None,
+        handler: run_trap,
+    },
+    CommandSpec {
+        name: "command",
+        usage: "command [-v|-V] name [args...]",
+        summary: "run a command without its function, or say what a name is",
+        max_args: None,
+        handler: run_command,
+    },
+    CommandSpec {
+        name: "exec",
+        usage: "exec [command [args...]]",
+        summary: "run a command and leave the shell with its status",
+        max_args: None,
+        handler: run_exec,
+    },
+    CommandSpec {
         name: "which",
         usage: "which <name>...",
         summary: "same as type",
@@ -707,6 +843,17 @@ fn run_segment(
     background: bool,
     state: &mut ShellState,
 ) -> CommandResult {
+    // `name=(a b c)`, `name+=(d)` and `name[2]=value` build an array.
+    if let Some(result) = array_assignment(text, background, state) {
+        return result;
+    }
+    // `[[ expression ]]` reads its own words: no braces, no splitting, no patterns.
+    if let Some(body) = double_bracket::body(text) {
+        return match body {
+            Ok(body) => condition(double_bracket::evaluate(body, state)),
+            Err(error) => CommandResult::Error(error),
+        };
+    }
     // Braces first, then command substitutions, which run now: each rewrites the
     // text, which is then split again.
     let braced = match braces::expand(text) {
@@ -1103,6 +1250,70 @@ fn split_assignment(argument: &str) -> Option<(&str, &str)> {
     shell_env::is_valid_name(name).then_some((name, value))
 }
 
+/// Handle `name=(words)`, `name+=(words)` and `name[index]=word`. `None` when the text is
+/// not one of them. The words are expanded like the arguments of a command.
+fn array_assignment(text: &str, background: bool, state: &mut ShellState) -> Option<CommandResult> {
+    let text = text.trim();
+    let name_end =
+        text.find(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))?;
+    let (name, rest) = text.split_at(name_end);
+    if !shell_env::is_valid_name(name) || background {
+        return None;
+    }
+    if let Some(list) = rest
+        .strip_prefix("+=(")
+        .or_else(|| rest.strip_prefix("=("))
+        .and_then(|list| list.strip_suffix(')'))
+    {
+        let append = rest.starts_with('+');
+        let words = match expand_words(list, state) {
+            Ok(words) => words,
+            Err(error) => return Some(CommandResult::Error(error)),
+        };
+        let elements = state.arrays.entry(name.to_string()).or_default();
+        if append {
+            elements.extend(words);
+        } else {
+            *elements = words;
+        }
+        // An array replaces a plain variable of the same name.
+        state.variables.remove(name);
+        state.record_status(false);
+        return Some(CommandResult::Continue);
+    }
+    let (index, value) = rest.strip_prefix('[')?.split_once("]=")?;
+    let index = match expand_case_word(index, state) {
+        Ok(index) => index,
+        Err(error) => return Some(CommandResult::Error(error)),
+    };
+    let number = match index.trim().parse::<i64>() {
+        Ok(number) if number >= 0 => number as usize,
+        _ => match state
+            .variable(index.trim())
+            .and_then(|value| value.trim().parse::<usize>().ok())
+        {
+            Some(number) => number,
+            None => {
+                state.record_status(true);
+                return Some(CommandResult::Error(format!(
+                    "{name}[{index}]: bad array subscript"
+                )));
+            }
+        },
+    };
+    let value = match expand_case_word(value, state) {
+        Ok(value) => value,
+        Err(error) => return Some(CommandResult::Error(error)),
+    };
+    let elements = state.arrays.entry(name.to_string()).or_default();
+    if elements.len() <= number {
+        elements.resize(number + 1, String::new());
+    }
+    elements[number] = value;
+    state.record_status(false);
+    Some(CommandResult::Continue)
+}
+
 fn assign_variable(name: &str, value: &str, state: &mut ShellState) -> CommandResult {
     if shell_env::is_exported(name) {
         shell_env::export(name, value);
@@ -1155,6 +1366,7 @@ fn run_unset(args: &[String], state: &mut ShellState) -> CommandResult {
             return CommandResult::Error(format!("unset: not a valid name: {name}"));
         }
         state.variables.remove(name.as_str());
+        state.arrays.remove(name.as_str());
         shell_env::remove(name);
     }
     CommandResult::Continue
@@ -1252,6 +1464,142 @@ fn describe_name(name: &str, state: &ShellState) -> Option<String> {
         return Some(format!("{name} is a plugin command"));
     }
     external::locate(name).map(|path| format!("{name} is {}", path.display()))
+}
+
+/// The process id of the parent of the shell, empty where it is not known.
+fn parent_process_id() -> String {
+    #[cfg(unix)]
+    {
+        std::os::unix::process::parent_id().to_string()
+    }
+    #[cfg(not(unix))]
+    {
+        String::new()
+    }
+}
+
+/// `$RANDOM`: xorshift, seeded from the clock and the process id the first time.
+fn next_random() -> u32 {
+    use std::cell::Cell;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    thread_local! {
+        static STATE: Cell<u64> = const { Cell::new(0) };
+    }
+    STATE.with(|cell| {
+        let mut value = cell.get();
+        if value == 0 {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.as_nanos() as u64);
+            value = nanos ^ (u64::from(std::process::id()) << 32) | 1;
+        }
+        value ^= value << 13;
+        value ^= value >> 7;
+        value ^= value << 17;
+        cell.set(value);
+        ((value >> 33) % 32768) as u32
+    })
+}
+
+/// `command -v name...` prints what each name runs, `command -V name...` says it like
+/// `type`, and `command name args...` runs the command without the function of that name.
+fn run_command(args: &[String], state: &mut ShellState) -> CommandResult {
+    match args.first().map(String::as_str) {
+        None => CommandResult::Error("command: usage: command [-v|-V] name [args...]".into()),
+        Some("-V") => run_type(&args[1..], state),
+        Some("-v") => {
+            let mut missing = false;
+            for name in &args[1..] {
+                let shown = if flow::is_keyword(name)
+                    || state.functions.contains_key(name)
+                    || find_command(name).is_some()
+                    || state.user_commands.get(name).is_some()
+                {
+                    Some(name.clone())
+                } else {
+                    external::locate(name).map(|path| path.display().to_string())
+                };
+                match shown {
+                    Some(line) => {
+                        let _ = render::stdout_line(line);
+                    }
+                    None => missing = true,
+                }
+            }
+            if missing || args.len() == 1 {
+                CommandResult::Error(String::new())
+            } else {
+                CommandResult::Continue
+            }
+        }
+        Some(name) => {
+            // A function does not shadow the command that is asked for by name.
+            let shadowed = state.functions.remove(name);
+            let result = execute(args, state);
+            if let Some(function) = shadowed {
+                state.functions.entry(name.to_string()).or_insert(function);
+            }
+            result
+        }
+    }
+}
+
+/// `trap 'command' EXIT` runs the command when the shell ends (`exit`, end of input, `Ctrl+D`);
+/// `trap - EXIT` removes it, and `trap` alone shows it. Signal traps are not available.
+fn run_trap(args: &[String], state: &mut ShellState) -> CommandResult {
+    let is_exit = |name: &str| matches!(name, "EXIT" | "0");
+    match args {
+        [] => {
+            if let Some(command) = &state.exit_trap {
+                let quoted = command.replace('\'', "'\\''");
+                return map_prefixed_error(
+                    "trap",
+                    render::stdout_line(format!("trap -- '{quoted}' EXIT")),
+                );
+            }
+            CommandResult::Continue
+        }
+        [dash, names @ ..] if dash == "-" && !names.is_empty() => {
+            for name in names {
+                if !is_exit(name) {
+                    return CommandResult::Error(trap_unsupported(name));
+                }
+            }
+            state.exit_trap = None;
+            CommandResult::Continue
+        }
+        [command, names @ ..] if !names.is_empty() => {
+            for name in names {
+                if !is_exit(name) {
+                    return CommandResult::Error(trap_unsupported(name));
+                }
+            }
+            state.exit_trap = Some(command.clone()).filter(|command| !command.trim().is_empty());
+            CommandResult::Continue
+        }
+        _ => CommandResult::Error("trap: usage: trap [command] EXIT | trap - EXIT".to_string()),
+    }
+}
+
+fn trap_unsupported(name: &str) -> String {
+    format!("trap: {name}: only EXIT is supported (no signal traps)")
+}
+
+/// `exec command args...` runs the command and leaves the shell with its status; without
+/// a command it does nothing. The shell is not replaced by the program.
+fn run_exec(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args.is_empty() {
+        return CommandResult::Continue;
+    }
+    let result = execute(args, state);
+    if let CommandResult::Error(message) = &result
+        && !message.is_empty()
+    {
+        let _ = render::stderr_line(message);
+    }
+    state.record_status(matches!(result, CommandResult::Error(_)));
+    state.exit_code = Some(status_byte(i64::from(state.last_status)));
+    CommandResult::Exit
 }
 
 fn run_type(args: &[String], state: &mut ShellState) -> CommandResult {
