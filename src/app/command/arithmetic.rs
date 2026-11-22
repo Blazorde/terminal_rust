@@ -26,6 +26,97 @@ pub(super) fn evaluate(expression: &str, lookup: Lookup) -> Result<i64, String> 
     }
 }
 
+/// The statements of `(( … ))` and `let`: expressions separated by commas, where each may be an
+/// assignment (`i=3`, `n+=2`, `x*=4`) or an increment (`i++`, `--i`) of a variable. The value
+/// is the one of the last statement. Assignments are the top of a statement only (ADR-0033).
+pub(super) fn statements(text: &str, state: &mut super::ShellState) -> Result<i64, String> {
+    let mut value = 0;
+    for statement in split_statements(text) {
+        let statement = statement.trim();
+        if statement.is_empty() {
+            continue;
+        }
+        value = statement_value(statement, state)?;
+    }
+    Ok(value)
+}
+
+/// Split at the commas that are not inside parentheses.
+fn split_statements(text: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0_usize;
+    let mut start = 0;
+    for (index, character) in text.char_indices() {
+        match character {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(&text[start..index]);
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&text[start..]);
+    parts
+}
+
+fn statement_value(statement: &str, state: &mut super::ShellState) -> Result<i64, String> {
+    let read = |state: &super::ShellState, expression: &str| {
+        evaluate(expression, &|name| state.variable(name))
+    };
+    // `i++`, `i--`, `++i`, `--i`.
+    for (suffix, delta) in [("++", 1_i64), ("--", -1)] {
+        if let Some(name) = statement
+            .strip_suffix(suffix)
+            .or_else(|| statement.strip_prefix(suffix))
+            && shell_env::is_valid_name(name.trim())
+        {
+            let name = name.trim();
+            let before = read(state, name)?;
+            let after = before.checked_add(delta).ok_or_else(overflow)?;
+            super::assign_variable(name, &after.to_string(), state);
+            // `i++` is the old value, `++i` the new one.
+            return Ok(if statement.ends_with(suffix) {
+                before
+            } else {
+                after
+            });
+        }
+    }
+    // `name = expr`, `name += expr`, … (not `==`, `<=`, `>=`, `!=`).
+    if let Some((left, right)) = statement.split_once('=') {
+        let operator = left
+            .chars()
+            .last()
+            .filter(|c| matches!(c, '+' | '-' | '*' | '/' | '%'));
+        let name = left.trim_end_matches(['+', '-', '*', '/', '%']).trim();
+        let comparison = right.starts_with('=') || left.ends_with(['<', '>', '!', '=']);
+        if !comparison && shell_env::is_valid_name(name) {
+            let right = read(state, right)?;
+            let value = match operator {
+                None => right,
+                Some(operator) => {
+                    let current = read(state, name)?;
+                    match operator {
+                        '+' => current.checked_add(right),
+                        '-' => current.checked_sub(right),
+                        '*' => current.checked_mul(right),
+                        '/' if right == 0 => return Err("arithmetic: division by 0".to_string()),
+                        '/' => current.checked_div(right),
+                        _ if right == 0 => return Err("arithmetic: division by 0".to_string()),
+                        _ => current.checked_rem(right),
+                    }
+                    .ok_or_else(overflow)?
+                }
+            };
+            super::assign_variable(name, &value.to_string(), state);
+            return Ok(value);
+        }
+    }
+    read(state, statement)
+}
+
 /// Parentheses nested deeper than this are refused instead of overflowing the
 /// stack on a hostile expression.
 const MAX_DEPTH: usize = 64;

@@ -630,6 +630,13 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_type,
     },
     CommandSpec {
+        name: "let",
+        usage: "let expression...",
+        summary: "calculate integers and assign variables: let n=n+1",
+        max_args: None,
+        handler: run_let,
+    },
+    CommandSpec {
         name: "pushd",
         usage: "pushd [dir]",
         summary: "go to a directory and remember the one that was left",
@@ -925,6 +932,19 @@ fn run_segment(
     // `name=(a b c)`, `name+=(d)` and `name[2]=value` build an array.
     if let Some(result) = array_assignment(text, background, state) {
         return result;
+    }
+    // `(( expression ))` is arithmetic: its status is 0 when the value is not zero.
+    if let Some(body) = arithmetic_command(text) {
+        return match substitution::expand(body, state)
+            .and_then(|body| arithmetic::statements(&body, state))
+        {
+            Ok(0) => CommandResult::Error(String::new()),
+            Ok(_) => CommandResult::Continue,
+            Err(error) => {
+                external::note_exit_code(2);
+                CommandResult::Error(error)
+            }
+        };
     }
     // `[[ expression ]]` reads its own words: no braces, no splitting, no patterns.
     if let Some(body) = double_bracket::body(text) {
@@ -1327,6 +1347,50 @@ fn run_man(args: &[String], _state: &mut ShellState) -> CommandResult {
 fn split_assignment(argument: &str) -> Option<(&str, &str)> {
     let (name, value) = argument.split_once('=')?;
     shell_env::is_valid_name(name).then_some((name, value))
+}
+
+/// What is between `((` and `))` when `text` is an arithmetic command.
+fn arithmetic_command(text: &str) -> Option<&str> {
+    let text = text.trim();
+    let inner = text.strip_prefix("((")?.strip_suffix("))")?;
+    // `((a)+(b))` is `(a)+(b)` inside one pair of parentheses, not `a)+(b` inside two.
+    let mut depth = 0_i32;
+    let balanced = inner.chars().all(|character| {
+        match character {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ => {}
+        }
+        depth >= 0
+    }) && depth == 0;
+    Some(if balanced {
+        inner
+    } else {
+        &text[1..text.len() - 1]
+    })
+}
+
+/// `let a=1 b=a+1`: each argument is an assignment or an expression; the status is 0 when
+/// the last value is not zero.
+fn run_let(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args.is_empty() {
+        return CommandResult::Error("let: expression expected".to_string());
+    }
+    let mut value = 0;
+    for argument in args {
+        match arithmetic::statements(argument, state) {
+            Ok(result) => value = result,
+            Err(error) => {
+                external::note_exit_code(2);
+                return CommandResult::Error(format!("let: {error}"));
+            }
+        }
+    }
+    if value == 0 {
+        CommandResult::Error(String::new())
+    } else {
+        CommandResult::Continue
+    }
 }
 
 /// Handle `name=(words)`, `name+=(words)` and `name[index]=word`. `None` when the text is
