@@ -5,6 +5,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-11-22
+
 ### Added
 
 - Job control (ADR-0024): `Ctrl+Z` stops the program that runs in the foreground and
