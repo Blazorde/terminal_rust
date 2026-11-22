@@ -30,6 +30,7 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0021](0021-functions.md) | Accepted | Functions and positional parameters |
 | [0022](0022-redirected-blocks.md) | Accepted | Redirections and pipes on blocks, `while read` |
 | [0023](0023-here-documents.md) | Accepted | Here-documents and here-strings |
+| [0024](0024-job-control.md) | Accepted | Job control: Ctrl+Z, `bg` and `fg` in safe Rust |
 
 ## Lifecycle
 

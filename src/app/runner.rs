@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
-use rustyline::{ColorMode, CompletionType, Config, Editor};
+use rustyline::{Cmd, ColorMode, CompletionType, Config, Editor, KeyEvent};
 
 use crate::app::command::input_is_incomplete;
 use crate::app::completion::ShellHelper;
@@ -17,6 +17,7 @@ use crate::commands::external;
 use crate::config::{self, AppConfig, AppearanceSettings, appearance_ansi_sequences};
 use crate::core::{ExecutionResult, ExecutionStatus, ShellEngine};
 use crate::render;
+use crate::utils::job_control;
 
 const HISTORY_FILE_ENV: &str = "TERMINAL_RUST_HISTORY_FILE";
 
@@ -66,8 +67,13 @@ fn run_once(args: &[String]) -> ExitCode {
 
 pub fn run_interactive() -> ExitCode {
     render::stream_before_children(true);
+    let on_terminal = io::stdin().is_terminal();
+    // Before any thread starts, so that they all share the signal mask it sets.
+    if on_terminal {
+        job_control::init();
+    }
     external::keep_shell_alive_on_interrupt();
-    if io::stdin().is_terminal() {
+    if on_terminal {
         run_interactive_editor()
     } else {
         run_interactive_plain()
@@ -88,6 +94,8 @@ fn run_interactive_editor() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // `Ctrl+Z` stops the programs that run, not the shell: at the prompt it does nothing.
+    editor.bind_sequence(KeyEvent::ctrl('Z'), Cmd::Noop);
     editor.set_helper(Some(ShellHelper::with_command_names(
         engine.command_names(),
     )));

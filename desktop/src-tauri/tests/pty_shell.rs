@@ -957,6 +957,127 @@ fn a_process_command_reads_what_the_user_types() {
     fs::remove_dir_all(directory).expect("fixture directory should be removed");
 }
 
+/// `Ctrl+Z` stops the program that runs and not the shell; `jobs`, `bg` and `fg` then
+/// continue it, and `exit` warns once about a job that is still stopped (ADR-0024).
+#[cfg(unix)]
+#[test]
+fn ctrl_z_stops_the_program_and_bg_and_fg_continue_it() {
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows: 24,
+            cols: 100,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .expect("native PTY should open");
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .expect("PTY output should be readable");
+    let mut writer = pair
+        .master
+        .take_writer()
+        .expect("PTY input should be writable");
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut buffer = [0; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(length) => {
+                    if sender.send(buffer[..length].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_terminal-rust-desktop"));
+    isolate(&mut command);
+    command.arg("--pty-shell");
+    command.env("TERMINAL_RUST_GUI", "1");
+    command.env("TERM", "xterm-256color");
+    let mut child = pair
+        .slave
+        .spawn_command(command)
+        .expect("desktop shell mode should start");
+    drop(pair.slave);
+
+    let mut output = Vec::new();
+    let mut cursor_answered = false;
+    wait_for_prompt_frame(
+        &receiver,
+        &mut output,
+        1,
+        writer.as_mut(),
+        &mut cursor_answered,
+    );
+
+    // What was written since the last step, so that each step waits for its own answer.
+    let mut step = |input: &[u8], expected: &str| {
+        let from = output.len();
+        writer
+            .write_all(input)
+            .and_then(|()| writer.flush())
+            .expect("the input should reach the PTY");
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
+                output.extend(chunk);
+            }
+            let text = String::from_utf8_lossy(&output[from..]).into_owned();
+            if text.contains(expected) {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "expected {expected:?} after {:?}, got: {text:?}",
+                String::from_utf8_lossy(input)
+            );
+        }
+    };
+
+    step(b"sleep 60\r", "sleep 60");
+    // The program has the terminal: `Ctrl+Z` stops it and the shell says so.
+    thread::sleep(Duration::from_millis(500));
+    step(b"\x1a", "[1]+  Stopped  sleep 60");
+    step(b"jobs\r", "[1]+  Stopped  sleep 60\r\n");
+    step(b"bg\r", "[1]+  sleep 60 &");
+    step(b"jobs\r", "[1]+  Running  sleep 60");
+    // `fg` gives the terminal back to the program, so `Ctrl+C` ends it and not the shell.
+    step(b"fg\r", "sleep 60\r\n");
+    thread::sleep(Duration::from_millis(300));
+    step(b"\x03", "fg: exited with status 130");
+    step(b"echo after-$?\r", "after-130");
+    // A job that is stopped again blocks the first `exit`.
+    step(b"sleep 60\r", "sleep 60");
+    thread::sleep(Duration::from_millis(500));
+    step(b"\x1a", "Stopped  sleep 60");
+    step(b"exit\r", "There are stopped jobs.");
+
+    let exit_deadline = Instant::now() + Duration::from_secs(10);
+    let mut next_exit = Instant::now();
+    loop {
+        if child
+            .try_wait()
+            .expect("shell status should be readable")
+            .is_some()
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < exit_deadline,
+            "the second exit did not leave"
+        );
+        if Instant::now() >= next_exit {
+            let _ = writer.write_all(b"exit\r").and_then(|()| writer.flush());
+            next_exit = Instant::now() + Duration::from_millis(500);
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
 #[test]
 fn live_dashboard_exits_and_restores_the_desktop_pty() {
     let pair = native_pty_system()

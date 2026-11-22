@@ -16,7 +16,7 @@ use crate::app::parser::{Redirect, Stage, parse_args, parse_with};
 use crate::commands::external::{self, RunError};
 use crate::git;
 use crate::render;
-use crate::utils::{pipe_input, shell_env};
+use crate::utils::{job_control, pipe_input, shell_env};
 
 /// The text of the stage that stands for the compound command of the pipeline. It
 /// holds the redirections that were written after the closing keyword.
@@ -93,6 +93,8 @@ pub(super) fn run(
         Input::Inherit
     };
     let mut children: Vec<(String, Child)> = Vec::new();
+    // The process group of the programs: the first one leads it, the others join it.
+    let mut group: Option<i32> = None;
     let mut feeders: Vec<JoinHandle<()>> = Vec::new();
     // In a command substitution, what the last program writes is collected.
     let capturing = background.is_none() && render::programs_captured();
@@ -138,8 +140,18 @@ pub(super) fn run(
                 }
             }
             StageKind::Program { .. } | StageKind::Git { .. } => {
-                match start_program(&plan, opened, previous, is_last) {
+                match start_program(
+                    &plan,
+                    opened,
+                    previous,
+                    is_last,
+                    group,
+                    background.is_none(),
+                ) {
                     Ok(started) => {
+                        if group.is_none() && job_control::enabled() {
+                            group = Some(job_control::group_of(&started.child));
+                        }
                         input = started.next_input;
                         if is_last
                             && capturing
@@ -174,7 +186,7 @@ pub(super) fn run(
     if let Some(text) = background {
         if !children.is_empty() {
             let programs = children.into_iter().map(|(_, child)| child).collect();
-            let (number, pid) = state.jobs.add(text, programs);
+            let (number, pid) = state.jobs.add(text, programs, group);
             let _ = render::stderr_line(format!("[{number}] {pid}"));
         }
         if exit_requested {
@@ -188,16 +200,25 @@ pub(super) fn run(
     let mut program_result = None;
     let mut last_code = None;
     let started = children.len();
-    for (position, (name, mut child)) in children.into_iter().enumerate() {
-        let outcome = match child.wait() {
-            Ok(status) if status.success() => CommandResult::Continue,
-            Ok(status) => {
-                if position + 1 == started {
-                    last_code = Some(external::exit_code(status));
-                }
-                CommandResult::Error(external::describe_exit(&name, status))
+    let (names, programs): (Vec<String>, Vec<Child>) = children.into_iter().unzip();
+    let statuses = match job_control::wait_foreground(programs, None) {
+        job_control::Waited::Done(statuses) => statuses,
+        // `Ctrl+Z`: the pipeline is a stopped job now, and says so itself. Whatever
+        // still feeds or collects its streams is left to finish on its own.
+        job_control::Waited::Stopped(stopped) => {
+            job_control::set_aside(stopped, &pipeline_text(stages));
+            external::note_exit_code(job_control::STOPPED_STATUS);
+            return CommandResult::Error(String::new());
+        }
+    };
+    for (position, (name, status)) in names.iter().zip(statuses).enumerate() {
+        let outcome = if status.success() {
+            CommandResult::Continue
+        } else {
+            if position + 1 == started {
+                last_code = Some(external::exit_code(status));
             }
-            Err(error) => CommandResult::Error(format!("{name}: cannot wait: {error}")),
+            CommandResult::Error(external::describe_exit(name, status))
         };
         if position + 1 == started {
             program_result = Some(outcome);
@@ -226,6 +247,21 @@ pub(super) fn run(
     last_result
         .or(program_result)
         .unwrap_or(CommandResult::Continue)
+}
+
+/// The text that names a pipeline in the job table.
+fn pipeline_text(stages: &[Stage]) -> String {
+    stages
+        .iter()
+        .map(|stage| {
+            if stage.text.trim() == COMPOUND_STAGE {
+                "{ … }".to_string()
+            } else {
+                stage.text.trim().to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
 }
 
 fn plan(stage: &Stage, state: &ShellState) -> Result<Plan, String> {
@@ -471,6 +507,8 @@ fn start_program(
     opened: Opened,
     previous: Input,
     is_last: bool,
+    group: Option<i32>,
+    foreground: bool,
 ) -> Result<Started, String> {
     let name = plan.args.first().map(String::as_str).unwrap_or_default();
     let capture_last = render::programs_captured();
@@ -539,6 +577,7 @@ fn start_program(
         Sink::Default => {}
     }
 
+    job_control::prepare(&mut command, group);
     let spawned = command.spawn();
     // The parent must not keep a copy of the write end, or the next stage would
     // never see the end of its input.
@@ -552,6 +591,8 @@ fn start_program(
         }
         RunError::Failed(message) => message,
     })?;
+
+    job_control::join_group(&child, group, foreground);
 
     let feeder = feed.and_then(|bytes| {
         child.stdin.take().map(|mut stdin| {

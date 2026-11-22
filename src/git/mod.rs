@@ -6,6 +6,8 @@ use std::process::{Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::utils::job_control::{self, Finished};
+
 /// How long the prompt waits for `git status` before leaving the segment out.
 const PROMPT_GIT_TIMEOUT: Duration = Duration::from_millis(1500);
 
@@ -90,16 +92,16 @@ fn run_native_command_with_program(
         // pagers, editors, SSH prompts, credential helpers, and other tools.
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .map_err(GitCommandError::GitUnavailable)
-        .and_then(|status| {
-            if status.success() {
-                Ok(status)
-            } else {
-                Err(GitCommandError::CommandFailed(status.code()))
-            }
-        })
+        .stderr(Stdio::inherit());
+    let text = format!("git {}", args.join(" "));
+    match job_control::run_foreground(command, text.trim())
+        .map_err(GitCommandError::GitUnavailable)?
+    {
+        Finished::Exited(status) if status.success() => Ok(status),
+        Finished::Exited(status) => Err(GitCommandError::CommandFailed(status.code())),
+        // `Ctrl+Z` in a pager or an editor Git started: the job says so itself.
+        Finished::Stopped => Ok(job_control::success_status()),
+    }
 }
 
 fn is_inside_work_tree_with_program(path: &Path, program: impl AsRef<OsStr>) -> bool {

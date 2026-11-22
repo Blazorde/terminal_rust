@@ -2,6 +2,7 @@ use std::io;
 use std::process::Command;
 
 use crate::render;
+use crate::utils::job_control::{self, Finished};
 use crate::utils::shell_env;
 
 /// Built-in command data a manual page is made from.
@@ -28,8 +29,11 @@ pub fn show(entry: &Entry) -> io::Result<()> {
 pub fn show_system(args: &[String]) -> io::Result<()> {
     let mut command = Command::new("man");
     shell_env::prepare_child(&mut command);
-    let status = match command.args(args).status() {
-        Ok(status) => status,
+    command.args(args);
+    let text = format!("man {}", args.join(" "));
+    let status = match job_control::run_foreground(command, text.trim()) {
+        Ok(Finished::Exited(status)) => status,
+        Ok(Finished::Stopped) => return Ok(()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             return Err(io::Error::other(format!(
                 "no manual entry for {} (the system 'man' program is not installed)",

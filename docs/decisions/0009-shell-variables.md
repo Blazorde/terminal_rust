@@ -55,6 +55,15 @@ process environment.
    `OLDPWD` is dropped, since there is no previous directory yet. After a `cd` the
    value is the physical path, with symbolic links resolved. `cd -` prints the
    directory it goes to. (Added in 1.8.0.)
+10. **Word splitting is explicit.** An unquoted `$NAME` is always one word, whatever the
+    value holds, as in zsh and fish: a path with a space (`C:\Users\Jane Doe`) or a
+    value that comes from a file or a program cannot turn into several arguments, which
+    removes a whole family of bugs and injections. `${=NAME}` asks for the split: the value
+    is cut at blanks into one word per piece (none when it is empty), with the first and
+    last pieces attached to the text around it, also inside double quotes. It combines with
+    the other forms (`${=NAME:-a b}`), and the pieces are never file name patterns.
+    Positional parameters keep their own rule: `$@` and `"$@"` are one word per argument.
+    (Added in 1.9.2.)
 
 ## Options considered
 
