@@ -187,6 +187,7 @@ pub(super) fn run(
         if !children.is_empty() {
             let programs = children.into_iter().map(|(_, child)| child).collect();
             let (number, pid) = state.jobs.add(text, programs, group);
+            state.last_background = Some(pid);
             let _ = render::stderr_line(format!("[{number}] {pid}"));
         }
         if exit_requested {
