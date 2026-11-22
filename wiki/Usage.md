@@ -58,7 +58,8 @@ type for echo ls cargo     # for is a shell keyword ... cargo is /usr/bin/cargo
 
 `$NAME`, `${NAME}` and `$?` (`0` after a success, the exit code of a program
 that failed, `127` for an unknown program, `1` for a failure inside the shell) are
-expanded in command lines, and a leading `~` stands for your home directory.
+expanded in command lines, and a leading `~` stands for your home directory. `$$` is the
+process id of the shell and `$!` the one of the last job started with `&` (empty before any).
 Double quotes expand variables, single quotes do not, and `\$` writes a literal
 dollar sign:
 
@@ -284,8 +285,10 @@ against file names; in double quotes it stays one word (`"$(pwd)"`). In an
 assignment (`NAME=$(cmd)`) it is not split. What the command writes on standard
 error still goes to the terminal. A result can never add an operator such as `;`
 or `>` to the line. Single quotes and `\$(` keep it as text. `cd` inside a
-substitution changes the shell's directory (there is no subshell). Backquotes
-are not available.
+substitution changes the shell's directory (there is no subshell). The old
+spelling with backquotes works the same way: `` echo today is `date` ``. A line that
+ends with a single backquote is still a continuation line (`docs/custom-commands.md`);
+one that ends with the closing backquote of a pair is complete.
 
 ## Arithmetic
 

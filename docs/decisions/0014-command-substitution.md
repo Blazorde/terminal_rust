@@ -56,8 +56,11 @@ user still cannot write is the output of one command inside another:
 
 ### Negative
 
-- No arithmetic expansion, no process substitution (`<(...)`), no backquotes, no
-  `IFS`.
+- No arithmetic expansion, no process substitution (`<(...)`), no `IFS`. Backquotes
+  (`` `line` ``) were added later and work like `$(line)`: `` \` ``, `\\` and `\$` are unescaped
+  inside them, they are active in double quotes and not in single quotes, and a line that
+  ends with the closing backquote of a pair is complete (the trailing backtick continues
+  a line only when the backquotes of the line are odd in number).
 - Results are not matched against file names, unlike POSIX shells.
 - A substitution that reads and writes the terminal at once may behave oddly.
 
