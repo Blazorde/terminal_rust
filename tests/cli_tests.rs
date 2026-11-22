@@ -4600,3 +4600,125 @@ fn parameter_operators_cut_replace_slice_and_change_case() {
         "{errors}"
     );
 }
+
+#[test]
+fn eval_reads_its_arguments_again_and_set_changes_the_parameters() {
+    let directory = TestDirectory::new("eval set");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "eval 'echo evaled; x=5'",
+            "echo x=$x",
+            "cmd='echo a b'",
+            "eval $cmd",
+            "eval echo joined args",
+            "eval",
+            "echo empty=$?",
+            "set -- one two three",
+            "echo count=$# first=$1 third=$3",
+            "set a b",
+            "echo second=$2 count=$#",
+            "set --",
+            "echo cleared=$#",
+            "set -o bogus",
+            "set -q",
+        ],
+    );
+
+    for expected in [
+        "evaled\n",
+        "x=5\n",
+        "a b\n",
+        "joined args\n",
+        "empty=0\n",
+        "count=3 first=one third=three\n",
+        "second=b count=2\n",
+        "cleared=0\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(errors.contains("option not supported"), "{errors}");
+}
+
+#[test]
+fn set_u_makes_an_unset_variable_an_error_and_dollar_dash_lists_the_options() {
+    let directory = TestDirectory::new("set u");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo before=[$nothing]",
+            "set -u",
+            "echo flags=$-",
+            "echo after=$nothing",
+            "echo braced=${nothing}",
+            "echo default=${nothing:-fallback}",
+            "x=1",
+            "echo set=$x",
+            "echo specials=$? $# $0",
+            "set +u",
+            "echo off=[$nothing] flags=[$-]",
+            "set -o nounset -o xtrace",
+            "echo both=$-",
+        ],
+    );
+
+    for expected in [
+        "before=[]\n",
+        "flags=u\n",
+        "default=fallback\n",
+        "set=1\n",
+        "off=[] flags=[]\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(printed.contains("both=ux\n"), "{printed}");
+    assert_eq!(
+        errors.matches("nothing: unbound variable").count(),
+        2,
+        "{errors}"
+    );
+    assert!(!printed.contains("after="), "{printed}");
+    assert!(
+        printed.contains("specials=0 0 terminal_rust\n"),
+        "{printed}"
+    );
+    // `set -x` shows the commands on standard error.
+    assert!(errors.contains("+ echo both=$-"), "{errors}");
+}
+
+#[test]
+fn set_e_leaves_the_shell_when_a_command_fails_outside_a_condition() {
+    let directory = TestDirectory::new("set e");
+
+    let output = run_interactive(
+        directory.path(),
+        "set -e\nfalse || echo or-ok\nif false; then echo no; fi\n! false\n! true\nfalse && echo skipped\nwhile false; do :; done\necho still-running\nsh -c 'exit 5'\necho never-reached\n",
+    );
+    let printed = stdout(&output);
+    for expected in ["or-ok\n", "still-running\n"] {
+        assert!(printed.contains(expected), "{expected:?} in {printed}");
+    }
+    assert!(!printed.contains("never-reached"), "{printed}");
+    // The status of the command that failed is the status of the shell.
+    assert_eq!(output.status.code(), Some(5), "{}", stderr(&output));
+
+    // Without the option, a failure does not stop anything.
+    let output = run_interactive(directory.path(), "false\necho goes-on\n");
+    assert!(stdout(&output).contains("goes-on\n"));
+
+    // Switched off again.
+    let output = run_interactive(directory.path(), "set -e\nset +e\nfalse\necho off-again\n");
+    assert!(
+        stdout(&output).contains("off-again\n"),
+        "{}",
+        stdout(&output)
+    );
+}
