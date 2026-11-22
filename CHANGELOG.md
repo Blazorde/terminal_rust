@@ -7,6 +7,13 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- Job control (ADR-0024): `Ctrl+Z` stops the program that runs in the foreground and
+  gives the prompt back (`[1]+  Stopped  vim notes.txt`), `fg` brings it back, `bg`
+  continues it in the background, `jobs` shows `Stopped`, and `exit` warns once about
+  stopped jobs. `Ctrl+C` now reaches the program and not the shell. It is written in
+  safe Rust (`rustix`, `nix`, `signal-hook`), and only active when the shell is on a
+  terminal.
+
 - `${=NAME}` splits the value of a variable into one word per blank-separated piece
   (ADR-0009): `FLAGS="-a -l"; ls ${=FLAGS}`, `for f in ${=LIST}; do …; done`. Plain
   `$NAME` stays a single word, so a value with spaces is still safe.

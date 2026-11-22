@@ -50,6 +50,8 @@ pub struct ShellState {
     frames: Vec<functions::Frame>,
     /// Set by `return`: the status to leave the running function with.
     returning: Option<i32>,
+    /// `exit` already warned about stopped jobs.
+    exit_warned: bool,
 }
 
 impl ShellState {
@@ -74,6 +76,7 @@ impl ShellState {
             functions: HashMap::new(),
             frames: Vec::new(),
             returning: None,
+            exit_warned: false,
         }
     }
 
@@ -146,6 +149,12 @@ impl ShellState {
     }
 
     /// The notices for the background jobs that ended since the last call.
+    pub(crate) fn adopt_stopped_jobs(&mut self) {
+        for notice in self.jobs.adopt_stopped() {
+            let _ = render::stderr_line(notice);
+        }
+    }
+
     pub(crate) fn finished_job_notices(&mut self) -> Vec<String> {
         self.jobs.finished_notices()
     }
@@ -513,9 +522,16 @@ const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         name: "fg",
         usage: "fg [%job]",
-        summary: "wait for a background job and show its result",
+        summary: "bring a job to the foreground and wait for it",
         max_args: Some(1),
         handler: run_fg,
+    },
+    CommandSpec {
+        name: "bg",
+        usage: "bg [%job]",
+        summary: "continue a stopped job in the background",
+        max_args: Some(1),
+        handler: run_bg,
     },
     CommandSpec {
         name: "wait",
@@ -1311,12 +1327,26 @@ fn job_outcome(name: &str, status: Option<std::process::ExitStatus>) -> CommandR
 }
 
 fn run_fg(args: &[String], state: &mut ShellState) -> CommandResult {
-    match state.jobs.foreground(optional_arg(args)) {
-        Ok((text, status)) => {
-            let _ = render::stdout_line(&text);
-            job_outcome("fg", status)
+    let announce = |text: &str| {
+        let _ = render::stdout_line(text);
+        // The job has the terminal while it runs: show the command first.
+        render::flush_captured();
+    };
+    match state.jobs.foreground(optional_arg(args), announce) {
+        Ok(jobs::Foreground::Done(status)) => job_outcome("fg", status),
+        Ok(jobs::Foreground::Stopped(notice)) => {
+            let _ = render::stderr_line(notice);
+            external::note_exit_code(crate::utils::job_control::STOPPED_STATUS);
+            CommandResult::Error(String::new())
         }
         Err(error) => CommandResult::Error(format!("fg: {error}")),
+    }
+}
+
+fn run_bg(args: &[String], state: &mut ShellState) -> CommandResult {
+    match state.jobs.background(optional_arg(args)) {
+        Ok(line) => map_prefixed_error("bg", render::stdout_line(line)),
+        Err(error) => CommandResult::Error(format!("bg: {error}")),
     }
 }
 
@@ -1339,6 +1369,11 @@ fn run_kill(args: &[String], state: &mut ShellState) -> CommandResult {
 }
 
 fn run_exit(args: &[String], state: &mut ShellState) -> CommandResult {
+    // Stopped jobs would be left behind: say so once, and leave on the next `exit`.
+    if state.jobs.has_stopped() && !state.exit_warned {
+        state.exit_warned = true;
+        return CommandResult::Error("There are stopped jobs.".to_string());
+    }
     state.exit_code = match args.first() {
         // Without a code the shell leaves with the status of the last command.
         None => Some(status_byte(i64::from(state.last_status))),

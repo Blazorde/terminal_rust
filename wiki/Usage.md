@@ -382,14 +382,20 @@ input (its standard input is empty) and its output still goes to the terminal.
 | Command | Effect |
 | --- | --- |
 | `jobs` | list the jobs: `[1]+  Running  npm run dev` |
-| `fg [%n]` | wait for a job (the latest by default); `$?` is its exit code |
-| `wait [%n]` | wait for one job, or for all of them |
+| `fg [%n]` | bring a job to the foreground and wait for it (the latest by default); `$?` is its exit code |
+| `bg [%n]` | continue a stopped job in the background |
+| `wait [%n]` | wait for one job, or for all of them (not for a stopped one) |
 | `kill %n` | stop a job (`kill 1234` still reaches the system `kill`) |
 
 When a job ends the shell says so once, before the next prompt: `[1]+  Done
 npm run dev` or `[1]+  Exit 3  ...`. A job is one command or one pipeline: `a &&
-b &` is rejected. Programs keep running if you leave the shell. There is no
-`Ctrl+Z` and no `bg`: an interactive program has to run in the foreground.
+b &` is rejected. Programs keep running if you leave the shell.
+
+`Ctrl+Z` stops the program that runs in the foreground (an editor, `ssh`, a server)
+and gives the prompt back: `[1]+  Stopped  vim notes.txt`. `fg` brings it back where it was,
+`bg` lets it go on in the background. `exit` warns once while a job is stopped and
+leaves on the next `exit`. This works in a terminal window and in the desktop app, not in
+scripts or on Windows. At the prompt itself `Ctrl+Z` does nothing.
 
 ## History
 
