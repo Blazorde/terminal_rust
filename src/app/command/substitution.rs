@@ -1,4 +1,4 @@
-//! Command substitution, `$(line)` (see ADR-0014).
+//! Command substitution, `$(line)` and `` `line` `` (see ADR-0014).
 //!
 //! The text of a segment is rewritten before it is parsed: each `$(line)` is
 //! replaced by what `line` printed, quoted so that it can only ever become words
@@ -72,6 +72,32 @@ pub(super) fn expand(text: &str, state: &mut ShellState) -> Result<String, Strin
                 )?;
                 position = index - 1;
                 inner.pop();
+                let result = capture(&inner, state)?;
+                let in_assignment = quote.is_none() && is_assignment(&output[word_start..]);
+                output.push_str(&replacement(&result, quote == Some('"'), in_assignment));
+            }
+            // Backquotes, the old spelling of `$(…)`: the text up to the next backquote
+            // that is not escaped, with `\`` `\\` and `\$` unescaped.
+            (Some('"') | None, '`') => {
+                let mut inner = String::new();
+                let mut index = position + 1;
+                loop {
+                    match characters.get(index) {
+                        None => return Err("unterminated backquote command substitution".into()),
+                        Some('`') => break,
+                        Some('\\')
+                            if matches!(characters.get(index + 1), Some('`' | '\\' | '$')) =>
+                        {
+                            inner.push(characters[index + 1]);
+                            index += 2;
+                        }
+                        Some(&other) => {
+                            inner.push(other);
+                            index += 1;
+                        }
+                    }
+                }
+                position = index;
                 let result = capture(&inner, state)?;
                 let in_assignment = quote.is_none() && is_assignment(&output[word_start..]);
                 output.push_str(&replacement(&result, quote == Some('"'), in_assignment));

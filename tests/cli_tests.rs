@@ -3980,3 +3980,85 @@ fn an_equals_sign_in_braces_splits_a_variable_into_arguments_on_request() {
     assert!(!printed.contains("plain=[one]"), "{printed}");
     assert!(errors.is_empty(), "{errors}");
 }
+
+#[cfg(unix)]
+#[test]
+fn dollar_dollar_is_the_shell_pid_and_dollar_bang_the_last_background_pid() {
+    let directory = TestDirectory::new("pid parameters");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            // Before any job `$!` is empty.
+            "echo none=[$!]",
+            "echo me=$$",
+            "echo again=${$}",
+            "sleep 20 &",
+            "echo job=$!",
+            "kill $!",
+            "wait",
+            "echo \"quoted=$$ $!\"",
+        ],
+    );
+
+    assert!(printed.contains("none=[]\n"), "{printed}\n{errors}");
+    let line = |prefix: &str| {
+        // The prompt comes before the output on the same line.
+        let start = printed
+            .find(prefix)
+            .unwrap_or_else(|| panic!("no {prefix} in {printed}\n{errors}"))
+            + prefix.len();
+        printed[start..]
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .to_string()
+    };
+    let shell: u32 = line("me=").parse().expect("a pid");
+    assert!(shell > 1);
+    assert_eq!(line("again="), shell.to_string());
+    // The job number line on standard error carries the pid that `$!` gives.
+    let job: u32 = line("job=").parse().expect("a pid");
+    assert!(job > 1 && job != shell);
+    assert!(errors.contains(&format!("[1] {job}")), "{errors}");
+    assert_eq!(line("quoted="), format!("{shell} {job}"));
+}
+
+#[test]
+fn backquotes_substitute_a_command_like_dollar_parenthesis() {
+    let directory = TestDirectory::new("backquotes");
+
+    let (printed, errors) = shell_lines(
+        &directory,
+        &[
+            "echo today=`echo ok`",
+            "echo \"quoted=`echo 'a   b'`\"",
+            "echo plain=`echo 'a   b'`",
+            "echo 'single=`echo no`'",
+            "V=`echo assigned`",
+            "echo $V",
+            "echo nested=`echo \\`echo inner\\``",
+            "echo backslash=`echo \\\\x`",
+            "echo open=`echo broken",
+        ],
+    );
+
+    for expected in [
+        "today=ok\n",
+        "quoted=a   b\n",
+        "plain=a   b\n",
+        "single=`echo no`\n",
+        "assigned\n",
+        "nested=inner\n",
+        "backslash=\\x\n",
+    ] {
+        assert!(
+            printed.contains(expected),
+            "{expected:?} in {printed}\n{errors}"
+        );
+    }
+    assert!(
+        errors.contains("unterminated backquote"),
+        "an unclosed backquote is an error: {errors}"
+    );
+}

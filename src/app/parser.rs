@@ -241,7 +241,7 @@ fn expand_variable(
             }
             return expand_braced(&content, lookup, output);
         }
-        Some(special @ ('?' | '#' | '@' | '*')) => {
+        Some(special @ ('?' | '#' | '@' | '*' | '$' | '!')) => {
             characters.next();
             special.to_string()
         }
@@ -289,7 +289,7 @@ fn expand_braced(content: &str, lookup: Lookup, output: &mut String) -> Result<b
     }
     let valid = |name: &str| {
         crate::utils::shell_env::is_valid_name(name)
-            || matches!(name, "?" | "#" | "@" | "*")
+            || matches!(name, "?" | "#" | "@" | "*" | "$" | "!")
             || (!name.is_empty() && name.chars().all(|character| character.is_ascii_digit()))
     };
     if let Some(name) = content.strip_prefix('#')
@@ -298,7 +298,7 @@ fn expand_braced(content: &str, lookup: Lookup, output: &mut String) -> Result<b
         output.push_str(&lookup(name).unwrap_or_default().chars().count().to_string());
         return Ok(true);
     }
-    let name_end = if content.starts_with(['?', '#', '@', '*']) {
+    let name_end = if content.starts_with(['?', '#', '@', '*', '$', '!']) {
         1
     } else {
         content
@@ -831,7 +831,11 @@ pub fn continuation_prefix(line: &str) -> Option<&str> {
         .rev()
         .take_while(|character| *character == '`')
         .count();
-    (trailing_ticks % 2 == 1).then(|| {
+    // A line that ends with the closing backquote of a substitution (`echo `date``)
+    // is complete: the tick continues the line only when the ticks of the whole line
+    // are odd in number, the others being pairs.
+    let all_ticks = line.chars().filter(|character| *character == '`').count();
+    (trailing_ticks % 2 == 1 && all_ticks % 2 == 1).then(|| {
         line.strip_suffix('`')
             .expect("a trailing tick was counted")
             .trim_end()
@@ -1676,6 +1680,9 @@ mod tests {
             Some("echo hello")
         );
         assert_eq!(continuation_prefix("echo hello ``"), None);
+        // The closing backquote of a substitution does not continue the line.
+        assert_eq!(continuation_prefix("echo today=`date`"), None);
+        assert_eq!(continuation_prefix("echo `date` `"), Some("echo `date`"));
         assert_eq!(continuation_prefix("echo hello"), None);
     }
 

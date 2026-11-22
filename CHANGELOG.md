@@ -5,6 +5,15 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-11-22
+
+### Added
+
+- `$$` (the process id of the shell), `$!` (the process id of the last job started with
+  `&`, empty before any) and backquote command substitution `` `command` `` as the old
+  spelling of `$(command)`. A line that ends with the closing backquote of a pair is no
+  longer taken as a continuation line.
+
 ## [1.10.0] - 2026-11-22
 
 ### Added

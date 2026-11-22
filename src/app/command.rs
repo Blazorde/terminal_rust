@@ -52,6 +52,8 @@ pub struct ShellState {
     returning: Option<i32>,
     /// `exit` already warned about stopped jobs.
     exit_warned: bool,
+    /// The process id of the last job started with `&`, for `$!`.
+    pub(crate) last_background: Option<u32>,
 }
 
 impl ShellState {
@@ -77,6 +79,7 @@ impl ShellState {
             frames: Vec::new(),
             returning: None,
             exit_warned: false,
+            last_background: None,
         }
     }
 
@@ -105,6 +108,17 @@ impl ShellState {
     pub(crate) fn variable(&self, name: &str) -> Option<String> {
         if name == "?" {
             return Some(self.last_status.to_string());
+        }
+        // The process id of the shell, and of the last job started with `&`.
+        if name == "$" {
+            return Some(std::process::id().to_string());
+        }
+        if name == "!" {
+            return Some(
+                self.last_background
+                    .map(|pid| pid.to_string())
+                    .unwrap_or_default(),
+            );
         }
         // The positional parameters of the running function, or of the file that
         // `source` is reading. Outside any: none, and `$#` is 0.
@@ -699,7 +713,7 @@ fn run_segment(
         Ok(braced) => braced,
         Err(error) => return CommandResult::Error(error),
     };
-    if braced.contains("$(") || braced != text {
+    if braced.contains("$(") || braced.contains('`') || braced != text {
         let expanded = match substitution::expand(&braced, state) {
             Ok(expanded) => expanded,
             Err(error) => return CommandResult::Error(error),
