@@ -62,6 +62,24 @@ pub fn parse_args(input: &str, lookup: Lookup) -> Result<Vec<String>, String> {
     Ok(args)
 }
 
+thread_local! {
+    /// `set -u`: an unset variable is an error.
+    static NOUNSET: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Turn `set -u` on or off for the expansions that follow.
+pub(crate) fn set_nounset(on: bool) {
+    NOUNSET.with(|flag| flag.set(on));
+}
+
+fn unbound(name: &str) -> Result<(), String> {
+    let special = matches!(name, "?" | "#" | "@" | "*" | "$" | "!" | "-" | "0");
+    if NOUNSET.with(std::cell::Cell::get) && !special {
+        return Err(format!("{name}: unbound variable"));
+    }
+    Ok(())
+}
+
 /// Whether the expansion that starts after a `$` gives one word per piece: `$@`
 /// and `${=NAME}`.
 fn splits_into_words(characters: &std::iter::Peekable<std::str::Chars<'_>>) -> bool {
@@ -258,7 +276,7 @@ fn expand_variable(
             }
             return expand_braced(&content, lookup, output);
         }
-        Some(special @ ('?' | '#' | '@' | '*' | '$' | '!')) => {
+        Some(special @ ('?' | '#' | '@' | '*' | '$' | '!' | '-')) => {
             characters.next();
             special.to_string()
         }
@@ -283,7 +301,11 @@ fn expand_variable(
         }
     };
 
-    let value = lookup(&name).unwrap_or_default();
+    let found = lookup(&name);
+    if found.is_none() {
+        unbound(&name)?;
+    }
+    let value = found.unwrap_or_default();
     output.push_str(&value);
     Ok(!value.is_empty())
 }
@@ -393,7 +415,12 @@ fn expand_braced(content: &str, lookup: Lookup, output: &mut String) -> Result<b
         .is_some_and(|value| !colon || !value.is_empty());
     let text = match operation.chars().next() {
         None if colon => return Err(format!("bad substitution: ${{{content}}}")),
-        None => value.unwrap_or_default(),
+        None => {
+            if value.is_none() {
+                unbound(name)?;
+            }
+            value.unwrap_or_default()
+        }
         Some('-') if set => value.unwrap_or_default(),
         Some('-') => expand_word(&operation[1..], lookup)?,
         Some('+') if set => expand_word(&operation[1..], lookup)?,

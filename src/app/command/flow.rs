@@ -805,7 +805,7 @@ fn interrupted_result() -> CommandResult {
 /// Run the nodes of a list in order, applying `&&` and `||` between them.
 pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult {
     let mut last = CommandResult::Continue;
-    for node in nodes {
+    for (index, node) in nodes.iter().enumerate() {
         if state.loop_signal.is_some() || state.returning.is_some() {
             break;
         }
@@ -824,7 +824,7 @@ pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult
         report(&last);
 
         last = match node {
-            Node::Simple { segment, stages } => match negated(&segment.text) {
+            Node::Simple { segment, stages } => match trace_and_negation(segment, state) {
                 // `! command`: the status is turned around, so `if ! test -f x` reads well.
                 Some(rest) => run_negated(rest, segment.background, state),
                 None => {
@@ -867,8 +867,33 @@ pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult
         if last == CommandResult::Exit {
             break;
         }
+        // `set -e`: a failed command ends the shell, unless it is a condition or the left
+        // side of `&&` or `||`.
+        // A command after `!` is exempt: its failure is what the `!` asked for.
+        let negation =
+            matches!(node, Node::Simple { segment, .. } if negated(&segment.text).is_some());
+        if state.options.errexit
+            && state.errexit_guard == 0
+            && !negation
+            && matches!(last, CommandResult::Error(_))
+            && !nodes
+                .get(index + 1)
+                .is_some_and(|next| next.connector() != Connector::Then)
+        {
+            // The shell leaves with the status of the command that failed.
+            report(&last);
+            return CommandResult::Exit;
+        }
     }
     last
+}
+
+/// `set -x` shows the command before it runs; returns what follows a leading `!`, if any.
+fn trace_and_negation<'a>(segment: &'a Segment, state: &ShellState) -> Option<&'a str> {
+    if state.options.xtrace {
+        let _ = render::stderr_line(format!("+ {}", segment.text.trim()));
+    }
+    negated(&segment.text)
 }
 
 /// The command that follows a leading `!` word, when the text starts with one.
@@ -1016,7 +1041,10 @@ fn finished(last: &CommandResult, state: &mut ShellState) -> bool {
 /// shell. A failing test is not an error, so its message is not shown, except
 /// for a command that does not exist.
 fn test(condition: &[Node], state: &mut ShellState) -> (bool, bool) {
+    // `set -e` does not leave because a condition is false.
+    state.errexit_guard += 1;
     let result = run_nodes(condition, state);
+    state.errexit_guard -= 1;
     match &result {
         CommandResult::Exit => (false, true),
         CommandResult::Error(message) => {

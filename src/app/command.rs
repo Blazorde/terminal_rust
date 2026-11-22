@@ -70,6 +70,21 @@ pub struct ShellState {
     pub(crate) last_background: Option<u32>,
     /// The command that `trap 'command' EXIT` runs when the shell ends.
     exit_trap: Option<String>,
+    /// The options of `set`: `-e`, `-u`, `-x` (ADR-0031).
+    options: ShellOptions,
+    /// How many conditions (`if`, `while`, `!`) are running: `set -e` does not leave in them.
+    errexit_guard: u32,
+}
+
+/// The options that `set` turns on and off.
+#[derive(Clone, Copy, Default)]
+struct ShellOptions {
+    /// `-e`: leave when a command fails.
+    errexit: bool,
+    /// `-u`: an unset variable is an error.
+    nounset: bool,
+    /// `-x`: show each command before it runs.
+    xtrace: bool,
 }
 
 impl ShellState {
@@ -98,6 +113,8 @@ impl ShellState {
             exit_warned: false,
             last_background: None,
             exit_trap: None,
+            options: ShellOptions::default(),
+            errexit_guard: 0,
         }
     }
 
@@ -136,6 +153,20 @@ impl ShellState {
                 self.last_background
                     .map(|pid| pid.to_string())
                     .unwrap_or_default(),
+            );
+        }
+        // `$-`: the letters of the options that are on.
+        if name == "-" {
+            let options = self.options;
+            return Some(
+                [
+                    (options.errexit, 'e'),
+                    (options.nounset, 'u'),
+                    (options.xtrace, 'x'),
+                ]
+                .into_iter()
+                .filter_map(|(on, letter)| on.then_some(letter))
+                .collect(),
             );
         }
         // An element of an array, all of them, their number or their indices.
@@ -591,6 +622,20 @@ const COMMANDS: &[CommandSpec] = &[
         summary: "say what a name runs: keyword, built-in, alias, plugin or program",
         max_args: None,
         handler: run_type,
+    },
+    CommandSpec {
+        name: "eval",
+        usage: "eval [command...]",
+        summary: "run the arguments, joined with spaces, as a command line",
+        max_args: None,
+        handler: run_eval,
+    },
+    CommandSpec {
+        name: "set",
+        usage: "set [-eux] [+eux] [-o name] [--] [arguments...]",
+        summary: "turn shell options on or off, or set the positional parameters",
+        max_args: None,
+        handler: run_set,
     },
     CommandSpec {
         name: "trap",
@@ -1541,6 +1586,89 @@ fn run_command(args: &[String], state: &mut ShellState) -> CommandResult {
             }
             result
         }
+    }
+}
+
+/// `eval args...` joins the arguments with spaces and runs the result as a command line, so
+/// what they hold (variables already expanded, `;`, quotes) is read again.
+fn run_eval(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args.is_empty() {
+        return CommandResult::Continue;
+    }
+    run_line(&args.join(" "), state)
+}
+
+/// `set -e` leave when a command fails, `-u` an unset variable is an error, `-x` show each
+/// command; `+e`, `+u`, `+x` and `set -o name` / `set +o name` (`errexit`, `nounset`, `xtrace`)
+/// do the same; `set -- a b` and `set a b` replace `$1`, `$2`, …; `set` alone shows the variables.
+fn run_set(args: &[String], state: &mut ShellState) -> CommandResult {
+    if args.is_empty() {
+        let mut names: Vec<_> = state.variables.iter().collect();
+        names.sort();
+        for (name, value) in names {
+            let _ = render::stdout_line(format!("{name}={value}"));
+        }
+        return CommandResult::Continue;
+    }
+    let mut index = 0;
+    while index < args.len() {
+        let argument = args[index].as_str();
+        if argument == "--" {
+            index += 1;
+            break;
+        }
+        let (on, letters) = match argument.split_at_checked(1) {
+            Some(("-", letters)) if !letters.is_empty() => (true, letters),
+            Some(("+", letters)) if !letters.is_empty() => (false, letters),
+            _ => break,
+        };
+        index += 1;
+        if letters == "o" {
+            let Some(name) = args.get(index) else {
+                return CommandResult::Error("set: -o needs an option name".to_string());
+            };
+            index += 1;
+            let letter = match name.as_str() {
+                "errexit" => 'e',
+                "nounset" => 'u',
+                "xtrace" => 'x',
+                other => {
+                    return CommandResult::Error(format!(
+                        "set: {other}: option not supported (errexit, nounset, xtrace)"
+                    ));
+                }
+            };
+            set_option(letter, on, state);
+            continue;
+        }
+        for letter in letters.chars() {
+            if !matches!(letter, 'e' | 'u' | 'x') {
+                return CommandResult::Error(format!(
+                    "set: -{letter}: option not supported (e, u, x)"
+                ));
+            }
+            set_option(letter, on, state);
+        }
+    }
+    // What is left replaces the positional parameters.
+    if index < args.len() || args.get(index.wrapping_sub(1)).map(String::as_str) == Some("--") {
+        let positional = args[index..].to_vec();
+        match state.frames.last_mut() {
+            Some(frame) => frame.positional = positional,
+            None => state.frames.push(functions::Frame::for_file(&positional)),
+        }
+    }
+    CommandResult::Continue
+}
+
+fn set_option(letter: char, on: bool, state: &mut ShellState) {
+    match letter {
+        'e' => state.options.errexit = on,
+        'u' => {
+            state.options.nounset = on;
+            crate::app::parser::set_nounset(on);
+        }
+        _ => state.options.xtrace = on,
     }
 }
 
