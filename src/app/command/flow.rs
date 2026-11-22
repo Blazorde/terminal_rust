@@ -839,6 +839,8 @@ pub(super) fn run_nodes(nodes: &[Node], state: &mut ShellState) -> CommandResult
                 CommandResult::Continue
             }
         };
+        // A program that `Ctrl+Z` stopped becomes a job, which says so at once.
+        state.adopt_stopped_jobs();
         if last == CommandResult::Exit {
             break;
         }

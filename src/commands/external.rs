@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::utils::job_control::{self, Finished};
 use crate::utils::shell_env;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -51,9 +52,20 @@ pub(crate) fn take_exit_code() -> Option<i32> {
 /// Run `name` with `args`, sharing the terminal streams, the environment and the
 /// current directory of the shell.
 pub fn run(name: &str, args: &[String]) -> Result<(), RunError> {
-    let status = command(name, args)
-        .status()
-        .map_err(|error| start_error(name, &error))?;
+    let text = std::iter::once(name)
+        .chain(args.iter().map(String::as_str))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let status = match job_control::run_foreground(command(name, args), &text)
+        .map_err(|error| start_error(name, &error))?
+    {
+        Finished::Exited(status) => status,
+        // `Ctrl+Z`: the program is a stopped job now, which says so itself.
+        Finished::Stopped => {
+            note_exit_code(job_control::STOPPED_STATUS);
+            return Err(RunError::Failed(String::new()));
+        }
+    };
 
     if status.success() {
         Ok(())
@@ -127,6 +139,12 @@ pub fn keep_shell_alive_on_interrupt() {
 }
 
 static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+
+/// Record that the user asked to stop, when the interrupt went to a program and not to
+/// the shell (a foreground program has the terminal to itself under job control).
+pub(crate) fn request_interrupt() {
+    INTERRUPTED.store(true, Ordering::SeqCst);
+}
 
 /// Whether `Ctrl+C` was pressed since the last line began.
 pub(crate) fn interrupt_requested() -> bool {

@@ -1,18 +1,24 @@
 use std::process::Command;
 use std::{env, ffi::OsString};
 
+use crate::utils::job_control::{self, Finished};
 use crate::utils::shell_env;
 
 pub fn run(name: &str, executable: &str, args: &[String]) -> Result<(), String> {
     let program = bundled_program(executable).unwrap_or_else(|| OsString::from(executable));
     let mut command = Command::new(&program);
     shell_env::prepare_child(&mut command);
-    let status = command.args(args).status().map_err(|error| {
+    command.args(args);
+    let text = format!("{executable} {}", args.join(" "));
+    let status = match job_control::run_foreground(command, text.trim()).map_err(|error| {
         format!(
             "{name}: cannot start {}: {error}",
             program.to_string_lossy()
         )
-    })?;
+    })? {
+        Finished::Exited(status) => status,
+        Finished::Stopped => return Ok(()),
+    };
 
     if status.success() {
         Ok(())

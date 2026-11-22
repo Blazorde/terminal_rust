@@ -3,6 +3,7 @@ use std::process::Command;
 
 use crate::commands::external;
 use crate::config::{UserCommandConfig, UserCommandKind};
+use crate::utils::job_control::{self, Finished};
 use crate::utils::shell_env;
 
 #[derive(Debug, Clone, Default)]
@@ -278,9 +279,19 @@ pub fn run_process(
 
     // Inherit the terminal streams: capturing them would give the program no
     // terminal and no stdin, which breaks every interactive tool.
-    let status = process
-        .status()
-        .map_err(|error| format!("{name}: cannot start '{}': {error}", command.target))?;
+    let text = std::iter::once(target.as_str())
+        .chain(args.iter().map(String::as_str))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let status = match job_control::run_foreground(process, &text)
+        .map_err(|error| format!("{name}: cannot start '{}': {error}", command.target))?
+    {
+        Finished::Exited(status) => status,
+        Finished::Stopped => {
+            external::note_exit_code(job_control::STOPPED_STATUS);
+            return Err(String::new());
+        }
+    };
     if status.success() {
         Ok(())
     } else {
