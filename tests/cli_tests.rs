@@ -4730,7 +4730,14 @@ fn pushd_popd_and_dirs_keep_a_stack_of_directories() {
     let directory = TestDirectory::new("dirs stack");
     fs::create_dir(directory.path().join("alpha")).expect("fixture");
     fs::create_dir(directory.path().join("beta")).expect("fixture");
-    let base = directory.path().display().to_string();
+    // The shell shows the directory the system resolved (`/private/var/...` where
+    // the temporary directory is a link), so the base is asked from the shell and
+    // the separator comes from the platform.
+    let base = PathBuf::from(stdout(&run_cli(directory.path(), &["pwd"])).trim());
+    assert!(base.is_absolute(), "pwd printed {base:?}");
+    let base_line = base.display().to_string();
+    let alpha = base.join("alpha").display().to_string();
+    let beta = base.join("beta").display().to_string();
 
     let (printed, errors) = shell_lines(
         &directory,
@@ -4751,10 +4758,10 @@ fn pushd_popd_and_dirs_keep_a_stack_of_directories() {
 
     // Each line shows the current directory, then the ones that were set aside.
     for expected in [
-        format!("{base}/alpha {base}\n"),
-        format!("{base}/beta {base}/alpha {base}\n"),
-        format!("{base} {base}/alpha\n"),
-        format!("{base}/alpha\n"),
+        format!("{alpha} {base_line}\n"),
+        format!("{beta} {alpha} {base_line}\n"),
+        format!("{base_line} {alpha}\n"),
+        format!("{alpha}\n"),
     ] {
         assert!(
             printed.contains(&expected),
@@ -4763,7 +4770,7 @@ fn pushd_popd_and_dirs_keep_a_stack_of_directories() {
     }
     assert_eq!(
         printed
-            .matches(&format!("{base}/beta {base}/alpha {base}\n"))
+            .matches(&format!("{beta} {alpha} {base_line}\n"))
             .count(),
         2,
         "{printed}"
