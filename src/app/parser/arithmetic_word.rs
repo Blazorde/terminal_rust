@@ -64,6 +64,7 @@ mod tests {
         assert_eq!(len("(( \"a)\" ))"), Some(10));
         assert_eq!(len("(( ')' ))"), Some(9));
         assert_eq!(len("(( \\) ))"), Some(8));
+        assert_eq!(len("(( \"\\\")\" ))"), Some(11));
     }
 
     fn segments(input: &str) -> Vec<(Connector, String)> {
@@ -207,6 +208,18 @@ mod tests {
                 (Connector::Then, "a[1]=((3))".to_string()),
                 (Connector::And, "echo ok".to_string()),
             ]
+        );
+    }
+
+    #[test]
+    fn a_redirection_after_a_word_is_not_part_of_an_arithmetic_command() {
+        let target = Redirect::Stdout {
+            target: "2".into(),
+            append: false,
+        };
+        assert_eq!(
+            stages("echo (( 1 > 2 ))"),
+            vec![("echo (( 1  ))".to_string(), vec![target])]
         );
     }
 }

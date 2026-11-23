@@ -620,7 +620,8 @@ mod tests {
     #[test]
     fn an_increment_glued_to_an_identifier_is_detected() {
         for text in [
-            "i-- - 1", "i++ < 3", "x + ++i", "a - --b", "--$i + 1", "--${i}", "5--",
+            "i-- - 1", "i++ < 3", "x + ++i", "a - --b", "--$i + 1", "--${i}", "5--", "1 --_b",
+            "1 ++_b", "x_++ + 1",
         ] {
             assert!(has_embedded_increment(text), "{text:?}");
         }

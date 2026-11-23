@@ -62,3 +62,21 @@ pub(super) fn as_let_stages(stages: &[Stage]) -> Option<Vec<Stage>> {
             .collect(),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::body;
+
+    #[test]
+    fn text_after_the_closing_parentheses_is_not_an_arithmetic_command() {
+        assert_eq!(body("(( 1 )) foo"), None);
+        assert_eq!(body("(( 1 ))x"), None);
+        assert_eq!(body("(( 1 )) | cat"), None);
+    }
+
+    #[test]
+    fn surrounding_blanks_are_ignored() {
+        assert_eq!(body("  (( 1 ))  "), Some(" 1 "));
+        assert_eq!(body("((1+2))"), Some("1+2"));
+    }
+}

@@ -5430,3 +5430,136 @@ fn arithmetic_errors_do_not_print_escape_sequences_from_variables() {
     let (printed, errors) = arithmetic_session(&control, &[hostile, r#"echo "$x""#]);
     assert!(printed.contains('\u{1b}'), "{printed:?}\n{errors:?}");
 }
+
+#[test]
+fn text_after_the_closing_parentheses_makes_it_an_ordinary_command() {
+    let directory = TestDirectory::new("arithmetic trailing text");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"(( 1 )) foo; echo "<A=$?>""#,
+            r#"echo (( 3 > 2 )); echo "<B=$?>""#,
+        ],
+    );
+
+    assert_markers(&printed, &errors, &["<A=127>", "<B=0>"]);
+    assert_eq!(errors.matches("unknown command: ((").count(), 1, "{errors}");
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+    // After a word, `>` is the ordinary redirection of `echo`.
+    assert!(directory.path().join("2").is_file());
+}
+
+#[test]
+fn a_comma_after_a_closing_parenthesis_still_separates_statements() {
+    let directory = TestDirectory::new("arithmetic comma");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"(( x=(1+2), y=x*2 )); echo "<A=$x $y $?>""#,
+            r#"(( (1), 0 )); echo "<B=$?>""#,
+        ],
+    );
+
+    assert_markers(&printed, &errors, &["<A=3 6 0>", "<B=1>"]);
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+}
+
+#[test]
+fn a_doubled_sign_before_a_number_is_not_an_increment() {
+    let directory = TestDirectory::new("arithmetic doubled sign");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"(( a = --5 )); echo "<A=$a $?>""#,
+            r#"(( b = ++3 )); echo "<B=$b $?>""#,
+        ],
+    );
+
+    assert_markers(&printed, &errors, &["<A=5 0>", "<B=3 0>"]);
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+}
+
+#[test]
+fn an_increment_glued_to_an_underscore_name_is_refused_inside_an_expression() {
+    let directory = TestDirectory::new("arithmetic underscore increment");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"(( 1 --_b )); echo "<A=$?>""#,
+            // The comma inside parentheses is not a separator, so `i++` is not alone.
+            r#"(( (1, i++) )); echo "<B=$?>""#,
+        ],
+    );
+
+    assert_markers(&printed, &errors, &["<A=1>", "<B=1>"]);
+    assert_eq!(
+        errors
+            .matches("((: arithmetic: ++ and -- must stand alone as a statement")
+            .count(),
+        2,
+        "{errors}"
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 2, "{errors}");
+}
+
+#[test]
+fn an_escaped_double_quote_in_a_string_does_not_end_the_command() {
+    let directory = TestDirectory::new("arithmetic escaped quote");
+
+    let (printed, errors) = arithmetic_session(&directory, &[r#"(( "\")" )); echo "<A=$?>""#]);
+
+    assert_markers(&printed, &errors, &["<A=1>"]);
+    assert_eq!(errors.matches("((: arithmetic:").count(), 1, "{errors}");
+    assert_eq!(errors.matches("unknown command").count(), 0, "{errors}");
+}
+
+#[test]
+fn compound_division_and_modulo_by_zero_name_the_error_and_keep_the_variable() {
+    let directory = TestDirectory::new("arithmetic compound division");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"x=4; (( x /= 0 )); echo "<A=$x $?>""#,
+            r#"(( x %= 0 )); echo "<B=$x $?>""#,
+        ],
+    );
+
+    assert_markers(&printed, &errors, &["<A=4 1>", "<B=4 1>"]);
+    assert_eq!(
+        errors.matches("((: arithmetic: division by 0").count(),
+        2,
+        "{errors}"
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 2, "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_pipeline_with_an_arithmetic_command_in_the_background_is_a_job() {
+    let directory = TestDirectory::new("arithmetic background job");
+
+    // `kill` and `wait` end the sleeper, so nothing outlives the session.
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            "(( 1 )) | sleep 5 &",
+            "jobs",
+            "kill %1",
+            "wait",
+            r#"echo "<A>""#,
+        ],
+    );
+
+    assert_markers(&printed, &errors, &["<A>"]);
+    let listed: Vec<_> = printed
+        .lines()
+        .filter(|line| line.contains("Running") && line.contains("(( 1 )) | sleep 5"))
+        .collect();
+    assert_eq!(listed.len(), 1, "{printed}\n{errors}");
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+}
