@@ -394,6 +394,14 @@ is `0`, so `(( n < 3 ))` works as a condition; an error (division by zero, a bad
 message. `let` takes one statement per argument, and an argument is an ordinary word: quote any that holds spaces, `*`,
 `<` or `>`. `$(...)` and `$name` in the body are expanded before it is evaluated.
 
+A compound assignment is a name followed by exactly one of `+ - * / %` and `=`, with nothing between them: `**=`, `+-=`
+and `%*=` are syntax errors that leave the variable as it was. A chain such as `a = b = c = 1` may go 64 levels deep;
+a longer one gives `arithmetic: expression nested too deeply` and changes nothing.
+
+In a script run by `source`, the shell stops at the first top-level command whose status is not `0`, as it does for
+`false`. `(( n++ ))` alone on a line with `n` at `0` has the value `0`, so its status is `1` and the script stops
+(`source: post.sh:2: ` on standard error), although `n` is now `1`. Write `(( ++n ))` or `n=$((n+1))` instead.
+
 Not supported: the bit operators (`& | ^ ~ << >>`), the ternary `?:`, arrays in an expression, bases other than
 decimal and `0x` (`010` is 10), a `++` or `--` inside a larger expression (`i++ < 3`; write `(( i++ ))` on its own) and
 `for (( i=0; i<3; i++ ))`. Run in a pipe or in the background, a `(( ))` still changes the variables of the current

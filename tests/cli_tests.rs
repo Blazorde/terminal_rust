@@ -5272,6 +5272,48 @@ fn set_e_stops_the_shell_on_a_failing_arithmetic_command_only_where_it_should() 
 }
 
 #[test]
+fn a_post_increment_alone_in_a_sourced_script_stops_it_when_the_value_is_zero() {
+    let directory = TestDirectory::new("arithmetic sourced increment");
+    for (file, increment) in [
+        ("post.sh", "(( n++ ))"),
+        ("pre.sh", "(( ++n ))"),
+        ("expansion.sh", "n=$((n+1))"),
+    ] {
+        fs::write(
+            directory.path().join(file),
+            format!("n=0\n{increment}\necho \"<AFTER {file}>\"\n"),
+        )
+        .expect("fixture");
+    }
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"source post.sh; echo "<STATUS post=$? n=$n>""#,
+            r#"source pre.sh; echo "<STATUS pre=$? n=$n>""#,
+            r#"source expansion.sh; echo "<STATUS expansion=$? n=$n>""#,
+        ],
+    );
+
+    // `(( n++ ))` yields the old value 0, so the status is 1 and the file stops there.
+    assert!(!printed.contains("<AFTER post.sh>"), "{printed}\n{errors}");
+    assert_markers(&printed, &errors, &["<STATUS post=1 n=1>"]);
+    assert_eq!(errors, "source: post.sh:2: \n");
+
+    // A value of 1 or an assignment succeeds, so the file runs to its end.
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<AFTER pre.sh>",
+            "<STATUS pre=0 n=1>",
+            "<AFTER expansion.sh>",
+            "<STATUS expansion=0 n=1>",
+        ],
+    );
+}
+
+#[test]
 fn an_arithmetic_command_takes_redirections() {
     let directory = TestDirectory::new("arithmetic redirections");
 

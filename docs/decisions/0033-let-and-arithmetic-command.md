@@ -26,7 +26,11 @@
    assignment (`a = b = 3`). An unset or empty variable is `0`; a value that is not an integer is an error that names
    the variable. A `++` or `--` glued to a name inside a larger expression (`i++ < 3`, `x = i-- - 1`) is refused with
    `arithmetic: ++ and -- must stand alone as a statement`, where bash accepts it, because it could also be read as
-   two signs. `$(( ))` is unchanged: `$((--x))` is still a double negation.
+   two signs. `$(( ))` is unchanged: `$((--x))` is still a double negation. A compound assignment is accepted only
+   as a name followed by exactly one of `+ - * / %` glued to `=`; `**=`, `+-=`, `*-=`, `%*=` and `++=` are syntax
+   errors (`arithmetic: unexpected '='`, or `'*'` for `%*=`) with status `1`, and the variable keeps its value.
+   A chain of assignments (`a = b = c = …`) is limited to 64 levels, like parentheses; beyond that the error is
+   `arithmetic: expression nested too deeply`, the status is `1` and no variable changes.
 4. **Recognition.** `((` opens an arithmetic command only where a command starts (start of line, after `;`, `&&`,
    `||`, `|`, `!`, `if`, `then`, `elif`, `else`, `do`, `while`, `until`, `{` or `(`), and only if the first `)` at depth
    zero after it (quotes and escapes skipped) is directly followed by another `)`. Otherwise nested subshells stay as
@@ -38,7 +42,12 @@
    `let '<body>'` and goes through the pipeline code, so its error message starts with `let:` instead of `((:`. Like
    the other built-in commands it runs in the current shell: `(( x = 5 )) | cat` and `(( x = 5 )) &` change `x`,
    where bash uses a subshell.
-6. **Not included**: the bit operators (`& | ^ ~ << >>`), the ternary `?:`, arrays in an expression (`a[1]`), a comma
+6. **Failing status in a sourced script.** The existing rule applies: a script run by `source` stops as soon as a
+   command at its top level gives a non-zero status, `false` included. A `(( n++ ))` alone on a line with `n` at `0`
+   has the value `0` (the old one), so its status is `1` and the script stops, although `n` is incremented. The shell
+   prints `source: post.sh:2: ` (file, failing line and an empty message) on standard error and `source` gives `1`.
+   `(( ++n ))` (value `1`) and `n=$((n+1))` (status `0`) do not stop it.
+7. **Not included**: the bit operators (`& | ^ ~ << >>`), the ternary `?:`, arrays in an expression (`a[1]`), a comma
    inside parentheses, bases other than decimal and `0x` (`010` is 10, bash reads 8; `2#101` is refused),
    `${y:-3}` inside `(( ))` (`let "x = ${y:-3}"` works because the word is expanded first), the effect of `set -u`
    on the expression, `for (( i=0; i<3; i++ ))`, `time (( ))` and `f() (( … ))`. An overflow is an error that leaves the
@@ -69,6 +78,8 @@
 
 - `i++ < 3` is refused where bash accepts it, and the bit operators and the ternary are missing.
 - `(( ))` is not isolated in a subshell when piped or put in the background.
+- `(( n++ ))` alone on a line stops a sourced script while `n` is `0`, and a chain of more than 64 assignments is refused,
+  where bash has no such limit.
 - `(((cmd)))` no longer runs as three subshells.
 
 ## Validation
@@ -89,8 +100,9 @@
   `a_doubled_sign_before_a_number_is_not_an_increment`,
   `an_increment_glued_to_an_underscore_name_is_refused_inside_an_expression`,
   `an_escaped_double_quote_in_a_string_does_not_end_the_command`,
-  `compound_division_and_modulo_by_zero_name_the_error_and_keep_the_variable` and
-  `a_pipeline_with_an_arithmetic_command_in_the_background_is_a_job`.
+  `compound_division_and_modulo_by_zero_name_the_error_and_keep_the_variable`,
+  `a_pipeline_with_an_arithmetic_command_in_the_background_is_a_job` and
+  `a_post_increment_alone_in_a_sourced_script_stops_it_when_the_value_is_zero`.
 - Unit tests of the recognition in `src/app/parser/arithmetic_word.rs` (nested subshells, quotes and escapes, a
   comparison or a pipe in the body, redirections and `&` after the command, positions where a command starts) and of the
   refusal of embedded increments in `src/app/command/arithmetic.rs`.
