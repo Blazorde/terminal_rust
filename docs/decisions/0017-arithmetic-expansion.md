@@ -1,6 +1,6 @@
 # ADR-0017 — Arithmetic expansion
 
-- Status: Accepted. Item 6 is partly replaced by [ADR-0033](0033-let-and-arithmetic-command.md): assignment, the comma, `let` and `((...))`.
+- Status: Accepted. Item 6 is partly replaced by [ADR-0033](0033-let-and-arithmetic-command.md): assignment, the comma, `let` and `((...))`. This holds for the `((...))` and `let` commands only: inside `$((...))`, `$((x=3))` and `$((a,b))` are still refused.
 - Date: 2026-11-21
 - Decision makers: Terminal Rust team
 

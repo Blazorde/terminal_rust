@@ -45,7 +45,9 @@
    variable as it was, where bash wraps around. The error of a `(( ))` used as the condition of `if` or `while` is not
    printed, like for every condition of those. A line with `<<` in the body (`(( 1 << 2 ))`) is taken for a
    here-document by the here-document reader, which then swallows the lines that follow; the expression would be
-   refused anyway. `**` already exists ([ADR-0028](0028-exit-trap-and-power.md)).
+   refused anyway. `**` already exists ([ADR-0028](0028-exit-trap-and-power.md)). The literal `-9223372036854775808`
+   (the smallest 64-bit integer) is refused with `invalid number '9223372036854775808'`, because the evaluator of
+   [ADR-0017](0017-arithmetic-expansion.md) reads the number before applying the sign; bash accepts it.
 
 ## Options considered
 
@@ -92,10 +94,10 @@
 - Unit tests of the recognition in `src/app/parser/arithmetic_word.rs` (nested subshells, quotes and escapes, a
   comparison or a pipe in the body, redirections and `&` after the command, positions where a command starts) and of the
   refusal of embedded increments in `src/app/command/arithmetic.rs`.
-- Mutation testing of the new code: 84 mutations in a first round, 62 killed at once. The 8 that survived with a real
-  missing test (text after the closing parentheses, a comma after a closing parenthesis, `--5` and `++3`, `_` next to
-  `++`, an escaped double quote in a string, a `((` that does not start a stage, a background pipeline job, and the
-  division messages) got tests, and a second round killed all of them. The rest were guards that mutation showed to be
-  redundant (one comparison test and two conditions of the `((` branch) and were removed.
+- Mutation testing of the new code: a first round left mutations alive that showed missing tests (text after the
+  closing parentheses, a comma after a closing parenthesis, `--5` and `++3`, `_` next to `++`, an escaped double quote
+  in a string, a `((` that does not start a stage, a background pipeline job, and the division messages). Those tests
+  were added and a second round killed the mutations. Three guards that mutation showed to be redundant (one
+  comparison test and two conditions of the `((` branch) were removed.
 - Checked by hand in a real terminal (PTY): a `while (( n < 3 ))` loop with `(( n++ ))`, a failing `(( 1/0 ))`
   and `let`.
