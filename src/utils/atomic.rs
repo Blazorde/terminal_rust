@@ -1,6 +1,6 @@
 //! Replace a file so that a reader, or a crash, never sees half of it.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
 use std::process;
@@ -61,7 +61,7 @@ fn write_and_replace(temporary: &Path, path: &Path, contents: &[u8]) -> io::Resu
 /// here does not undo a save that already succeeded.
 fn sync_directory(directory: &Path) {
     #[cfg(unix)]
-    if let Ok(handle) = File::open(directory) {
+    if let Ok(handle) = fs::File::open(directory) {
         let _ = handle.sync_all();
     }
     #[cfg(not(unix))]
