@@ -5578,6 +5578,55 @@ fn compound_division_and_modulo_by_zero_name_the_error_and_keep_the_variable() {
     assert_eq!(errors.matches("arithmetic").count(), 2, "{errors}");
 }
 
+#[test]
+fn malformed_compound_assignment_operators_are_syntax_errors_and_keep_the_variable() {
+    let directory = TestDirectory::new("arithmetic malformed compound");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"x=3; (( x **= 2 )); echo "<A=$x $?>""#,
+            r#"(( x +-= 2 )); echo "<B=$x $?>""#,
+            r#"(( x *-= 2 )); echo "<C=$x $?>""#,
+            r#"(( x %*= 2 )); echo "<D=$x $?>""#,
+            r#"(( x ++= 2 )); echo "<E=$x $?>""#,
+            r#"let 'x **= 2'; echo "<F=$x $?>""#,
+            r#"let 'x +-= 2'; echo "<G=$x $?>""#,
+            r#"let 'x *-= 2'; echo "<H=$x $?>""#,
+            r#"let 'x %*= 2'; echo "<I=$x $?>""#,
+            r#"let 'x ++= 2'; echo "<J=$x $?>""#,
+            r#"x=10; (( x += 4 )); echo "<K=$x $?>""#,
+            r#"(( x -= 4 )); echo "<L=$x $?>""#,
+            r#"(( x *= 3 )); echo "<M=$x $?>""#,
+            r#"(( x /= 4 )); echo "<N=$x $?>""#,
+            r#"(( x %= 4 )); echo "<O=$x $?>""#,
+            r#"let 'x *= 7'; echo "<P=$x $?>""#,
+            r#"(( x -= 21 )); echo "<Q=$x $?>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=3 1>", "<B=3 1>", "<C=3 1>", "<D=3 1>", "<E=3 1>", "<F=3 1>", "<G=3 1>", "<H=3 1>",
+            "<I=3 1>", "<J=3 1>", "<K=14 0>", "<L=10 0>", "<M=30 0>", "<N=7 0>", "<O=3 0>",
+            "<P=21 0>", "<Q=0 1>",
+        ],
+    );
+    assert_eq!(
+        errors.matches("((: arithmetic: unexpected '").count(),
+        5,
+        "{errors}"
+    );
+    assert_eq!(
+        errors.matches("let: arithmetic: unexpected '").count(),
+        5,
+        "{errors}"
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 10, "{errors}");
+}
+
 #[cfg(unix)]
 #[test]
 fn a_pipeline_with_an_arithmetic_command_in_the_background_is_a_job() {

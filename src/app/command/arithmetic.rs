@@ -98,11 +98,16 @@ fn statement_value(
     }
     // `name = expr`, `name += expr`, … (not `==`, `<=`, `>=`, `!=`).
     if let Some((left, right)) = statement.split_once('=') {
+        // Exactly one operator character, glued to `=`: `**=`, `+-=` leave a name that is not valid.
         let operator = left
             .chars()
             .last()
             .filter(|c| matches!(c, '+' | '-' | '*' | '/' | '%'));
-        let name = left.trim_end_matches(['+', '-', '*', '/', '%']).trim();
+        let name = match operator {
+            Some(operator) => left.strip_suffix(operator).unwrap_or(left),
+            None => left,
+        }
+        .trim();
         let comparison = right.starts_with('=');
         if !comparison && shell_env::is_valid_name(name) {
             let right = statement_value(right.trim(), state, depth + 1)?;
