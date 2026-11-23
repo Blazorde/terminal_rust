@@ -647,8 +647,6 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
             // operators of the expression.
             (None, '(')
                 if starts_command(&current)
-                    && !in_test
-                    && characters.peek() == Some(&'(')
                     && let Some(length) =
                         arithmetic_len(std::iter::once('(').chain(characters.clone())) =>
             {

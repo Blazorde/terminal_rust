@@ -94,7 +94,7 @@ fn statement_value(statement: &str, state: &mut super::ShellState) -> Result<i64
             .last()
             .filter(|c| matches!(c, '+' | '-' | '*' | '/' | '%'));
         let name = left.trim_end_matches(['+', '-', '*', '/', '%']).trim();
-        let comparison = right.starts_with('=') || left.ends_with(['<', '>', '!', '=']);
+        let comparison = right.starts_with('=');
         if !comparison && shell_env::is_valid_name(name) {
             let right = statement_value(right.trim(), state)?;
             let value = match operator {
@@ -136,7 +136,7 @@ fn has_embedded_increment(statement: &str) -> bool {
         let after = characters.get(index + 2);
         doubled
             && (before.is_some_and(|c| c.is_ascii_alphanumeric() || *c == '_')
-                || after.is_some_and(|c| c.is_ascii_alphabetic() || matches!(c, '_' | '$' | '{')))
+                || after.is_some_and(|c| c.is_ascii_alphabetic() || matches!(c, '_' | '$')))
     })
 }
 
