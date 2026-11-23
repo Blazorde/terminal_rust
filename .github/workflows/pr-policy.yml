@@ -34,6 +34,8 @@ jobs:
           ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
+          # Character ranges below must mean ASCII only, whatever the runner locale.
+          export LC_ALL=C
 
           echo "Base branch: ${BASE_BRANCH}"
           echo "Head branch: ${HEAD_BRANCH}"
@@ -45,6 +47,11 @@ jobs:
           fi
 
           allowed_work_branch_regex='^(feat|fix|chore|refactor|hotfix)/[a-z0-9][a-z0-9._-]*$'
+          # Dependabot always creates lowercase "dependabot/<ecosystem>/<directory>/<name>"
+          # branches, where names may keep upstream capitals ("EmbarkStudios") and
+          # may contain "." and "+". A dot must be followed by another character,
+          # which rules out "..", leading dots and trailing dots in a segment.
+          dependabot_branch_regex='^dependabot/[A-Za-z0-9][A-Za-z0-9+_-]*(\.[A-Za-z0-9+_-]+)*(/[A-Za-z0-9][A-Za-z0-9+_-]*(\.[A-Za-z0-9+_-]+)*)*$'
 
           if [[ "${BASE_BRANCH}" == "main" ]]; then
             if [[ "${HEAD_BRANCH}" != "develop" ]]; then
@@ -55,11 +62,14 @@ jobs:
           fi
 
           if [[ "${BASE_BRANCH}" == "develop" ]]; then
-            if [[ ! "${HEAD_BRANCH}" =~ ${allowed_work_branch_regex} ]]; then
-              echo "::error::develop only accepts PRs from feat/*, fix/*, chore/*, refactor/*, or hotfix/* branches."
-              exit 1
+            if [[ "${HEAD_BRANCH}" =~ ${allowed_work_branch_regex} ]]; then
+              exit 0
             fi
-            exit 0
+            if [[ "${HEAD_BRANCH}" =~ ${dependabot_branch_regex} && "${HEAD_BRANCH}" != *.lock && "${HEAD_BRANCH}" != *.lock/* ]]; then
+              exit 0
+            fi
+            echo "::error::develop only accepts PRs from feat/*, fix/*, chore/*, refactor/*, or hotfix/* branches (dependabot/* is reserved for Dependabot)."
+            exit 1
           fi
 
           echo "::error::Pull requests are only allowed into main or develop."

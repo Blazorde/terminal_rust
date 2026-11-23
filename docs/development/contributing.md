@@ -37,6 +37,10 @@ git switch -c feat/short-description
 | `refactor/` | Refactor without behavior change |
 | `hotfix/` | Urgent production correction |
 
+Branches named `dependabot/...` are created by Dependabot and are accepted by
+the branch name gate and by the PR gate for `develop`; do not use that prefix
+for your own work.
+
 ## Add a command
 
 1. Create its module in `src/commands/`.

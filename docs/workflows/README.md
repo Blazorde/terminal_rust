@@ -4,6 +4,12 @@
 
 - `main` accepts pull requests only from `develop`.
 - `develop` accepts `feat/*`, `fix/*`, `chore/*`, `refactor/*` and `hotfix/*`.
+- Dependabot branches (`dependabot/<ecosystem>/...`) are also accepted, by the
+  branch name gate and by the PR gate when the target is `develop`. `main`
+  still accepts only `develop`. The rule is written in both
+  `.github/workflows/branch-policy.yml` and `.github/workflows/pr-policy.yml`
+  and tested with `node --test scripts/check-branch-policy.test.mjs`, which also
+  checks that the two copies stay identical.
 
 ## Workflows
 
