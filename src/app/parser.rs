@@ -1,3 +1,7 @@
+mod arithmetic_word;
+
+pub(crate) use arithmetic_word::arithmetic_len;
+
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Quote {
     Single,
@@ -639,33 +643,21 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
                 current.push(character);
                 current.extend(characters.next());
             }
+            // `(( expression ))` is one word, up to its `))`: its `<`, `>`, `&` and `|` are
+            // operators of the expression.
+            (None, '(')
+                if starts_command(&current)
+                    && !in_test
+                    && characters.peek() == Some(&'(')
+                    && let Some(length) =
+                        arithmetic_len(std::iter::once('(').chain(characters.clone())) =>
+            {
+                current.push(character);
+                current.extend(characters.by_ref().take(length - 1));
+            }
             // `( list )`: the `(` is a word of its own, and the `)` that closes it starts a
             // new command, so the flow parser reads them like `{` and `}`. The `()` of
             // `name()` and a `)` with no subshell open (a `case` pattern) are plain text.
-            // `(( expression ))`: one word, up to the matching `))`; its `<`, `>`, `&` and `|` are operators.
-            (None, '(')
-                if starts_command(&current) && !in_test && characters.peek() == Some(&'(') =>
-            {
-                characters.next();
-                current.push_str("((");
-                let mut depth = 2_usize;
-                for next in characters.by_ref() {
-                    current.push(next);
-                    match next {
-                        '(' => depth += 1,
-                        ')' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                break;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                if depth != 0 {
-                    return Err("missing closing parenthesis".to_string());
-                }
-            }
             (None, '(') if starts_command(&current) && !in_test => {
                 current.push_str("( ");
                 subshells += 1;
@@ -785,11 +777,6 @@ fn starts_command(current: &str) -> bool {
         })
 }
 
-/// Whether `text` is a `(( … ))` command.
-fn opens_arithmetic(text: &str) -> bool {
-    text.trim_start().starts_with("((") && text.trim_end().ends_with("))")
-}
-
 /// Whether `text` is a `[[ … ]]` command (it starts with the word `[[`).
 fn opens_double_bracket(text: &str) -> bool {
     text.trim_start()
@@ -869,7 +856,7 @@ pub struct Stage {
 /// of each stage.
 pub fn split_stages(input: &str) -> Result<Vec<Stage>, String> {
     // `[[ a < b || c ]]` is one command: its `<`, `>`, `|` and `&` are operators of its own.
-    if opens_double_bracket(input) || opens_arithmetic(input) {
+    if opens_double_bracket(input) {
         return Ok(vec![Stage {
             text: input.to_string(),
             redirects: Vec::new(),
@@ -931,6 +918,14 @@ pub fn split_stages(input: &str) -> Result<Vec<Stage>, String> {
                     text.push(*escaped);
                 }
                 position += 2;
+            }
+            (None, '(')
+                if text.trim().is_empty()
+                    && let Some(length) =
+                        arithmetic_len(characters[position..].iter().copied()) =>
+            {
+                text.extend(&characters[position..position + length]);
+                position += length;
             }
             (None, '|') => {
                 if text.trim().is_empty() {
