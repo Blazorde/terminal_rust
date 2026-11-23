@@ -5086,6 +5086,16 @@ fn a_very_long_chain_of_assignments_is_refused_without_crashing_the_shell() {
         "{}7",
         (1..=50).map(|n| format!("a{n}=")).collect::<String>()
     );
+    let chain = |name: &str, length: usize| {
+        format!(
+            "{}7",
+            (1..=length)
+                .map(|n| format!("{name}{n}="))
+                .collect::<String>()
+        )
+    };
+    let at_the_limit = chain("b", 64);
+    let past_the_limit = chain("c", 65);
 
     let (printed, errors) = arithmetic_session(
         &directory,
@@ -5095,6 +5105,9 @@ fn a_very_long_chain_of_assignments_is_refused_without_crashing_the_shell() {
             r#"echo "<C=still here>""#,
             &format!(r#"(( {fine} )); echo "<D=$a1 $a50 $?>""#),
             &format!(r#"unset a1 a50; let "{fine}"; echo "<E=$a1 $a50 $?>""#),
+            &format!(r#"(( {at_the_limit} )); echo "<F=$b1 $b64 $?>""#),
+            &format!(r#"(( {past_the_limit} )); echo "<G=[$c1] [$c65] $?>""#),
+            &format!(r#"let "{past_the_limit}"; echo "<H=[$c1] [$c65] $?>""#),
         ],
     );
 
@@ -5107,13 +5120,16 @@ fn a_very_long_chain_of_assignments_is_refused_without_crashing_the_shell() {
             "<C=still here>",
             "<D=7 7 0>",
             "<E=7 7 0>",
+            "<F=7 7 0>",
+            "<G=[] [] 1>",
+            "<H=[] [] 1>",
         ],
     );
     assert_eq!(
         errors
             .matches("arithmetic: expression nested too deeply")
             .count(),
-        2,
+        4,
         "{errors}"
     );
 }
@@ -5667,6 +5683,12 @@ fn malformed_compound_assignment_operators_are_syntax_errors_and_keep_the_variab
             r#"let 'x *-= 2'; echo "<H=$x $?>""#,
             r#"let 'x %*= 2'; echo "<I=$x $?>""#,
             r#"let 'x ++= 2'; echo "<J=$x $?>""#,
+            r#"(( x ^= 2 )); echo "<R=$x $?>""#,
+            r#"(( x &= 2 )); echo "<S=$x $?>""#,
+            r#"(( x |= 2 )); echo "<T=$x $?>""#,
+            r#"let 'x ^= 2'; echo "<V=$x $?>""#,
+            r#"let 'x &= 2'; echo "<W=$x $?>""#,
+            r#"let 'x |= 2'; echo "<X=$x $?>""#,
             r#"x=10; (( x += 4 )); echo "<K=$x $?>""#,
             r#"(( x -= 4 )); echo "<L=$x $?>""#,
             r#"(( x *= 3 )); echo "<M=$x $?>""#,
@@ -5682,21 +5704,21 @@ fn malformed_compound_assignment_operators_are_syntax_errors_and_keep_the_variab
         &errors,
         &[
             "<A=3 1>", "<B=3 1>", "<C=3 1>", "<D=3 1>", "<E=3 1>", "<F=3 1>", "<G=3 1>", "<H=3 1>",
-            "<I=3 1>", "<J=3 1>", "<K=14 0>", "<L=10 0>", "<M=30 0>", "<N=7 0>", "<O=3 0>",
-            "<P=21 0>", "<Q=0 1>",
+            "<I=3 1>", "<J=3 1>", "<R=3 1>", "<S=3 1>", "<T=3 1>", "<V=3 1>", "<W=3 1>", "<X=3 1>",
+            "<K=14 0>", "<L=10 0>", "<M=30 0>", "<N=7 0>", "<O=3 0>", "<P=21 0>", "<Q=0 1>",
         ],
     );
     assert_eq!(
         errors.matches("((: arithmetic: unexpected '").count(),
-        5,
+        8,
         "{errors}"
     );
     assert_eq!(
         errors.matches("let: arithmetic: unexpected '").count(),
-        5,
+        8,
         "{errors}"
     );
-    assert_eq!(errors.matches("arithmetic").count(), 10, "{errors}");
+    assert_eq!(errors.matches("arithmetic").count(), 16, "{errors}");
 }
 
 #[cfg(unix)]
