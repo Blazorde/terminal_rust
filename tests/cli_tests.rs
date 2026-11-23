@@ -5619,6 +5619,38 @@ fn compound_division_and_modulo_by_zero_name_the_error_and_keep_the_variable() {
 }
 
 #[test]
+fn compound_division_of_the_smallest_integer_by_minus_one_is_out_of_range() {
+    let directory = TestDirectory::new("arithmetic compound minimum");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"x=-9223372036854775807; (( x -= 1 )); echo "<A=$x $?>""#,
+            r#"(( x /= -1 )); echo "<B=$x $?>""#,
+            r#"(( x %= -1 )); echo "<C=$x $?>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=-9223372036854775808 0>",
+            "<B=-9223372036854775808 1>",
+            "<C=-9223372036854775808 1>",
+        ],
+    );
+    assert_eq!(
+        errors
+            .matches("((: arithmetic: result out of range")
+            .count(),
+        2,
+        "{errors}"
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 2, "{errors}");
+}
+
+#[test]
 fn malformed_compound_assignment_operators_are_syntax_errors_and_keep_the_variable() {
     let directory = TestDirectory::new("arithmetic malformed compound");
 
