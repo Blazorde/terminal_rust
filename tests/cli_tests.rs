@@ -5079,6 +5079,46 @@ fn arithmetic_errors_name_the_problem_and_leave_the_variables_alone() {
 }
 
 #[test]
+fn a_very_long_chain_of_assignments_is_refused_without_crashing_the_shell() {
+    let directory = TestDirectory::new("arithmetic chain");
+    let too_long = format!("{}1", "x=".repeat(20_000));
+    let fine = format!(
+        "{}7",
+        (1..=50).map(|n| format!("a{n}=")).collect::<String>()
+    );
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            &format!(r#"(( {too_long} )); echo "<A=[$x] $?>""#),
+            &format!(r#"let "{too_long}"; echo "<B=[$x] $?>""#),
+            r#"echo "<C=still here>""#,
+            &format!(r#"(( {fine} )); echo "<D=$a1 $a50 $?>""#),
+            &format!(r#"unset a1 a50; let "{fine}"; echo "<E=$a1 $a50 $?>""#),
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=[] 1>",
+            "<B=[] 1>",
+            "<C=still here>",
+            "<D=7 7 0>",
+            "<E=7 7 0>",
+        ],
+    );
+    assert_eq!(
+        errors
+            .matches("arithmetic: expression nested too deeply")
+            .count(),
+        2,
+        "{errors}"
+    );
+}
+
+#[test]
 fn the_body_of_an_arithmetic_command_is_expanded_first() {
     let directory = TestDirectory::new("arithmetic expansion");
 

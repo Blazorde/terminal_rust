@@ -39,7 +39,7 @@ pub(super) fn statements(text: &str, state: &mut super::ShellState) -> Result<i6
         if statement.is_empty() {
             continue;
         }
-        value = statement_value(statement, state)?;
+        value = statement_value(statement, state, 0)?;
     }
     Ok(value)
 }
@@ -64,7 +64,16 @@ fn split_statements(text: &str) -> Vec<&str> {
     parts
 }
 
-fn statement_value(statement: &str, state: &mut super::ShellState) -> Result<i64, String> {
+fn statement_value(
+    statement: &str,
+    state: &mut super::ShellState,
+    depth: usize,
+) -> Result<i64, String> {
+    // The chain `a=b=c=…` recurses once per `=`; assignments happen on the way back, so a refused
+    // chain changes no variable.
+    if depth > MAX_DEPTH {
+        return Err("arithmetic: expression nested too deeply".to_string());
+    }
     let read = |state: &super::ShellState, expression: &str| {
         evaluate(expression, &|name| state.variable(name))
     };
@@ -96,7 +105,7 @@ fn statement_value(statement: &str, state: &mut super::ShellState) -> Result<i64
         let name = left.trim_end_matches(['+', '-', '*', '/', '%']).trim();
         let comparison = right.starts_with('=');
         if !comparison && shell_env::is_valid_name(name) {
-            let right = statement_value(right.trim(), state)?;
+            let right = statement_value(right.trim(), state, depth + 1)?;
             let value = match operator {
                 None => right,
                 Some(operator) => {
