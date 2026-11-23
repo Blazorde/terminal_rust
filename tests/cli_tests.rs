@@ -5323,8 +5323,6 @@ fn an_arithmetic_command_takes_redirections() {
             r#"(( 5 )) > made; echo "<A=$?>""#,
             r#"(( 1/0 )) 2> errs; echo "<B=$?>""#,
             r#"(( 0 )) > zero; echo "<C=$?>""#,
-            // Bash runs the command in a subshell when it is redirected, so the
-            // assignment would be lost there; here it is kept (accepted difference).
             r#"(( xx = 5 )) > kept; echo "<D=$xx>""#,
             r#"(( 4 )) > out1 2> out2; echo "<E=$?>""#,
             r#"(( 1/0 )) 2>&1 | cat; echo "<F>""#,
