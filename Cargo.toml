@@ -40,5 +40,5 @@ unicode-width = "0.2"
 # APIs that need no `unsafe` code on our side.
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", default-features = false, features = ["signal"] }
-signal-hook = { version = "0.3", default-features = false }
+signal-hook = { version = "0.4", default-features = false }
 rustix = { version = "1.1", default-features = false, features = ["std", "process", "termios"] }
