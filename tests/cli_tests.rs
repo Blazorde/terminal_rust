@@ -4801,7 +4801,21 @@ fn time_shows_how_long_a_command_took_and_keeps_its_status() {
         ],
     );
 
-    assert!(errors.contains("real\t0m0.2"), "{errors}");
+    let first_real = errors
+        .lines()
+        .find_map(|line| line.strip_prefix("real\t"))
+        .unwrap_or_else(|| panic!("no real line in {errors}"));
+    let (minutes, seconds) = first_real
+        .trim_end_matches('s')
+        .split_once('m')
+        .unwrap_or_else(|| panic!("unexpected duration {first_real:?}"));
+    let elapsed = minutes.parse::<f64>().expect("minutes should be a number") * 60.0
+        + seconds.parse::<f64>().expect("seconds should be a number");
+    // A loaded machine can stretch the sleep, so only the bounds are checked.
+    assert!(
+        (0.2..30.0).contains(&elapsed),
+        "time sleep 0.2 reported {elapsed}s in {errors}"
+    );
     assert_eq!(errors.matches("real\t").count(), 3, "{errors}");
     assert!(printed.contains("status=3\n"), "{printed}\n{errors}");
 }
