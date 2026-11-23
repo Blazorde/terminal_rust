@@ -75,7 +75,7 @@ struct SystemProbe {
 
 impl SystemProbe {
     fn new() -> io::Result<Self> {
-        let mut system = System::new_all();
+        let mut system = System::new_all().map_err(system_info_error)?;
 
         // CPU usage requires two measurements. This is the only explicit wait;
         // later live samples use the dashboard refresh interval as their gap.
@@ -84,8 +84,8 @@ impl SystemProbe {
 
         Ok(Self {
             system,
-            disks: Disks::new_with_refreshed_list(),
-            networks: Networks::new_with_refreshed_list(),
+            disks: Disks::new_with_refreshed_list().map_err(system_info_error)?,
+            networks: Networks::new_with_refreshed_list().map_err(system_info_error)?,
         })
     }
 
@@ -114,14 +114,14 @@ impl SystemProbe {
             .to_string();
 
         Ok(SystemSnapshot {
-            os: System::long_os_version().unwrap_or_else(|| env::consts::OS.to_string()),
-            kernel: System::kernel_version().unwrap_or_else(|| "unknown".to_string()),
-            host: System::host_name().unwrap_or_else(|| "unknown".to_string()),
-            uptime_seconds: System::uptime(),
+            os: System::long_os_version().unwrap_or_else(|_| env::consts::OS.to_string()),
+            kernel: System::kernel_version().unwrap_or_else(|_| "unknown".to_string()),
+            host: System::host_name().unwrap_or_else(|_| "unknown".to_string()),
+            uptime_seconds: System::uptime().unwrap_or(0),
             cpu_name,
             cpu_usage: self.system.global_cpu_usage(),
             logical_cores: self.system.cpus().len(),
-            physical_cores: System::physical_core_count(),
+            physical_cores: System::physical_core_count().ok(),
             memory_used: self.system.used_memory(),
             memory_total: self.system.total_memory(),
             swap_used: self.system.used_swap(),
@@ -134,6 +134,10 @@ impl SystemProbe {
             current_dir,
         })
     }
+}
+
+fn system_info_error(error: sysinfo::Error) -> io::Error {
+    io::Error::other(format!("cannot read system information: {error}"))
 }
 
 fn should_run_live_dashboard() -> bool {
@@ -289,11 +293,10 @@ fn dashboard_action(event: &Event) -> Option<DashboardAction> {
 
 fn current_disk(disks: &Disks, current_dir: &Path) -> Option<DiskSnapshot> {
     let disk = disks
-        .list()
         .iter()
         .filter(|disk| current_dir.starts_with(disk.mount_point()))
         .max_by_key(|disk| disk.mount_point().components().count())
-        .or_else(|| disks.list().first())?;
+        .or_else(|| disks.first())?;
 
     let total = disk.total_space();
     Some(DiskSnapshot {
