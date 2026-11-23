@@ -4958,6 +4958,37 @@ fn an_arithmetic_command_succeeds_when_its_value_is_not_zero() {
 }
 
 #[test]
+fn post_increment_yields_the_old_value_and_pre_increment_the_new_one() {
+    let directory = TestDirectory::new("increment values");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"x=0; (( x++ )); echo "<A=$? $x>""#,
+            r#"x=0; (( ++x )); echo "<B=$? $x>""#,
+            r#"x=5; let y=x++; echo "<C=$y $x>""#,
+            r#"let y=++x; echo "<D=$y $x>""#,
+            r#"x=5; (( x++ )); echo "<E=$? $x>""#,
+            r#"(( ++x )); echo "<F=$? $x>""#,
+            r#"x=1; (( x-- )); echo "<G=$? $x>""#,
+            r#"x=1; (( --x )); echo "<H=$? $x>""#,
+            r#"x=5; let y=x--; echo "<I=$y $x>""#,
+            r#"let y=--x; echo "<J=$y $x>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=1 1>", "<B=0 1>", "<C=5 6>", "<D=7 7>", "<E=0 6>", "<F=0 7>", "<G=0 0>", "<H=1 0>",
+            "<I=5 4>", "<J=3 3>",
+        ],
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+}
+
+#[test]
 fn compound_assignments_and_the_comma_update_variables() {
     let directory = TestDirectory::new("arithmetic assignments");
 
