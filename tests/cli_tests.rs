@@ -4829,3 +4829,604 @@ fn dollar_quotes_read_the_escapes_of_c() {
     }
     assert!(errors.contains("missing closing quote"), "{errors}");
 }
+
+/// Run the lines in one session, giving up after 30 s so a loop that never ends fails
+/// the test instead of hanging it. A failing line stays visible in the markers, which
+/// are `<NAME=value>` words that the prompt (the current directory) never contains.
+fn arithmetic_session(directory: &TestDirectory, lines: &[&str]) -> (String, String) {
+    let mut input = lines.join("\n");
+    input.push_str("\nexit\n");
+    let output = run_interactive_with_timeout(directory.path(), &input, Duration::from_secs(30))
+        .expect("the session should finish");
+    (stdout(&output), stderr(&output))
+}
+
+fn assert_markers(printed: &str, errors: &str, markers: &[&str]) {
+    for marker in markers {
+        assert!(
+            printed.contains(&format!("{marker}\n")),
+            "{marker} missing from:\n{printed}\n{errors}"
+        );
+    }
+}
+
+#[test]
+fn let_assigns_calculates_and_reports_the_last_value() {
+    let directory = TestDirectory::new("let values");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"let a=1+2 b=a*2"#,
+            r#"echo "<A=$a $b>""#,
+            r#"let "x = 3"; echo "<B=$x $?>""#,
+            r#"let x-x; echo "<C=$?>""#,
+            r#"let 0; echo "<D=$?>""#,
+            r#"let 7; echo "<E=$?>""#,
+            r#"let 0 5; echo "<F=$?>""#,
+            r#"let 5 0; echo "<G=$?>""#,
+            r#"let n=5 n=n+1 n*2; echo "<H=$n $?>""#,
+            r#"let 'k = 2 + 3'; echo "<I=$k $?>""#,
+            r#"let c=3 c-=3; echo "<J=$c $?>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=3 6>", "<B=3 0>", "<C=1>", "<D=1>", "<E=0>", "<F=0>", "<G=1>", "<H=6 0>",
+            "<I=5 0>", "<J=0 1>",
+        ],
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+}
+
+#[test]
+fn let_reports_errors_and_stops_at_the_first_failing_argument() {
+    let directory = TestDirectory::new("let errors");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"let; echo "<A=$?>""#,
+            r#"let '1+'; echo "<B=$?>""#,
+            r#"let '1/0'; echo "<C=$?>""#,
+            r#"let a1=1 '1/0' b1=2; echo "<D=$a1,[$b1],$?>""#,
+            r#"let 'y1 = 1/0'; echo "<E=[$y1] $?>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &["<A=1>", "<B=1>", "<C=1>", "<D=1,[],1>", "<E=[] 1>"],
+    );
+    assert_eq!(
+        errors.matches("let: expression expected").count(),
+        1,
+        "{errors}"
+    );
+    assert_eq!(
+        errors.matches("let: arithmetic: missing operand").count(),
+        1,
+        "{errors}"
+    );
+    assert_eq!(
+        errors.matches("let: arithmetic: division by 0").count(),
+        3,
+        "{errors}"
+    );
+}
+
+#[test]
+fn an_arithmetic_command_succeeds_when_its_value_is_not_zero() {
+    let directory = TestDirectory::new("arithmetic status");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"(( x = 3 )); echo "<A=$x $?>""#,
+            r#"(( )); echo "<B=$?>""#,
+            r#"(( 5 )); echo "<C=$?>""#,
+            r#"(( 0 )); echo "<D=$?>""#,
+            r#"(( x > 2 )); echo "<E=$?>""#,
+            r#"(( x == 3 )); echo "<F=$?>""#,
+            r#"(( x <= 2 )); echo "<G=$?>""#,
+            r#"(( x != 3 )); echo "<H=$?>""#,
+            r#"(( x < 2 )); echo "<I=$?>""#,
+            r#"(( x >= 3 )); echo "<J=$?>""#,
+            r#"(( undefinedvar )); echo "<K=[$undefinedvar] $?>""#,
+            r#"(( undefinedvar + 2 )); echo "<L=$?>""#,
+            r#"(( 2 + 3 * 4 == 14 )); echo "<M=$?>""#,
+            r#"(( (1+2)*3 == 9 )); echo "<N=$?>""#,
+            r#"(( 7 % 4 == 3 )); echo "<O=$?>""#,
+            r#"(( 1 > 0 && 2 > 1 )); echo "<P=$?>""#,
+            r#"(( 0 || 0 )); echo "<Q=$?>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=3 0>", "<B=1>", "<C=0>", "<D=1>", "<E=0>", "<F=0>", "<G=1>", "<H=1>", "<I=1>",
+            "<J=0>", "<K=[] 1>", "<L=0>", "<M=0>", "<N=0>", "<O=0>", "<P=0>", "<Q=1>",
+        ],
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+}
+
+#[test]
+fn compound_assignments_and_the_comma_update_variables() {
+    let directory = TestDirectory::new("arithmetic assignments");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"x=10; (( x += 4 )); echo "<A=$x>""#,
+            r#"(( x -= 2 )); echo "<B=$x>""#,
+            r#"(( x *= 3 )); echo "<C=$x>""#,
+            r#"(( x /= 5 )); echo "<D=$x>""#,
+            r#"(( x %= 4 )); echo "<E=$x $?>""#,
+            r#"(( p = 5, q = p * 2 )); echo "<F=$p $q $?>""#,
+            r#"(( a = b = 3 )); echo "<G=$a $b>""#,
+            r#"(( c = 0, d = 1 )); echo "<H=$c $d $?>""#,
+            r#"(( d = 1, c = 0 )); echo "<I=$?>""#,
+            r#"(( t = 3 - -2 )); echo "<J=$t $?>""#,
+            r#"(( --5 )); echo "<K=$?>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=14>",
+            "<B=12>",
+            "<C=36>",
+            "<D=7>",
+            "<E=3 0>",
+            "<F=5 10 0>",
+            "<G=3 3>",
+            "<H=0 1 0>",
+            "<I=1>",
+            "<J=5 0>",
+            "<K=0>",
+        ],
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+}
+
+#[test]
+fn increments_as_a_statement_give_the_old_or_the_new_value() {
+    let directory = TestDirectory::new("arithmetic increments");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"y=0; (( y++ )); echo "<A=$y $?>""#,
+            r#"(( y++ )); echo "<B=$y $?>""#,
+            r#"(( ++y )); echo "<C=$y $?>""#,
+            r#"(( y-- )); echo "<D=$y $?>""#,
+            r#"(( --y )); echo "<E=$y $?>""#,
+            r#"(( --y )); echo "<F=$y $?>""#,
+            r#"(( fresh++ )); echo "<G=$fresh $?>""#,
+            r#"(( ++other )); echo "<H=$other $?>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=1 1>", "<B=2 0>", "<C=3 0>", "<D=2 0>", "<E=1 0>", "<F=0 1>", "<G=1 1>", "<H=1 0>",
+        ],
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+}
+
+#[test]
+fn arithmetic_errors_name_the_problem_and_leave_the_variables_alone() {
+    let directory = TestDirectory::new("arithmetic errors");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"(( 1/0 )); echo "<A=$?>""#,
+            r#"(( 1+ )); echo "<B=$?>""#,
+            r#"word=abc; (( word + 1 )); echo "<C=$?>""#,
+            r#"i=0; (( i++ < 3 )); echo "<D=$i $?>""#,
+            r#"j=5; (( k = j-- - 1 )); echo "<E=$j [$k] $?>""#,
+            r#"n=9223372036854775807; (( n++ )); echo "<F=$n $?>""#,
+            r#"m=9223372036854775807; (( m + 1 )); echo "<G=$m $?>""#,
+            r#"(( 3 - -2 )); echo "<H=$?>""#,
+            r#"(( ok = 1 )); echo "<I=$ok>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=1>",
+            "<B=1>",
+            "<C=1>",
+            "<D=0 1>",
+            "<E=5 [] 1>",
+            "<F=9223372036854775807 1>",
+            "<G=9223372036854775807 1>",
+            "<H=0>",
+            "<I=1>",
+        ],
+    );
+    for (message, count) in [
+        ("((: arithmetic: division by 0", 1),
+        ("((: arithmetic: missing operand", 1),
+        ("((: arithmetic: word: not an integer: 'abc'", 1),
+        (
+            "((: arithmetic: ++ and -- must stand alone as a statement",
+            2,
+        ),
+        ("((: arithmetic: result out of range", 2),
+    ] {
+        assert_eq!(
+            errors.matches(message).count(),
+            count,
+            "{message}\n{errors}"
+        );
+    }
+}
+
+#[test]
+fn the_body_of_an_arithmetic_command_is_expanded_first() {
+    let directory = TestDirectory::new("arithmetic expansion");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"(( $(echo 3) > 2 )); echo "<A=$?>""#,
+            r#"(( x = "3" )); echo "<B=$x $?>""#,
+            r#"y=4; (( z = $y * 2 )); echo "<C=$z>""#,
+            r#"f() { (( $1 * 2 )); }; f 3; echo "<D=$?>""#,
+            r#"f 0; echo "<E=$?>""#,
+            r#"g() { (( total = $1 + $2 )); echo "<F=$total>"; }; g 4 5"#,
+            r#"n=4; h() { (( n > $1 )); }; h 3; echo "<G=$?>"; h 4; echo "<H=$?>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=0>", "<B=3 0>", "<C=8>", "<D=0>", "<E=1>", "<F=9>", "<G=0>", "<H=1>",
+        ],
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+}
+
+#[test]
+fn an_arithmetic_command_follows_and_or_connectors() {
+    let directory = TestDirectory::new("arithmetic connectors");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            "(( 0 )) && echo MARKAND0",
+            r#"echo "<A>""#,
+            "(( 1 )) || echo MARKOR1",
+            r#"echo "<B>""#,
+            r#"(( 1 )) && echo "<C>""#,
+            r#"(( 0 )) || echo "<D>""#,
+            r#"false || (( y = 7 )); echo "<E=$y>""#,
+            r#"true || (( y = 8 )); echo "<F=$y>""#,
+            r#"true && (( z = 1 )); echo "<G=$z>""#,
+            r#"(( 0 )) && (( w = 1 )); echo "<H=[$w] $?>""#,
+            r#"(( 1 )) && (( 0 )) || echo "<I>""#,
+            r#"! (( 0 )); echo "<J=$?>""#,
+            r#"! (( 5 )); echo "<K=$?>""#,
+            r#"(( 1 < 2 )) && echo "<L>""#,
+            r#"(( 2 > 3 )) || echo "<M>""#,
+            r#"false || { (( k = 2 )); echo "<N=$k>"; }"#,
+            r#"true || { (( q = 2 )); echo MARKBRACE; }; echo "<O=[$q]>""#,
+        ],
+    );
+
+    assert!(!printed.contains("MARKAND0"), "{printed}\n{errors}");
+    assert!(!printed.contains("MARKOR1"), "{printed}\n{errors}");
+    assert!(!printed.contains("MARKBRACE"), "{printed}\n{errors}");
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A>", "<B>", "<C>", "<D>", "<E=7>", "<F=7>", "<G=1>", "<H=[] 1>", "<I>", "<J=0>",
+            "<K=1>", "<L>", "<M>", "<N=2>", "<O=[]>",
+        ],
+    );
+}
+
+#[test]
+fn an_arithmetic_command_works_in_conditions_loops_functions_and_blocks() {
+    let directory = TestDirectory::new("arithmetic blocks");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"x=5; if (( x > 3 )); then echo "<A=big>"; else echo "<A=small>"; fi"#,
+            r#"x=1; if (( x > 3 )); then echo "<B=big>"; elif (( x == 1 )); then echo "<B=one>"; else echo "<B=small>"; fi"#,
+            r#"n=0; while (( n < 3 )); do echo "<C=$n>"; (( n++ )); done"#,
+            r#"m=0; until (( m >= 2 )); do echo "<D=$m>"; (( m++ )); done"#,
+            r#"x=1; ( (( x = 9 )); echo "<E=$x>" ); echo "<F=$x>""#,
+            r#"case 1 in 1) (( c = 4 )); echo "<G=$c>";; esac"#,
+            r#"{ (( d = 6 )); echo "<H=$d>"; }"#,
+            r#"eval '(( e = 4 ))'; echo "<I=$e>""#,
+            r#"true || if (( 1 )); then echo MARKIF; fi"#,
+            r#"if (( 0 )); then echo MARKTHEN; fi; echo "<J>""#,
+            r#"s=0; for v in 1 2 3; do (( s += v )); done; echo "<K=$s>""#,
+        ],
+    );
+
+    assert!(!printed.contains("MARKIF"), "{printed}\n{errors}");
+    assert!(!printed.contains("MARKTHEN"), "{printed}\n{errors}");
+    assert!(!printed.contains("<A=small>"), "{printed}");
+    assert!(!printed.contains("<B=big>"), "{printed}");
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=big>", "<B=one>", "<C=0>", "<C=1>", "<C=2>", "<D=0>", "<D=1>", "<E=9>", "<F=1>",
+            "<G=4>", "<H=6>", "<I=4>", "<J>", "<K=6>",
+        ],
+    );
+    assert_eq!(printed.matches("<C=").count(), 3, "{printed}");
+    assert_eq!(printed.matches("<D=").count(), 2, "{printed}");
+}
+
+#[test]
+fn set_e_stops_the_shell_on_a_failing_arithmetic_command_only_where_it_should() {
+    for failing in ["(( 0 ))", "let 0", "(( 1/0 ))"] {
+        let directory = TestDirectory::new("arithmetic set e exit");
+        let (printed, errors) = arithmetic_session(
+            &directory,
+            &[
+                r#"echo "<before>""#,
+                "set -e",
+                failing,
+                "echo MARKAFTER",
+                r#"echo "<never>""#,
+            ],
+        );
+        assert!(
+            printed.contains("<before>\n"),
+            "{failing}: {printed}\n{errors}"
+        );
+        assert!(!printed.contains("MARKAFTER"), "{failing}: {printed}");
+        assert!(!printed.contains("<never>"), "{failing}: {printed}");
+    }
+
+    let directory = TestDirectory::new("arithmetic set e stays");
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            "set -e",
+            r#"(( 0 )) || echo "<A>""#,
+            "(( 0 )) || true",
+            r#"echo "<B>""#,
+            "if (( 0 )); then echo MARKIF; fi",
+            r#"echo "<C>""#,
+            "! (( 0 ))",
+            r#"echo "<D>""#,
+            "(( 0 )) && echo MARKAND",
+            r#"echo "<E>""#,
+            "(( 5 ))",
+            r#"echo "<F>""#,
+        ],
+    );
+    assert!(!printed.contains("MARKIF"), "{printed}");
+    assert!(!printed.contains("MARKAND"), "{printed}");
+    assert_markers(
+        &printed,
+        &errors,
+        &["<A>", "<B>", "<C>", "<D>", "<E>", "<F>"],
+    );
+}
+
+#[test]
+fn an_arithmetic_command_takes_redirections() {
+    let directory = TestDirectory::new("arithmetic redirections");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"(( 5 )) > made; echo "<A=$?>""#,
+            r#"(( 1/0 )) 2> errs; echo "<B=$?>""#,
+            r#"(( 0 )) > zero; echo "<C=$?>""#,
+            // Bash runs the command in a subshell when it is redirected, so the
+            // assignment would be lost there; here it is kept (accepted difference).
+            r#"(( xx = 5 )) > kept; echo "<D=$xx>""#,
+            r#"(( 4 )) > out1 2> out2; echo "<E=$?>""#,
+            r#"(( 1/0 )) 2>&1 | cat; echo "<F>""#,
+            r#"(( 1/0 )) > out3; echo "<G=$?>""#,
+            r#"(( yy = "4" )) > dq; echo "<H=$yy $?>""#,
+            // A single quote in the body must survive the rewrite into `let '...'`: the
+            // evaluator rejects it, and the redirected form reports the same error.
+            r#"(( zz = '6' )) > sq; echo "<I=[$zz] $?>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=0>", "<B=1>", "<C=1>", "<D=5>", "<E=0>", "<F>", "<G=1>", "<H=4 0>", "<I=[] 1>",
+        ],
+    );
+    assert_eq!(
+        errors.matches("let: arithmetic: unexpected '''").count(),
+        1,
+        "{errors}"
+    );
+    for empty in ["made", "zero", "kept", "out1", "out2", "out3", "dq", "sq"] {
+        let content = fs::read_to_string(directory.path().join(empty))
+            .unwrap_or_else(|error| panic!("{empty} should exist: {error}"));
+        assert_eq!(content, "", "{empty}");
+    }
+    let recorded = fs::read_to_string(directory.path().join("errs")).expect("errs should exist");
+    assert_eq!(recorded, "let: arithmetic: division by 0\n");
+    // `2>&1 | cat` carries the message through the pipe; `> out3` leaves it on stderr.
+    assert_eq!(
+        printed.matches("let: arithmetic: division by 0").count(),
+        1,
+        "{printed}"
+    );
+    assert_eq!(
+        errors.matches("let: arithmetic: division by 0").count(),
+        1,
+        "{errors}"
+    );
+    assert!(!directory.path().join("1").exists());
+}
+
+#[test]
+fn an_arithmetic_command_runs_in_pipelines_and_in_the_background() {
+    let directory = TestDirectory::new("arithmetic pipes");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"(( 1 )) | cat; echo "<A=$?>""#,
+            r#"echo hi | (( 0 )); echo "<B=$?>""#,
+            r#"echo hi | (( 5 )); echo "<C=$?>""#,
+            r#"(( 3 )) | (( 0 )); echo "<D=$?>""#,
+            r#"(( 3 )) | (( 4 )); echo "<E=$?>""#,
+            "(( 7 )) &",
+            "wait",
+            r#"echo "<F=$?>""#,
+            "(( 0 )) &",
+            "wait",
+            r#"echo "<G>""#,
+            "jobs",
+            r#"echo "<H>""#,
+            // A background command goes through the `let` rewrite, which names itself in
+            // its errors.
+            "(( 1/0 )) &",
+            "wait",
+            r#"echo "<I>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &[
+            "<A=0>", "<B=1>", "<C=0>", "<D=1>", "<E=0>", "<F=0>", "<G>", "<H>", "<I>",
+        ],
+    );
+    assert!(!printed.contains("Running"), "{printed}");
+    assert_eq!(
+        errors.matches("let: arithmetic: division by 0").count(),
+        1,
+        "{errors}"
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 1, "{errors}");
+}
+
+#[test]
+fn comparison_and_logic_operators_in_the_body_are_not_shell_operators() {
+    let directory = TestDirectory::new("arithmetic operators");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            r#"(( 2 > 1 )) && echo "<A>""#,
+            r#"(( 1 > 2 )); echo "<B=$?>""#,
+            r#"(( 1 < 2 )) && echo "<C>""#,
+            r#"(( 3 >= 2 )) && echo "<D>""#,
+            r#"(( 1 > 2 )) || echo "<E>""#,
+            r#"(( 1 > 0 && 2 > 1 )); echo "<F=$?>""#,
+            r#"(( 0 || 2 < 3 )); echo "<G=$?>""#,
+        ],
+    );
+
+    assert_markers(
+        &printed,
+        &errors,
+        &["<A>", "<B=1>", "<C>", "<D>", "<E>", "<F=0>", "<G=0>"],
+    );
+    let created: Vec<_> = fs::read_dir(directory.path())
+        .expect("the test directory should be readable")
+        .map(|entry| entry.expect("an entry").file_name())
+        .collect();
+    assert!(created.is_empty(), "files created: {created:?}");
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+}
+
+#[test]
+fn nested_subshells_and_quoted_text_are_not_arithmetic() {
+    let directory = TestDirectory::new("arithmetic neighbours");
+
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            "((echo a1); echo a2)",
+            "((echo b1); (echo b2))",
+            "((echo c1) | cat)",
+            r#"echo "<A>""#,
+            r#"echo "(( 1 ))" '(( 1 ))' $((1+2))"#,
+            "for ((i=0;i<2;i++)); do echo $i; done",
+        ],
+    );
+
+    assert!(printed.contains("a1\na2\n"), "{printed}\n{errors}");
+    assert!(printed.contains("b1\nb2\n"), "{printed}\n{errors}");
+    assert_eq!(printed.matches("c1\n").count(), 1, "{printed}\n{errors}");
+    assert!(printed.contains("<A>\n"), "{printed}");
+    assert!(
+        printed.contains("(( 1 )) (( 1 )) 3\n"),
+        "{printed}\n{errors}"
+    );
+    // Out of scope for now: the `for ((;;))` loop is not supported, and the error stays.
+    assert!(
+        errors.contains("for: '((i=0' is not a valid variable name"),
+        "{errors}"
+    );
+    assert_eq!(errors.matches("arithmetic").count(), 0, "{errors}");
+    assert_eq!(errors.matches("syntax error").count(), 0, "{errors}");
+}
+
+#[cfg(unix)]
+#[test]
+fn arithmetic_errors_do_not_print_escape_sequences_from_variables() {
+    let hostile = r#"x=$'\e]0;hack\a'"#;
+
+    let directory = TestDirectory::new("arithmetic hostile");
+    let (printed, errors) = arithmetic_session(
+        &directory,
+        &[
+            hostile,
+            r#"(( x )); echo "<A=$?>""#,
+            "(( 1 + x ))",
+            "let y=x",
+            "let 'z = x + 1'",
+        ],
+    );
+    assert_markers(&printed, &errors, &["<A=1>"]);
+    for text in [&printed, &errors] {
+        assert!(
+            !text.contains('\u{1b}') && !text.contains('\u{7}'),
+            "{text:?}"
+        );
+    }
+    assert_eq!(
+        errors
+            .matches("arithmetic: x: not an integer: '?]0;hack?'")
+            .count(),
+        4,
+        "{errors:?}"
+    );
+
+    // The detector above would see a raw escape: `echo` does not neutralize it.
+    let control = TestDirectory::new("arithmetic hostile control");
+    let (printed, errors) = arithmetic_session(&control, &[hostile, r#"echo "$x""#]);
+    assert!(printed.contains('\u{1b}'), "{printed:?}\n{errors:?}");
+}
