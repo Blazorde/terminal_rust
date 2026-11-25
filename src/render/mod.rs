@@ -193,6 +193,20 @@ pub fn stderr(message: impl fmt::Display) -> io::Result<()> {
     })
 }
 
+/// Ask something of the person at the terminal, before reading the answer.
+///
+/// A question goes straight to the standard error of the shell: a redirection, a
+/// pipe or a substitution must not take it, or the shell waits for an answer to a
+/// question nobody has seen.
+pub(crate) fn question(message: &str) -> io::Result<()> {
+    // What the command printed before asking stays ahead of the question.
+    flush_captured();
+    with_stderr(|writer| {
+        write_text(writer, diagnostic(message))?;
+        writer.flush()
+    })
+}
+
 pub fn write_text(writer: &mut impl Write, message: impl fmt::Display) -> io::Result<()> {
     write!(writer, "{message}")
 }

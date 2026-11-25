@@ -51,6 +51,7 @@ they make the shell usable on Windows, where most of these programs do not exist
 
 - Output and messages of a delegated command depend on the system (GNU, BSD or none).
 - A system `rm` may ask again after the shell has asked.
+- The question of the shell goes to its own standard error: no redirection or pipe of the command takes it.
 - The question of the shell before a delegated `rm` is answered on the input of the shell, not through a pipe
   or a here-string given to `rm`.
 - A new option of a built-in must be added to the table as well, or it is handed over.

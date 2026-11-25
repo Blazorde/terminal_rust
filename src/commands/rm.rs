@@ -277,9 +277,7 @@ fn confirm_removal(
 }
 
 fn ask_confirmation(message: &str) -> io::Result<bool> {
-    render::stdout(message)?;
-    // The question is captured like any output; show it before waiting.
-    render::flush_captured();
+    render::question(message)?;
 
     let mut answer = String::new();
     stdin_line::read_line(&mut answer)?;

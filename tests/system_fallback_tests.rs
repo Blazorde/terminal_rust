@@ -281,14 +281,15 @@ fn the_system_rm_waits_for_the_confirmation_of_a_recursive_removal() {
     let answer = |script: &str, input: &str| {
         let mut command = fakes.shell(&sandbox);
         command.args(["-c", script]);
-        stdout(&finish(command, input.as_bytes()))
+        finish(command, input.as_bytes())
     };
 
     for script in ["rm -r -I dir", "rm -r -I dir | cat"] {
         let declined = answer(script, "n\n");
-        assert!(declined.contains("recursively remove"), "{declined}");
+        assert!(stderr(&declined).contains("recursively remove"));
+        let declined = stdout(&declined);
         assert!(!declined.contains("rm -r -I"), "{declined}");
-        let accepted = answer(script, "y\n");
+        let accepted = stdout(&answer(script, "y\n"));
         assert!(accepted.contains("rm -r -I dir"), "{accepted}");
     }
 }

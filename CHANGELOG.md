@@ -34,6 +34,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 - A program started by a redirected or piped function, or through `time`, `command` or an alias, now writes
   where the output of the command goes instead of the terminal.
+- The question of `rm` and the prompt of `read -p` are written to the standard error of the shell before the
+  answer is read, instead of ending up in a redirected file or appearing after the answer.
 - Windows: a pattern after a path written with backslashes (`~/*.txt`, `$PWD/*.rs`) now expands, and a
   backslash in a `case` or `[[ ]]` pattern is a path separator, as ADR-0012 says for file name patterns.
 

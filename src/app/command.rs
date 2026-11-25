@@ -1578,7 +1578,7 @@ fn run_read(args: &[String], state: &mut ShellState) -> CommandResult {
     if let Some(prompt) = &request.prompt
         && !crate::utils::pipe_input::is_provided()
     {
-        let _ = render::stderr(prompt);
+        let _ = render::question(prompt);
     }
     // Like any read error, a standard input that cannot be opened ends the input.
     let mut stdin = stdin_line::reader().unwrap_or_else(|_| Box::new(std::io::empty()));
