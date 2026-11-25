@@ -572,7 +572,8 @@ Windows `-l` has no effect.
 the variables and the directory it sets stay afterwards. Unlike `script run`, the
 file can have any name. It runs line by line like a script (blocks over several
 lines, `#` comments), stops at the first error and names the file and the line.
-Arguments for the file (`$1`) are not supported.
+Words after the file name are its `$1`, `$2`, ... while it runs; with none, the file
+sees no argument.
 
 ```text
 source ~/.config/project/env.sh
