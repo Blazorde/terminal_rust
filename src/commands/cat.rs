@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use crate::commands::system_fallback;
 use crate::errors::cat::CatError;
 use crate::utils::path::{expand_home, trimmed_arg};
 use crate::utils::pipe_input;
@@ -32,7 +33,8 @@ pub fn cat(target: Option<&str>) -> Result<String, CatError> {
 /// What `cat` prints for `targets` and the failures, in the order of the files.
 /// With no target it copies the input of the pipeline, and `-` stands for that
 /// input too. Every file is tried: a missing one does not hide the others.
-pub fn cat_all(targets: &[String]) -> (String, Vec<CatError>) {
+pub fn cat_all(args: &[String]) -> (String, Vec<CatError>) {
+    let targets: Vec<&String> = system_fallback::operands(args).collect();
     if targets.is_empty() {
         return match cat(None) {
             Ok(content) => (content, Vec::new()),

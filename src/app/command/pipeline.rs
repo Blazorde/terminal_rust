@@ -11,7 +11,7 @@ use std::thread::{self, JoinHandle};
 
 use super::{
     CommandError, CommandResult, ShellState, StageKind, classify, execute, find_command, flow,
-    split_env_prefix,
+    split_env_prefix, system,
 };
 use crate::app::parser::{Redirect, Stage, parse_args, parse_with};
 use crate::commands::external::{self, RunError};
@@ -149,8 +149,17 @@ fn execute_plans(
         // A here-string is the whole input of its stage.
         if let Some(text) = plan.here_text.clone() {
             previous = Input::Text(text);
+        } else if index == 0
+            && plan.stdin.is_none()
+            && let Some(bytes) = system::held_input(&plan.kind)
+        {
+            previous = Input::Text(bytes);
         }
-        let name = plan.args.first().cloned().unwrap_or_default();
+        // A system program is named after its built-in, not after an alias of it.
+        let name = match &plan.kind {
+            StageKind::System { name, .. } => name.clone(),
+            _ => plan.args.first().cloned().unwrap_or_default(),
+        };
 
         let mut opened = match open(&plan) {
             Ok(opened) => opened,
@@ -179,7 +188,24 @@ fn execute_plans(
                     let _ = render::stderr_line(message);
                 }
             }
-            StageKind::Program { .. } | StageKind::Git { .. } => {
+            StageKind::Program { .. } | StageKind::System { .. } | StageKind::Git { .. } => {
+                match system::guard(&plan.kind) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        if is_last {
+                            last_result = Some(CommandResult::Continue);
+                        }
+                        continue;
+                    }
+                    Err(message) => {
+                        if is_last {
+                            last_result = Some(CommandResult::Error(message));
+                        } else {
+                            let _ = render::stderr_line(message);
+                        }
+                        continue;
+                    }
+                }
                 match start_program(
                     &plan,
                     opened,
@@ -574,6 +600,11 @@ fn start_program(
     let capture_last = render::programs_captured();
     let mut command = match &plan.kind {
         StageKind::Program { program, args } => external::command(program, args),
+        StageKind::System {
+            name,
+            program,
+            args,
+        } => external::system_command(program, name, args),
         StageKind::Git { args } => git::native_command(args),
         StageKind::InProcess | StageKind::Compound => {
             return Err(format!("{name}: not a program"));

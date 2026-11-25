@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::app::help;
 use crate::app::parser::{Stage, parse_args, split_chain, split_stages};
+use crate::commands::system_fallback;
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, external, fastfetch,
     git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, read_command, rm,
@@ -27,6 +28,7 @@ mod jobs;
 mod pipeline;
 mod scripts;
 mod substitution;
+mod system;
 
 pub(crate) use scripts::{CommandAssembler, MAX_SCRIPT_BYTES, check_syntax};
 
@@ -1010,6 +1012,12 @@ enum StageKind {
     InProcess,
     /// As a program, with its streams connected to the neighbours.
     Program { program: String, args: Vec<String> },
+    /// The system program that takes over from the built-in `name`.
+    System {
+        name: String,
+        program: PathBuf,
+        args: Vec<String>,
+    },
     /// The native Git, which has its own environment (the bundled runtime).
     Git { args: Vec<String> },
     /// A `for`, `while`, `if`, `case` or `{ }` that is a stage of a pipeline or has
@@ -1035,6 +1043,9 @@ fn classify(args: &[String], state: &ShellState) -> Result<StageKind, String> {
         return Ok(StageKind::Git {
             args: args[1..].to_vec(),
         });
+    }
+    if let Some(kind) = system::stage(name, &args[1..], state) {
+        return Ok(kind);
     }
     if find_command(name).is_some() {
         return Ok(StageKind::InProcess);
@@ -1096,7 +1107,15 @@ pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
 
     if let Some(command) = find_command(command_name) {
         let command_args = &args[1..];
-        if let Err(error) = validate_arg_count(command, command_args.len()) {
+        if let Some(result) = system::dispatch(command_name, command_args, state) {
+            return result;
+        }
+        // For these built-ins `--` is not an argument that counts.
+        let count = match system_fallback::handled(command_name) {
+            Some(_) => system_fallback::operands(command_args).count(),
+            None => command_args.len(),
+        };
+        if let Err(error) = validate_arg_count(command, count) {
             return CommandResult::Error(error.to_string());
         }
         return (command.handler)(command_args, state);

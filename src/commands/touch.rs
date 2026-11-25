@@ -1,6 +1,7 @@
 use std::fs::OpenOptions;
 use std::time::SystemTime;
 
+use crate::commands::system_fallback;
 use crate::errors::touch::TouchError;
 use crate::utils::path::required_path;
 
@@ -27,12 +28,13 @@ pub fn touch(target: Option<&str>) -> Result<(), TouchError> {
 }
 
 /// Touch every file of `targets`, even after a failure; return the failures.
-pub fn touch_all(targets: &[String]) -> Vec<TouchError> {
+pub fn touch_all(args: &[String]) -> Vec<TouchError> {
+    let targets: Vec<&String> = system_fallback::operands(args).collect();
     if targets.is_empty() {
         return vec![TouchError::MissingFileName];
     }
     targets
-        .iter()
+        .into_iter()
         .filter_map(|target| touch(Some(target)).err())
         .collect()
 }

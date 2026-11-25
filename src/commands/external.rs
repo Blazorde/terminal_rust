@@ -84,6 +84,26 @@ fn wait_for(command: Command, name: &str, args: &[String]) -> Result<(), RunErro
     }
 }
 
+/// Like `run_at` for the system program that takes over from a built-in.
+pub(crate) fn run_system(program: &Path, name: &str, args: &[String]) -> Result<(), RunError> {
+    wait_for(system_command(program, name, args), name, args)
+}
+
+/// The command that starts `program` as `name`, so that its messages say `name`
+/// and not the whole path (Unix only: Windows has no separate first argument).
+pub(crate) fn system_command(program: &Path, name: &str, args: &[String]) -> Command {
+    #[cfg_attr(not(unix), allow(unused_mut))] // only Unix changes the command
+    let mut command = prepared(program.as_os_str(), args);
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.arg0(name);
+    }
+    #[cfg(not(unix))]
+    let _ = name;
+    command
+}
+
 /// The command that runs `name` with `args`: the program is looked up like
 /// `run` does, the exports are applied, and the output captured so far is
 /// written first so it stays ahead of what the program prints.

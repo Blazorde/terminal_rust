@@ -20,6 +20,7 @@ pub mod printenv;
 pub mod pwd;
 pub mod read_command;
 pub mod rm;
+pub mod system_fallback;
 pub mod test_command;
 pub mod theme;
 pub mod touch;
