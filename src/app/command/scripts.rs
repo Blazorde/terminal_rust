@@ -238,6 +238,11 @@ impl ShellState {
     pub(crate) fn enter_script(&mut self) {
         self.script_depth += 1;
     }
+
+    /// The end of what [`ShellState::enter_script`] began.
+    pub(crate) fn leave_script(&mut self) {
+        self.script_depth = self.script_depth.saturating_sub(1);
+    }
 }
 
 fn set_startup(path: &str, state: &mut ShellState) -> CommandResult {

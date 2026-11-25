@@ -15,8 +15,9 @@ use crate::app::history;
 use crate::app::launch::{self, Action, Invocation, UsageError};
 use crate::app::parser::{continuation_prefix, normalize_multiline_input};
 use crate::app::prompt::{GUI_PROMPT_ENV, Prompt};
+use crate::app::startup;
 use crate::commands::external;
-use crate::config::{self, AppConfig, AppearanceSettings, appearance_ansi_sequences};
+use crate::config::{self, AppConfig};
 use crate::core::{ExecutionResult, ExecutionStatus, ShellEngine};
 use crate::render;
 use crate::utils::job_control;
@@ -33,16 +34,26 @@ pub fn run() -> ExitCode {
         }
     };
 
-    match invocation.action {
-        Action::Shell if invocation.interactive || io::stdin().is_terminal() => run_interactive(),
+    let Invocation {
+        login,
+        interactive,
+        action,
+    } = invocation;
+    if action == Action::Shell && (interactive || io::stdin().is_terminal()) {
+        return interactive_shell(login);
+    }
+    if login {
+        startup::import_login_environment();
+    }
+    match action {
         Action::Shell => batch::run_stdin(),
         Action::CommandString {
             command,
             name,
             args,
-        } => batch::run_command_string(&command, name.as_deref(), &args),
-        Action::Script { path, args } => batch::run_script(&path, &args),
-        Action::OneLine(args) => run_once(&args),
+        } => batch::run_command_string(&command, name.as_deref(), &args, interactive),
+        Action::Script { path, args } => batch::run_script(&path, &args, interactive),
+        Action::OneLine(args) => run_once(&args, interactive),
     }
 }
 
@@ -78,25 +89,41 @@ fn read_editor_command<P: rustyline::Prompt + ?Sized>(
     Ok(input)
 }
 
-fn run_once(args: &[String]) -> ExitCode {
+fn run_once(args: &[String], interactive: bool) -> ExitCode {
     let app_config = load_config();
     let mut engine = load_engine(&app_config);
+    if interactive && let Some(status) = startup::run_rc(&mut engine) {
+        return status;
+    }
     let result = engine.execute_args(args);
     emit_result(&result);
 
     // The exact code of the program or command that ran, 1 for a failure inside
     // the shell.
-    ExitCode::from(engine.exit_code())
+    let status = engine.exit_code();
+    if interactive {
+        // The rc file may have set an `EXIT` trap.
+        return batch::finish(&mut engine, status);
+    }
+    ExitCode::from(status)
 }
 
 pub fn run_interactive() -> ExitCode {
     render::stream_before_children(true);
+    interactive_shell(false)
+}
+
+fn interactive_shell(login: bool) -> ExitCode {
     let on_terminal = io::stdin().is_terminal();
     // Before any thread starts, so that they all share the signal mask it sets.
     if on_terminal {
         job_control::init();
     }
     external::keep_shell_alive_on_interrupt();
+    // After both, so that `Ctrl+C` ends a profile that hangs and not the shell.
+    if login {
+        startup::import_login_environment();
+    }
     if on_terminal {
         run_interactive_editor()
     } else {
@@ -105,7 +132,10 @@ pub fn run_interactive() -> ExitCode {
 }
 
 fn run_interactive_editor() -> ExitCode {
-    let (mut engine, mut shell_prompt) = load_interactive_shell();
+    let (mut engine, mut shell_prompt) = match load_interactive_shell() {
+        Ok(shell) => shell,
+        Err(status) => return status,
+    };
     let mut config_builder = Config::builder().completion_type(CompletionType::Circular);
     if env::var_os(GUI_PROMPT_ENV).is_some() {
         config_builder = config_builder.color_mode(ColorMode::Forced);
@@ -221,7 +251,10 @@ fn finish_shell(engine: &mut ShellEngine) {
 }
 
 fn run_interactive_plain() -> ExitCode {
-    let (mut engine, mut shell_prompt) = load_interactive_shell();
+    let (mut engine, mut shell_prompt) = match load_interactive_shell() {
+        Ok(shell) => shell,
+        Err(status) => return status,
+    };
     let code = plain_loop(&mut engine, &mut shell_prompt);
     finish_shell(&mut engine);
     code
@@ -255,39 +288,17 @@ fn plain_loop(engine: &mut ShellEngine, shell_prompt: &mut Prompt) -> ExitCode {
     }
 }
 
-fn load_interactive_shell() -> (ShellEngine, Prompt) {
+/// `Err` is the status of an rc file that ended the shell before its first prompt.
+fn load_interactive_shell() -> Result<(ShellEngine, Prompt), ExitCode> {
     let config = load_config();
     let mut engine = load_engine(&config);
-    apply_native_terminal_appearance();
+    startup::apply_native_terminal_appearance();
     run_fastfetch_if_enabled(&mut engine);
+    if let Some(status) = startup::run_rc(&mut engine) {
+        return Err(status);
+    }
     run_startup_script(&mut engine);
-    (engine, load_prompt(&config))
-}
-
-fn apply_native_terminal_appearance() {
-    if env::var_os("TERMINAL_RUST_NATIVE_UI").is_none() {
-        return;
-    }
-
-    let mut settings = match config::load_appearance_settings() {
-        Ok(settings) => settings,
-        Err(error) => {
-            let _ = render::stderr_line(format_args!("appearance: {error}; using defaults"));
-            AppearanceSettings::default()
-        }
-    };
-    let saved_settings = settings.clone();
-    if let Err(error) = config::apply_appearance_environment(&mut settings) {
-        let _ = render::stderr_line(format_args!(
-            "appearance: {error}; ignoring invalid overrides"
-        ));
-        settings = saved_settings;
-    }
-    if let Err(error) = render::stdout(appearance_ansi_sequences(&settings)) {
-        let _ = render::stderr_line(format_args!(
-            "appearance: cannot apply terminal colors: {error}"
-        ));
-    }
+    Ok((engine, load_prompt(&config)))
 }
 
 fn read_plain_command(reader: &mut impl BufRead, input: &mut String) -> io::Result<bool> {

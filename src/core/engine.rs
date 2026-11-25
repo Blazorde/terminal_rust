@@ -124,6 +124,11 @@ impl ShellEngine {
         self.state.enter_script();
     }
 
+    /// What follows is typed again.
+    pub(crate) fn leave_script(&mut self) {
+        self.state.leave_script();
+    }
+
     /// The lines typed at the prompt, oldest first.
     pub(crate) fn history(&self) -> &[String] {
         self.state.history()

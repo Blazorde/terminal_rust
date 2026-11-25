@@ -9,6 +9,7 @@ use std::process::ExitCode;
 
 use crate::app::command::{CommandAssembler, MAX_SCRIPT_BYTES, check_syntax};
 use crate::app::runner::{emit_result, load_config, load_engine};
+use crate::app::startup;
 use crate::core::{ExecutionStatus, ShellEngine};
 use crate::render;
 use crate::render::printable::printable;
@@ -19,16 +20,27 @@ const SYNTAX_ERROR: u8 = 2;
 const CANNOT_RUN: u8 = 126;
 const NOT_FOUND: u8 = 127;
 
-pub(super) fn run_command_string(command: &str, name: Option<&str>, args: &[String]) -> ExitCode {
+pub(super) fn run_command_string(
+    command: &str,
+    name: Option<&str>,
+    args: &[String],
+    interactive: bool,
+) -> ExitCode {
     let lines = command.lines().map(|line| Ok(line.to_string()));
-    run(batch_engine(name, args), lines, None)
+    match batch_engine(name, args, interactive) {
+        Ok(engine) => run(engine, lines, None),
+        Err(status) => status,
+    }
 }
 
-pub(super) fn run_script(path: &str, args: &[String]) -> ExitCode {
-    match read_script(path) {
+pub(super) fn run_script(path: &str, args: &[String], interactive: bool) -> ExitCode {
+    match read_script(Path::new(path)) {
         Ok(content) => {
             let lines = content.lines().map(|line| Ok(line.to_string()));
-            run(batch_engine(Some(path), args), lines, Some(path))
+            match batch_engine(Some(path), args, interactive) {
+                Ok(engine) => run(engine, lines, Some(path)),
+                Err(status) => status,
+            }
         }
         Err(error) => {
             let _ = render::stderr_line(format_args!(
@@ -42,18 +54,26 @@ pub(super) fn run_script(path: &str, args: &[String]) -> ExitCode {
 }
 
 pub(super) fn run_stdin() -> ExitCode {
-    run(
-        batch_engine(None, &[]),
-        std::iter::from_fn(read_stdin_line),
-        None,
-    )
+    // An interactive shell reading a pipe goes through the interactive loop.
+    match batch_engine(None, &[], false) {
+        Ok(engine) => run(engine, std::iter::from_fn(read_stdin_line), None),
+        Err(status) => status,
+    }
 }
 
-fn batch_engine(name: Option<&str>, args: &[String]) -> ShellEngine {
+/// `Err` is the status of an rc file that ended the shell before its commands.
+fn batch_engine(
+    name: Option<&str>,
+    args: &[String],
+    interactive: bool,
+) -> Result<ShellEngine, ExitCode> {
     let mut engine = load_engine(&load_config());
+    if interactive && let Some(status) = startup::run_rc(&mut engine) {
+        return Err(status);
+    }
     engine.set_arguments(name, args);
     engine.enter_script();
-    engine
+    Ok(engine)
 }
 
 /// Stdin is locked for one line only: `read`, `rm` and the programs that a command
@@ -74,8 +94,15 @@ fn run(
     lines: impl Iterator<Item = io::Result<String>>,
     script: Option<&str>,
 ) -> ExitCode {
-    let failure = run_commands(&mut engine, lines, script);
-    let status = failure.unwrap_or_else(|| engine.exit_code());
+    let status = match run_commands(&mut engine, lines, script) {
+        End::Failed(status) => status,
+        End::Completed | End::Exited => engine.exit_code(),
+    };
+    finish(&mut engine, status)
+}
+
+/// Run the `EXIT` trap of a shell that ends with `status`.
+pub(super) fn finish(engine: &mut ShellEngine, status: u8) -> ExitCode {
     let trap = engine.finish();
     emit_result(&trap);
     // The trap changes the status of the shell only when it calls `exit`.
@@ -86,12 +113,20 @@ fn run(
     })
 }
 
-/// `Some` is the status of an input that could not be run to its end.
-fn run_commands(
+/// How running a list of commands ended.
+pub(super) enum End {
+    Completed,
+    /// A command asked the shell to exit.
+    Exited,
+    /// The input could not be run to its end; the status that says why.
+    Failed(u8),
+}
+
+pub(super) fn run_commands(
     engine: &mut ShellEngine,
     lines: impl Iterator<Item = io::Result<String>>,
     script: Option<&str>,
-) -> Option<u8> {
+) -> End {
     let mut assembler = CommandAssembler::default();
     let mut line_number = 0;
     for line in lines {
@@ -104,7 +139,7 @@ fn run_commands(
                     line_number,
                     &format!("cannot read the input: {error}"),
                 );
-                return Some(INPUT_ERROR);
+                return End::Failed(INPUT_ERROR);
             }
         };
         let Some(command) = assembler.push_line(&line) else {
@@ -113,7 +148,7 @@ fn run_commands(
         // As in POSIX shells, nothing runs after text that cannot be understood.
         if let Err(error) = check_syntax(&command) {
             report(script, line_number, &error);
-            return Some(SYNTAX_ERROR);
+            return End::Failed(SYNTAX_ERROR);
         }
         let mut result = engine.execute_line(&command);
         if let (Some(path), Some(error)) = (script, result.error.as_mut()) {
@@ -121,7 +156,7 @@ fn run_commands(
         }
         emit_result(&result);
         if result.status == ExecutionStatus::Exit {
-            return None;
+            return End::Exited;
         }
     }
     if assembler.is_unfinished() {
@@ -130,9 +165,9 @@ fn run_commands(
             line_number,
             "the input ends inside an unfinished command",
         );
-        return Some(SYNTAX_ERROR);
+        return End::Failed(SYNTAX_ERROR);
     }
-    None
+    End::Completed
 }
 
 fn report(script: Option<&str>, line_number: usize, error: &str) {
@@ -146,12 +181,13 @@ fn located(path: &str, line_number: usize, error: &str) -> String {
     format!("terminal_rust: {}:{line_number}: {error}", printable(path))
 }
 
-struct ScriptError {
+pub(super) struct ScriptError {
     status: u8,
-    reason: String,
+    pub(super) reason: String,
 }
 
-fn read_script(path: &str) -> Result<String, ScriptError> {
+/// The text of a file of commands: a regular text file of bounded size.
+pub(super) fn read_script(path: &Path) -> Result<String, ScriptError> {
     let cannot_run = |reason: String| ScriptError {
         status: CANNOT_RUN,
         reason,
@@ -164,7 +200,7 @@ fn read_script(path: &str) -> Result<String, ScriptError> {
         },
         reason: error.to_string(),
     };
-    let metadata = fs::metadata(Path::new(path)).map_err(unreadable)?;
+    let metadata = fs::metadata(path).map_err(unreadable)?;
     if metadata.is_dir() {
         return Err(cannot_run("is a directory".into()));
     }
