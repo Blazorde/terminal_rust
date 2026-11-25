@@ -129,8 +129,8 @@ expected behavior and the affected operating system.
 ## Platform support
 
 Windows, macOS and Linux are first-class targets in the architecture. The
-CI runs on Windows, Linux and macOS for every change. The macOS bundle and its
-PTY launch still require validation on Apple hardware.
+CI runs on Windows, Linux and macOS for every code change. The macOS bundle and
+its PTY launch still require validation on Apple hardware.
 
 ## Project status
 

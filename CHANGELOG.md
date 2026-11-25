@@ -17,6 +17,12 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 - Windows: a pattern after a path written with backslashes (`~/*.txt`, `$PWD/*.rs`) now expands, and a
   backslash in a `case` or `[[ ]]` pattern is a path separator, as ADR-0012 says for file name patterns.
 
+### Changed
+
+- CI caches compiled Cargo dependencies, cancels the superseded runs of a pull request (never those of
+  `main` or `develop`), runs formatting and Clippy before the long steps, reports every failing test in one
+  run, and skips the platform jobs when only documentation changed. The branch rule tests now run in CI.
+
 ## [1.12.0] - 2026-11-22
 
 ### Added
