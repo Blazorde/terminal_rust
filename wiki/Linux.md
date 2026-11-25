@@ -25,6 +25,9 @@ Only the first session uses these options. Tabs opened afterwards start a
 regular shell. A missing directory is ignored, and an invalid option is reported
 on stderr without preventing the window from opening.
 
+The shell of each session reads `~/.terminal_rust_rc`. The command-line binary
+also accepts `-c`, `-i` and `-l`; see [Starting the shell](Usage.md#starting-the-shell).
+
 ## Desktop entry
 
 The DEB package installs a desktop entry in the `TerminalEmulator` category, so

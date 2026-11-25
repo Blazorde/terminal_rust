@@ -114,6 +114,21 @@ impl ShellEngine {
         }
     }
 
+    /// Give `$0`, `$1`, ... to what the shell is about to run.
+    pub(crate) fn set_arguments(&mut self, name: Option<&str>, arguments: &[String]) {
+        self.state.set_arguments(name, arguments);
+    }
+
+    /// The lines that follow come from a script, not from someone typing.
+    pub(crate) fn enter_script(&mut self) {
+        self.state.enter_script();
+    }
+
+    /// What follows is typed again.
+    pub(crate) fn leave_script(&mut self) {
+        self.state.leave_script();
+    }
+
     /// The lines typed at the prompt, oldest first.
     pub(crate) fn history(&self) -> &[String] {
         self.state.history()
@@ -136,6 +151,19 @@ impl ShellEngine {
             return self.empty_result();
         }
         self.run_captured(|state| command::run_line(input, state))
+    }
+
+    /// Run the command given on the command line. If it is a program and `program` is
+    /// known, that file starts, whatever `PATH` says by then.
+    pub(crate) fn execute_launch_args(
+        &mut self,
+        args: &[String],
+        program: Option<PathBuf>,
+    ) -> ExecutionResult {
+        self.state.launch_program = args.first().cloned().zip(program);
+        let result = self.execute_args(args);
+        self.state.launch_program = None;
+        result
     }
 
     pub fn execute_args(&mut self, args: &[String]) -> ExecutionResult {

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::app::help;
 use crate::app::parser::{Stage, parse_args, split_chain, split_stages};
@@ -13,7 +13,7 @@ use crate::errors::command::CommandError;
 use crate::plugin::DeclarativeCommandRegistry;
 use crate::render;
 use crate::render::printable::printable_multiline;
-use crate::utils::shell_env;
+use crate::utils::{shell_env, stdin_line};
 
 mod aliases;
 mod arithmetic;
@@ -27,6 +27,8 @@ mod jobs;
 mod pipeline;
 mod scripts;
 mod substitution;
+
+pub(crate) use scripts::{CommandAssembler, MAX_SCRIPT_BYTES, check_syntax};
 
 /// The state a subshell restores when it ends.
 struct SubshellSnapshot {
@@ -48,6 +50,8 @@ pub struct ShellState {
     user_commands: user::UserCommandRegistry,
     startup_script: Option<String>,
     script_depth: usize,
+    /// `$0` when a script or `-c` names it.
+    script_name: Option<String>,
     variables: HashMap<String, String>,
     /// The arrays, `name=(a b c)`: `${name[1]}`, `${name[@]}` (ADR-0029).
     arrays: HashMap<String, Vec<String>>,
@@ -78,6 +82,8 @@ pub struct ShellState {
     options: ShellOptions,
     /// How many conditions (`if`, `while`, `!`) are running: `set -e` does not leave in them.
     errexit_guard: u32,
+    /// The name given on the command line and the file chosen for it at launch.
+    pub(crate) launch_program: Option<(String, PathBuf)>,
 }
 
 /// The options that `set` turns on and off.
@@ -104,6 +110,7 @@ impl ShellState {
             user_commands,
             startup_script,
             script_depth: 0,
+            script_name: None,
             variables: HashMap::new(),
             arrays: HashMap::new(),
             last_status: 0,
@@ -120,6 +127,7 @@ impl ShellState {
             exit_trap: None,
             options: ShellOptions::default(),
             errexit_guard: 0,
+            launch_program: None,
         }
     }
 
@@ -199,7 +207,10 @@ impl ShellState {
             "@" => {
                 return Some(positional.join(&crate::app::parser::PARAMETER_SEPARATOR.to_string()));
             }
-            "0" => return Some("terminal_rust".to_string()),
+            "0" => {
+                let name = self.script_name.as_deref().unwrap_or("terminal_rust");
+                return Some(name.to_string());
+            }
             digits if digits.bytes().all(|byte| byte.is_ascii_digit()) && !digits.is_empty() => {
                 return digits
                     .parse::<usize>()
@@ -1137,7 +1148,13 @@ fn execute_plugin_command(
         if let Some(reason) = state.plugin_commands.blocked_reason(name) {
             return CommandResult::Error(reason.to_string());
         }
-        return execute_external(name, invocation_args);
+        let launched = state.launch_program.as_ref();
+        let program = launched.filter(|(launched, _)| launched == name);
+        return execute_external(
+            name,
+            invocation_args,
+            program.map(|(_, path)| path.as_path()),
+        );
     };
     if !invocation_args.is_empty() {
         return CommandResult::Error(format!(
@@ -1148,8 +1165,12 @@ fn execute_plugin_command(
     map_prefixed_error(name, render::stdout(printable_multiline(&command.response)))
 }
 
-fn execute_external(name: &str, args: &[String]) -> CommandResult {
-    match external::run(name, args) {
+fn execute_external(name: &str, args: &[String], program: Option<&Path>) -> CommandResult {
+    let outcome = match program {
+        Some(program) => external::run_at(program, name, args),
+        None => external::run(name, args),
+    };
+    match outcome {
         Ok(()) => CommandResult::Continue,
         Err(external::RunError::NotFound) => {
             external::note_exit_code(external::COMMAND_NOT_FOUND);
@@ -1517,7 +1538,9 @@ fn run_read(args: &[String], state: &mut ShellState) -> CommandResult {
     {
         let _ = render::stderr(prompt);
     }
-    let line = read_command::next_line(&mut std::io::stdin().lock());
+    // Like any read error, a standard input that cannot be opened ends the input.
+    let mut stdin = stdin_line::reader().unwrap_or_else(|_| Box::new(std::io::empty()));
+    let line = read_command::next_line(&mut stdin);
     let values = match &line {
         Some(line) => read_command::split_fields(line, &request.names),
         None => request
@@ -2004,7 +2027,7 @@ fn run_kill(args: &[String], state: &mut ShellState) -> CommandResult {
             Ok(()) => CommandResult::Continue,
             Err(error) => CommandResult::Error(format!("kill: {error}")),
         },
-        _ => execute_external("kill", args),
+        _ => execute_external("kill", args, None),
     }
 }
 

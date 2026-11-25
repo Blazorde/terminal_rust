@@ -52,11 +52,20 @@ pub(crate) fn take_exit_code() -> Option<i32> {
 /// Run `name` with `args`, sharing the terminal streams, the environment and the
 /// current directory of the shell.
 pub fn run(name: &str, args: &[String]) -> Result<(), RunError> {
+    wait_for(command(name, args), name, args)
+}
+
+/// Like `run`, starting the file `program`; messages still say `name`.
+pub(crate) fn run_at(program: &Path, name: &str, args: &[String]) -> Result<(), RunError> {
+    wait_for(prepared(program.as_os_str(), args), name, args)
+}
+
+fn wait_for(command: Command, name: &str, args: &[String]) -> Result<(), RunError> {
     let text = std::iter::once(name)
         .chain(args.iter().map(String::as_str))
         .collect::<Vec<_>>()
         .join(" ");
-    let status = match job_control::run_foreground(command(name, args), &text)
+    let status = match job_control::run_foreground(command, &text)
         .map_err(|error| start_error(name, &error))?
     {
         Finished::Exited(status) => status,
@@ -79,7 +88,11 @@ pub fn run(name: &str, args: &[String]) -> Result<(), RunError> {
 /// `run` does, the exports are applied, and the output captured so far is
 /// written first so it stays ahead of what the program prints.
 pub(crate) fn command(name: &str, args: &[String]) -> Command {
-    let mut command = Command::new(resolve(name));
+    prepared(&resolve(name), args)
+}
+
+fn prepared(program: &OsStr, args: &[String]) -> Command {
+    let mut command = Command::new(program);
     shell_env::prepare_child(&mut command);
     command.args(args);
     command
@@ -96,25 +109,37 @@ pub(crate) fn start_error(name: &str, error: &io::Error) -> RunError {
 /// The program that `name` would start: the path as written when it has one,
 /// otherwise the first match in `PATH`. `None` when there is none.
 pub(crate) fn locate(name: &str) -> Option<PathBuf> {
+    search(name, |_| true)
+}
+
+/// Like `locate`, never answering with a relative path: the relative entries of `PATH`
+/// are skipped.
+pub(crate) fn locate_absolute(name: &str) -> Option<PathBuf> {
+    search(name, Path::is_absolute)
+}
+
+fn search(name: &str, accepts: fn(&Path) -> bool) -> Option<PathBuf> {
     let path = shell_env::value("PATH")
         .map(OsString::from)
         .unwrap_or_default();
     if name.contains(['/', '\\']) {
         let candidate = PathBuf::from(name);
-        return is_program(&candidate).then_some(candidate);
+        return (accepts(&candidate) && is_program(&candidate)).then_some(candidate);
     }
     #[cfg(windows)]
     {
         let pathext = shell_env::value("PATHEXT")
             .map(OsString::from)
             .unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
-        find_in_path(name, &path, &pathext, |candidate| candidate.is_file())
+        find_in_path(name, &path, &pathext, |candidate| {
+            accepts(candidate) && candidate.is_file()
+        })
     }
     #[cfg(not(windows))]
     {
         std::env::split_paths(&path)
             .map(|directory| directory.join(name))
-            .find(|candidate| is_program(candidate))
+            .find(|candidate| accepts(candidate) && is_program(candidate))
     }
 }
 

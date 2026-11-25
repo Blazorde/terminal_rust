@@ -7,10 +7,22 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- The shell can be started like other shells (ADR-0034): `-c 'string' [name args...]`, `terminal_rust file args...`
+  (also through `#!/usr/bin/env terminal_rust`), `-i`, `-l` / `--login` and `--`.
+- An interactive shell reads `~/.terminal_rust_rc`, the desktop app included.
+- On Unix, a login shell takes the environment of `/etc/profile` and `~/.profile`, run by `/bin/sh`.
 - Operators on the value of a variable (ADR-0030): `${f%.txt}`, `${path##*/}`, `${s/old/new}`, `${s//old/new}`,
   `${s:1:3}`, `${s: -3}`, `${s^^}`, `${s,,}`, and slices of arrays and parameters (`${arr[@]:1}`, `${@:2}`).
 - `let` and `(( expression ))` with assignments, `+=`, `++`, `--` and the comma; the status is `0` for a non-zero
   value and `1` otherwise (ADR-0033).
+
+### Changed
+
+- Piped input runs without a prompt and without the startup script; `-i` keeps both.
+- A first argument that is an existing file now runs as a script. A built-in or a program of an absolute
+  entry of `PATH`, written without a path, keeps priority over a file of the same name, and that program is
+  the one that runs even when a relative entry comes first. A path to a program
+  (`terminal_rust /usr/bin/ls`) is read as a script and gives status `126`.
 
 ### Fixed
 

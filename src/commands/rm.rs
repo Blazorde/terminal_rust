@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::errors::rm::RmError;
 use crate::render;
+use crate::utils::stdin_line;
 
 #[derive(Default)]
 struct RmOptions {
@@ -245,7 +246,7 @@ fn ask_confirmation(message: &str) -> io::Result<bool> {
     render::flush_captured();
 
     let mut answer = String::new();
-    io::stdin().read_line(&mut answer)?;
+    stdin_line::read_line(&mut answer)?;
 
     Ok(matches!(answer.trim(), "y" | "Y" | "yes" | "YES"))
 }

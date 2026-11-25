@@ -121,6 +121,7 @@ fn run_interactive(current_dir: &Path, input: &str) -> Output {
 
 fn run_interactive_with_env(current_dir: &Path, input: &str, config_path: Option<&Path>) -> Output {
     let mut child = shell_command()
+        .arg("-i")
         .current_dir(current_dir)
         .env("USER", "terminal-rust-test")
         .env("USERNAME", "terminal-rust-test")
@@ -1074,6 +1075,7 @@ fn run_interactive_with_timeout(
     limit: std::time::Duration,
 ) -> Option<Output> {
     let mut child = shell_command()
+        .arg("-i")
         .current_dir(current_dir)
         .env("USER", "terminal-rust-test")
         .stdin(Stdio::piped())
@@ -2282,6 +2284,7 @@ fn ctrl_c_stops_a_loop_and_the_shell_carries_on() {
     use std::io::Read;
     let directory = TestDirectory::new("flow interrupt");
     let mut child = shell_command()
+        .arg("-i")
         .current_dir(directory.path())
         .env("USER", "terminal-rust-test")
         .stdin(Stdio::piped())
@@ -2768,6 +2771,7 @@ fn shell_lines_with_env(
     lines: &[&str],
 ) -> (String, String) {
     let mut child = shell_command()
+        .arg("-i")
         .current_dir(directory)
         .env("USER", "terminal-rust-test")
         .env("USERNAME", "terminal-rust-test")

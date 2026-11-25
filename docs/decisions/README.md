@@ -38,6 +38,7 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0029](0029-arrays.md) | Accepted | Indexed arrays |
 | [0030](0030-parameter-operators.md) | Accepted | Operators on the value of a parameter |
 | [0030](0030-parameter-operators.md) | Accepted | Operators on the value of a parameter |
+| [0034](0034-shell-launch-and-startup-files.md) | Accepted | How the shell is launched and which files it reads |
 
 ## Lifecycle
 

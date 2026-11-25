@@ -517,13 +517,73 @@ inside quotes, after a backslash or `$`, at the end of a line and before a blank
 only apply when you type at the prompt: scripts and piped input never expand
 them. `!!:1`, `^a^b`, `!?text?` and `history -c` are not available.
 
+## Starting the shell
+
+| Command | Effect |
+| --- | --- |
+| `terminal_rust` | Interactive shell, or the commands of standard input when it is not a terminal |
+| `terminal_rust -c 'STRING' [NAME [ARGS...]]` | Run `STRING`; `NAME` is `$0`, then `$1`, `$2`, ... |
+| `terminal_rust FILE [ARGS...]` | Run a script with its arguments |
+| `terminal_rust COMMAND [ARGS...]` | Run one command |
+| `-i` | Interactive: prompt on piped input, and the rc file is read |
+| `-l`, `--login` | Login shell (Unix) |
+| `--` | End of the options |
+
+The first word after the options, with or without `--`, is read in this order:
+
+1. a built-in command or a program of `PATH`, written without a `/` (or `\` on
+   Windows), runs as one command, even when a file here has the same name;
+2. an existing file is a script;
+3. a word with a `/` (or `\` on Windows), or ending in `.sh` or `.trs`, is a script
+   that is missing;
+4. anything else runs as one command.
+
+To run a file that is named like a command, write its path: `terminal_rust ./git`.
+A missing script gives the status `127`, and one that cannot be run gives `126`.
+
+A script can start with `#!/usr/bin/env terminal_rust` when `terminal_rust` is on
+`PATH`. Unlike `source`, a script, `-c` and piped input go on after a command that
+fails; `set -e` stops at the first one. A syntax error stops them with status `2`.
+In a script, a line cannot end on `&&`, `||`, `|` or `\` (continue a line with a
+backtick), and a quoted string stays on one line.
+
+Custom commands, plugin commands and functions are not looked at here. Only the
+absolute entries of `PATH` are searched, and the program found there is the one that
+runs, even when a relative entry (`.`, empty, `bin`) comes first. A file whose name
+is reached only through a relative entry runs as a script. In a directory you do not
+trust, use `-c`.
+
+```text
+terminal_rust -c 'echo "$0: $# arguments"' demo one two
+terminal_rust ./deploy.sh production
+echo "echo hello" | terminal_rust
+```
+
+### Startup files
+
+An interactive shell, the desktop app included, runs `~/.terminal_rust_rc` before
+its first prompt. Put aliases, functions, variables and `PATH` changes there. An
+error names the file and the line, and does not prevent reaching the prompt.
+
+```text
+alias ll="ls -l"
+export EDITOR=nano
+```
+
+On Unix, a login shell (`-l`, or a program name starting with `-`) first takes the
+environment set by `/etc/profile` and `~/.profile`. `/bin/sh` runs those two files,
+so they keep their usual syntax. Only exported variables are taken: aliases,
+functions, `umask` and `ulimit` are not, and `~/.bash_profile` is not read. On
+Windows `-l` has no effect.
+
 ## Running a file and reading input
 
 `source file` (or `. file`) runs the commands of a file in the current shell, so
 the variables and the directory it sets stay afterwards. Unlike `script run`, the
 file can have any name. It runs line by line like a script (blocks over several
 lines, `#` comments), stops at the first error and names the file and the line.
-Arguments for the file (`$1`) are not supported.
+Words after the file name are its `$1`, `$2`, ... while it runs; with none, the file
+sees no argument.
 
 ```text
 source ~/.config/project/env.sh
@@ -558,7 +618,7 @@ echo done
 
 Each line runs on its own, so a line that fails is reported and the next lines
 still run. To stop at the first failure, join the commands with `&&` on one
-line (`make && echo done`), or put them in a script, which stops at the first
+line (`make && echo done`), or run them with `source`, which stops at the first
 failing command.
 
 ## Paths containing spaces
