@@ -35,7 +35,7 @@ pub(super) fn finish(mut candidates: Vec<Pair>) -> Vec<Pair> {
 /// `\` is a path separator and stays.
 pub(super) fn without_dangling_escape(text: &str) -> &str {
     let escapes = text.len() - text.trim_end_matches('\\').len();
-    if cfg!(windows) || escapes % 2 == 0 {
+    if cfg!(windows) || escapes.is_multiple_of(2) {
         text
     } else {
         &text[..text.len() - 1]
