@@ -7,6 +7,7 @@ use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+use super::matching::Case;
 use crate::utils::shell_env;
 
 /// How long the list of programs found in `PATH` is reused. Reading every
@@ -28,7 +29,7 @@ pub(super) struct Programs {
 impl Programs {
     /// The programs of `PATH` that start with `prefix`, from a cache that is
     /// rebuilt when `PATH` changes or after a few seconds.
-    pub(super) fn starting_with(&self, prefix: &str) -> Vec<String> {
+    pub(super) fn starting_with(&self, prefix: &str, case: Case) -> Vec<String> {
         let path = shell_env::value("PATH")
             .map(OsString::from)
             .unwrap_or_default();
@@ -50,7 +51,7 @@ impl Programs {
                 cached
                     .names
                     .iter()
-                    .filter(|name| name.starts_with(prefix))
+                    .filter(|name| case.starts_with(name, prefix))
                     .cloned()
                     .collect()
             })

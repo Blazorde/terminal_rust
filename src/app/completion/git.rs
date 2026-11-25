@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 
 use rustyline::completion::Pair;
 
+use super::matching::Case;
+use super::quoting::quoted;
+
 /// The everyday subcommands, offered after `git `.
 const SUBCOMMANDS: [&str; 41] = [
     "add",
@@ -82,7 +85,12 @@ const MAX_REFERENCES: usize = 5_000;
 ///
 /// `words` are those of the command before the word, `word` the word itself, and
 /// `directory` where the repository is looked for.
-pub(super) fn complete(words: &[&str], word: &str, directory: &Path) -> Option<Vec<Pair>> {
+pub(super) fn complete(
+    words: &[&str],
+    word: &str,
+    directory: &Path,
+    case: Case,
+) -> Option<Vec<Pair>> {
     if words.first() != Some(&"git") || word.starts_with('-') {
         return None;
     }
@@ -91,7 +99,7 @@ pub(super) fn complete(words: &[&str], word: &str, directory: &Path) -> Option<V
     if words.len() == 1 {
         let matches: Vec<Pair> = SUBCOMMANDS
             .iter()
-            .filter(|name| name.starts_with(word))
+            .filter(|name| case.starts_with(name, word))
             .map(|name| Pair {
                 display: (*name).to_string(),
                 replacement: format!("{name} "),
@@ -108,10 +116,13 @@ pub(super) fn complete(words: &[&str], word: &str, directory: &Path) -> Option<V
     }
     let matches: Vec<Pair> = references(directory)
         .into_iter()
-        .filter(|name| name.starts_with(word))
-        .map(|name| Pair {
-            display: name.clone(),
-            replacement: format!("{name} "),
+        .filter(|name| case.starts_with(name, word))
+        .filter_map(|name| {
+            let written = quoted(&name, None, cfg!(windows))?;
+            Some(Pair {
+                replacement: format!("{written} "),
+                display: name,
+            })
         })
         .collect();
     (!matches.is_empty()).then_some(matches)
@@ -213,7 +224,7 @@ mod tests {
     /// Complete `word` typed after `before_word`.
     fn complete(before_word: &str, word: &str, directory: &Path) -> Option<Vec<Pair>> {
         let at = crate::app::completion::line::analyze(before_word);
-        super::complete(&at.command, word, directory)
+        super::complete(&at.command, word, directory, Case::Exact)
     }
 
     fn displays(pairs: Option<Vec<Pair>>) -> Vec<String> {
