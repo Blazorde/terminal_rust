@@ -156,17 +156,6 @@ fn path_completion_preserves_quotes_spaces_and_native_separators() {
 }
 
 #[test]
-fn a_word_starts_after_a_multi_byte_whitespace() {
-    // U+00A0 (no-break space) and U+3000 (ideographic space) take 2 and 3 bytes.
-    assert_eq!(word_start("ls\u{a0}"), "ls\u{a0}".len());
-    assert_eq!(word_start("ls\u{3000}fi"), "ls\u{3000}".len());
-    assert_eq!(word_start("ls  fi"), 4);
-    assert_eq!(word_start("ls"), 0);
-    assert_eq!(word_start(""), 0);
-    assert_eq!(word_start("\u{e9}cho x"), "\u{e9}cho ".len());
-}
-
-#[test]
 fn a_cursor_inside_a_character_is_moved_back_to_its_start() {
     let text = "caf\u{e9}";
 
@@ -231,19 +220,6 @@ fn helper_with_programs(commands: &[&str], programs: &[&str]) -> ShellHelper {
         names: programs.iter().map(|p| p.to_string()).collect(),
     });
     helper
-}
-
-#[test]
-fn a_command_position_follows_every_separator() {
-    assert!(is_command_position("", 0));
-    assert!(is_command_position("   ", 3));
-    assert!(is_command_position("ls | ", 5));
-    assert!(is_command_position("a;", 2));
-    assert!(is_command_position("a && ", 5));
-    assert!(is_command_position("a || ", 5));
-    assert!(is_command_position("a|", 2));
-    assert!(!is_command_position("ls ", 3));
-    assert!(!is_command_position("echo a | cat x ", 15));
 }
 
 #[test]

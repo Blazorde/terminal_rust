@@ -80,14 +80,9 @@ const MAX_REFERENCES: usize = 5_000;
 /// Candidates for the word being typed, when the line is a `git` command and
 /// there is something to offer. `None` leaves the completion to the file names.
 ///
-/// `before_word` is the text before the word, `word` the word itself, and
+/// `words` are those of the command before the word, `word` the word itself, and
 /// `directory` where the repository is looked for.
-pub fn complete(before_word: &str, word: &str, directory: &Path) -> Option<Vec<Pair>> {
-    let segment = before_word
-        .rsplit([';', '|', '&'])
-        .next()
-        .unwrap_or(before_word);
-    let words: Vec<&str> = segment.split_whitespace().collect();
+pub(super) fn complete(words: &[&str], word: &str, directory: &Path) -> Option<Vec<Pair>> {
     if words.first() != Some(&"git") || word.starts_with('-') {
         return None;
     }
@@ -214,6 +209,12 @@ fn locate(directory: &Path) -> Option<PathBuf> {
 mod tests {
     use super::*;
     use crate::utils::path::temp_path;
+
+    /// Complete `word` typed after `before_word`.
+    fn complete(before_word: &str, word: &str, directory: &Path) -> Option<Vec<Pair>> {
+        let at = crate::app::completion::line::analyze(before_word);
+        super::complete(&at.command, word, directory)
+    }
 
     fn displays(pairs: Option<Vec<Pair>>) -> Vec<String> {
         pairs

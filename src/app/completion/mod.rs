@@ -1,6 +1,7 @@
 //! `Tab` completion and history hints of the line editor.
 
 mod git;
+mod line;
 mod listing;
 mod programs;
 #[cfg(test)]
@@ -53,9 +54,8 @@ impl ShellHelper {
         pos: usize,
         context: &Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Pair>)> {
-        let before_cursor = &line[..pos];
-        let command_start = word_start(before_cursor);
-        let current_word = &before_cursor[command_start..];
+        let at = line::analyze(&line[..pos]);
+        let (command_start, current_word) = (at.start, at.word);
 
         if let Some((offset, prefix, braced)) = variable_reference(current_word) {
             let names: Vec<String> = shell_env::vars()
@@ -70,7 +70,7 @@ impl ShellHelper {
 
         let looks_like_a_path =
             current_word.contains(['/', '\\']) || current_word.starts_with(['.', '~']);
-        if is_command_position(before_cursor, command_start) && !looks_like_a_path {
+        if at.command_position && !looks_like_a_path {
             let mut candidates = command_completions(&self.command_names, current_word);
             // Without a prefix every program of `PATH` would be listed.
             if !current_word.is_empty() {
@@ -88,8 +88,7 @@ impl ShellHelper {
 
         // `git ch<Tab>` and `git checkout fe<Tab>`: subcommands and references.
         if let Ok(directory) = std::env::current_dir()
-            && let Some(candidates) =
-                git::complete(&before_cursor[..command_start], current_word, &directory)
+            && let Some(candidates) = git::complete(&at.command, current_word, &directory)
         {
             return Ok((command_start, candidates));
         }
@@ -112,13 +111,6 @@ impl ShellHelper {
         }
         self.programs.starting_with(prefix)
     }
-}
-
-/// Whether the word that starts at `word_start` is where a command goes: at the
-/// start of the line, or after `;`, `|` or `&` (so after `&&` and `||` too).
-fn is_command_position(before_cursor: &str, word_start: usize) -> bool {
-    let before_word = before_cursor[..word_start].trim_end();
-    before_word.is_empty() || before_word.ends_with([';', '|', '&'])
 }
 
 impl Completer for ShellHelper {
@@ -151,16 +143,6 @@ fn floor_char_boundary(text: &str, pos: usize) -> usize {
         index -= 1;
     }
     index
-}
-
-/// Byte index where the last word of `text` starts. A whitespace character can
-/// take several bytes (a no-break space takes two), so its width is used rather
-/// than assuming one.
-fn word_start(text: &str) -> usize {
-    text.char_indices()
-        .rev()
-        .find(|(_, character)| character.is_whitespace())
-        .map_or(0, |(index, character)| index + character.len_utf8())
 }
 
 fn command_completions(command_names: &[String], prefix: &str) -> Vec<Pair> {
