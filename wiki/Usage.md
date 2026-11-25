@@ -529,10 +529,17 @@ them. `!!:1`, `^a^b`, `!?text?` and `history -c` are not available.
 | `-l`, `--login` | Login shell (Unix) |
 | `--` | End of the options |
 
-The first word after the options is a script when a file has that name, even if a
-command has it too. A word with a `/` (or `\` on Windows), or ending in `.sh` or
-`.trs`, is also taken as a script. Anything else runs as one command. A missing
-script gives the status `127`, and one that cannot be run gives `126`.
+The first word after the options, with or without `--`, is read in this order:
+
+1. a built-in command or a program of `PATH`, written without a `/` (or `\` on
+   Windows), runs as one command, even when a file here has the same name;
+2. an existing file is a script;
+3. a word with a `/` (or `\` on Windows), or ending in `.sh` or `.trs`, is a script
+   that is missing;
+4. anything else runs as one command.
+
+To run a file that is named like a command, write its path: `terminal_rust ./git`.
+A missing script gives the status `127`, and one that cannot be run gives `126`.
 
 A script can start with `#!/usr/bin/env terminal_rust` when `terminal_rust` is on
 `PATH`. Unlike `source`, a script, `-c` and piped input go on after a command that
@@ -540,8 +547,9 @@ fails; `set -e` stops at the first one. A syntax error stops them with status `2
 In a script, a line cannot end on `&&`, `||`, `|` or `\` (continue a line with a
 backtick), and a quoted string stays on one line.
 
-Because an existing file wins over a command of the same name, do not use the
-one-command form in a directory you do not trust; use `-c` there.
+Custom commands, plugin commands and functions are not looked at here, and neither
+is a program reached only through a relative entry of `PATH`: a file with that name
+runs as a script. In a directory you do not trust, use `-c`.
 
 ```text
 terminal_rust -c 'echo "$0: $# arguments"' demo one two

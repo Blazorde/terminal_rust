@@ -19,8 +19,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 ### Changed
 
 - Piped input runs without a prompt and without the startup script; `-i` keeps both.
-- A first argument that is an existing file now runs as a script, even when a command has that name. A path
-  to a program (`terminal_rust /usr/bin/ls`) is read as a script and gives status `126`.
+- A first argument that is an existing file now runs as a script. A built-in or a program of `PATH` written
+  without a path keeps priority over a file of the same name. A path to a program
+  (`terminal_rust /usr/bin/ls`) is read as a script and gives status `126`.
 
 ### Fixed
 

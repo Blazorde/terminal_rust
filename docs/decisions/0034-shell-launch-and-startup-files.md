@@ -20,11 +20,17 @@ read (`if [ -d … ]; then`, `.`, `case` forms, parameter forms).
    `argv[0]` that starts with `-` also means a login shell. An unknown option is not an option: it is the
    first operand, as before. There is no `--help` or `--version`.
 2. With `-c`, the first operand is the command string, the next one is `$0` and the others are `$1`, `$2`, …
-3. Without `-c`, the first operand decides, in this order:
-   1. an existing file is a script, even when a command has the same name;
-   2. otherwise, an operand that contains `/` (or `\` on Windows) or ends with `.sh` or `.trs` is a script
-      that cannot be run;
-   3. otherwise the operands are one command, as before (`terminal_rust ls`).
+3. Without `-c`, the first operand decides, in this order, with or without `--`:
+   1. an operand without `/` (or `\` on Windows) that names a built-in or a program of `PATH` makes the
+      operands one command, even when a file of the current directory has that name;
+   2. otherwise, an existing file is a script;
+   3. otherwise, an operand that contains a separator or ends with `.sh` or `.trs` is a script that cannot
+      be run;
+   4. otherwise the operands are one command, as before.
+
+   `PATH` is the one of the process after the login profiles. A match through a relative entry of `PATH`
+   (empty, `.`, `bin`) does not count: a `#!` script reached that way receives its bare name and would start
+   itself without end.
 4. A missing script gives status `127`. A directory, a file that cannot be read, a file that is not text
    or one larger than 1 MiB gives `126`. A usage error gives `2`.
 
@@ -65,6 +71,8 @@ warning is shown and the environment stays as it was.
   and a profile that fails would take the session with it. Rejected.
 - For operands, require a path (`./name`) before treating a file as a script: `terminal_rust deploy.sh`
   and `terminal_rust build` would not work as with other shells. Rejected.
+- Let an existing file win over a command, as `bash file` does: `terminal_rust git status` in a cloned
+  repository that holds a file named `git` would run that file. Rejected.
 
 ## Consequences
 
@@ -76,8 +84,9 @@ warning is shown and the environment stays as it was.
 ### Negative
 
 - Piped input no longer prints a prompt (`-i` restores it).
-- A file in the current directory named like a command wins over the command. In a directory someone else
-  filled (a cloned repository), `terminal_rust ls` or `terminal_rust git status` runs that file.
+- A script named like a command has to be given as a path (`terminal_rust ./test`).
+- Custom commands, plugin commands, functions and `PATH` changes of the rc file (`-i`) are known only once
+  the engine is loaded, after this choice: a file with such a name runs as a script.
 - A path to a program (`terminal_rust /usr/bin/ls`) is read as a script and gives `126`.
 - From the profiles, `umask`, `ulimit`, `cd`, aliases, functions, plain variables and removed variables are
   not taken. `~/.bash_profile` and `~/.bash_login` are not read.

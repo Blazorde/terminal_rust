@@ -198,15 +198,96 @@ fn a_missing_script_is_127_and_one_that_cannot_run_is_126() {
     assert_script_rejected(&sandbox, "zero.trs/below", 126);
 }
 
+/// A directory holding the shell under the name `name`, to stand for an installed program.
+fn installed_program(sandbox: &Sandbox, name: &str) -> std::path::PathBuf {
+    let directory = sandbox.home().join("programs");
+    std::fs::create_dir_all(&directory).expect("the program directory should be created");
+    let program = directory.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+    // A link where possible: a file just written can be refused as busy.
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(common::BINARY, program).expect("the program should be linked");
+    #[cfg(not(unix))]
+    std::fs::copy(common::BINARY, program).expect("the program should be copied");
+    directory
+}
+
 #[test]
-fn an_operand_is_a_command_unless_a_file_has_its_name() {
-    let sandbox = Sandbox::new("launch operand");
+fn a_built_in_wins_over_a_file_of_its_name() {
+    let sandbox = Sandbox::new("launch built-in");
+    assert_run(&sandbox.run(&["file-or-command"]), 127, "");
+    sandbox.write("file-or-command", "echo from the file\n");
+    assert_run(&sandbox.run(&["file-or-command"]), 0, "from the file\n");
 
-    assert_run(&sandbox.run(&["echo", "hi"]), 0, "hi\n");
-    assert_run(&sandbox.run(&["--", "echo", "hi"]), 0, "hi\n");
+    let file = sandbox.write("echo", "echo from the file $1\n");
+    // With nothing to search, only the built-in can answer.
+    let run = |args: &[&str]| {
+        let mut command = sandbox.shell();
+        command.args(args).env("PATH", sandbox.home());
+        common::finish(command, b"")
+    };
+    assert_run(&run(&["echo", "hi"]), 0, "hi\n");
+    assert_run(&run(&["--", "echo", "hi"]), 0, "hi\n");
 
-    sandbox.write("echo", "echo from the file $1\n");
-    assert_run(&sandbox.run(&["echo", "hi"]), 0, "from the file hi\n");
+    let local = format!(".{}echo", std::path::MAIN_SEPARATOR);
+    let absolute = file.to_str().expect("the sandbox path should be text");
+    for path in [local.as_str(), absolute] {
+        assert_run(&sandbox.run(&[path, "hi"]), 0, "from the file hi\n");
+    }
+}
+
+#[test]
+fn a_program_of_the_search_path_wins_over_a_file_of_its_name() {
+    let sandbox = Sandbox::new("launch program");
+    let programs = installed_program(&sandbox, "git");
+    sandbox.write("git", "echo from the file\n");
+    let run = |args: &[&str]| {
+        let mut command = sandbox.shell();
+        command.args(args).env("PATH", &programs);
+        common::finish(command, b"")
+    };
+    let local = format!(".{}git", std::path::MAIN_SEPARATOR);
+
+    assert_run(&run(&["git", "echo", "installed"]), 0, "installed\n");
+    assert_run(&run(&["--", "git", "echo", "installed"]), 0, "installed\n");
+    assert_run(&run(&[&local]), 0, "from the file\n");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_login_shell_searches_the_path_of_its_profile() {
+    let sandbox = Sandbox::new("launch login program");
+    let programs = installed_program(&sandbox, "installed-by-profile");
+    std::fs::write(
+        sandbox.home().join(".profile"),
+        format!("PATH=\"{}:$PATH\"\nexport PATH\n", programs.display()),
+    )
+    .expect("the profile should be written");
+    sandbox.write("installed-by-profile", "echo from the file\n");
+
+    assert_run(
+        &sandbox.run(&["-l", "installed-by-profile", "echo", "installed"]),
+        0,
+        "installed\n",
+    );
+}
+
+// Otherwise a `#!` script reached through an empty entry would start itself again.
+#[cfg(unix)]
+#[test]
+fn a_program_found_through_a_relative_entry_does_not_count() {
+    use std::os::unix::fs::PermissionsExt;
+    let sandbox = Sandbox::new("launch relative entry");
+    let tool = sandbox.write("tool", "#!/usr/bin/false\necho read as a script\n");
+    std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755))
+        .expect("the script should be made executable");
+
+    for path in [":/usr/bin", ".:/usr/bin"] {
+        let mut command = sandbox.shell();
+        command.arg("tool").env("PATH", path);
+        let output = common::finish(command, b"");
+
+        assert_run(&output, 0, "read as a script\n");
+    }
 }
 
 #[test]

@@ -9,10 +9,10 @@ use rustyline::history::DefaultHistory;
 use rustyline::{Cmd, ColorMode, CompletionType, Config, Editor, KeyEvent};
 
 use crate::app::batch;
-use crate::app::command::input_is_incomplete;
+use crate::app::command::{command_names, input_is_incomplete};
 use crate::app::completion::ShellHelper;
 use crate::app::history;
-use crate::app::launch::{self, Action, Invocation, UsageError};
+use crate::app::launch::{self, Action, Invocation, Target, UsageError};
 use crate::app::parser::{continuation_prefix, normalize_multiline_input};
 use crate::app::prompt::{GUI_PROMPT_ENV, Prompt};
 use crate::app::startup;
@@ -52,7 +52,12 @@ pub fn run() -> ExitCode {
             name,
             args,
         } => batch::run_command_string(&command, name.as_deref(), &args, interactive),
-        Action::Script { path, args } => batch::run_script(&path, &args, interactive),
+        Action::Operands(operands) => {
+            match launch::target(operands, is_command, |path| Path::new(path).is_file()) {
+                Target::Script { path, args } => batch::run_script(&path, &args, interactive),
+                Target::Command(args) => run_once(&args, interactive),
+            }
+        }
         Action::OneLine(args) => run_once(&args, interactive),
     }
 }
@@ -64,7 +69,14 @@ fn read_invocation() -> Result<Invocation, UsageError> {
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
     let arguments = launch::decode(arguments)?;
-    launch::parse(&argv0, &arguments, |path| Path::new(path).is_file())
+    launch::parse(&argv0, &arguments)
+}
+
+/// A built-in, or a program of the search path. A match through a relative entry of the
+/// path does not count: a `#!` script found that way would start itself without end.
+fn is_command(name: &str) -> bool {
+    command_names().any(|built_in| built_in == name)
+        || external::locate(name).is_some_and(|program| program.has_root())
 }
 
 fn read_editor_command<P: rustyline::Prompt + ?Sized>(
