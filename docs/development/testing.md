@@ -65,8 +65,8 @@ before publishing a release.
 `scripts/ci-local.sh` replays the whole Linux gate, with the Security checks, in
 the pinned validation image and prints one `PASS` or `FAIL` line per step. It
 exits with a non-zero status when a step fails and shows the last lines of the
-failing log. It also runs the tests of the workflow rules
-(`node --test scripts/check-branch-policy.test.mjs scripts/ci-scope.test.mjs`):
+failing log. One of those steps is the test of the workflow rules
+(`node --test scripts/check-branch-policy.test.mjs scripts/ci-scope.test.mjs`).
 
 ```bash
 scripts/ci-local.sh            # every step, including cargo-deny
