@@ -56,46 +56,6 @@ fn wait_for_prompt_frame(
     );
 }
 
-/// Wait until the prompt that follows `marker` has been drawn.
-///
-/// Every keystroke redraws the prompt, so counting prompt frames cannot tell
-/// that a command has finished. The line editor also discards input typed
-/// before it starts reading again, hence the short settling delay.
-fn wait_for_prompt_after(
-    receiver: &Receiver<Vec<u8>>,
-    output: &mut Vec<u8>,
-    marker: &str,
-    writer: &mut dyn Write,
-    cursor_answered: &mut bool,
-) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while Instant::now() < deadline {
-        if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
-            output.extend(chunk);
-        }
-        if cfg!(windows) && !*cursor_answered && output.windows(4).any(|bytes| bytes == b"\x1b[6n")
-        {
-            writer
-                .write_all(b"\x1b[1;1R")
-                .and_then(|()| writer.flush())
-                .expect("headless PTY should answer the cursor position query");
-            *cursor_answered = true;
-        }
-        let text = String::from_utf8_lossy(output);
-        if text
-            .rfind(marker)
-            .is_some_and(|index| text[index + marker.len()..].contains("]777;"))
-        {
-            thread::sleep(Duration::from_millis(150));
-            return;
-        }
-    }
-    panic!(
-        "desktop shell did not draw a prompt after {marker:?}: {}",
-        String::from_utf8_lossy(output)
-    );
-}
-
 fn wait_for_output(
     receiver: &Receiver<Vec<u8>>,
     output: &mut Vec<u8>,
@@ -457,37 +417,28 @@ fn interactive_pty_keeps_history_directory_changes_and_long_line_edits() {
         &mut cursor_answered,
     );
 
+    // The long line writes to a file: the screen cannot show that it ran, as
+    // ConPTY may forward the next prompt frame before it paints earlier text.
     let body = "a".repeat(110);
-    let expected = format!("{}Xa", "a".repeat(109));
-    let mut long_command = format!("echo {body}").into_bytes();
+    let expected = format!("{}Xa\n", "a".repeat(109));
+    let mut long_command = format!("echo > long.txt {body}").into_bytes();
     long_command.extend_from_slice(b"\x1b[DX\r");
     writer
         .write_all(&long_command)
         .and_then(|()| writer.flush())
         .expect("long edited command should reach the PTY");
-    wait_for_output_occurrences(
-        &receiver,
-        &mut output,
-        &expected,
-        1,
-        writer.as_mut(),
-        &mut cursor_answered,
-    );
-
-    // On Unix the command output starts a line, whereas the line being edited
-    // is prefixed by "echo ", so the text alone is not proof that it has run.
-    let output_marker = if cfg!(windows) {
-        expected.clone()
-    } else {
-        format!("\n{expected}")
-    };
-    wait_for_prompt_after(
-        &receiver,
-        &mut output,
-        &output_marker,
-        writer.as_mut(),
-        &mut cursor_answered,
-    );
+    let written = target.join("long.txt");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while fs::read_to_string(&written).ok().as_ref() != Some(&expected) {
+        assert!(
+            Instant::now() < deadline,
+            "the edited long line did not run: {}",
+            String::from_utf8_lossy(&output)
+        );
+        if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
+            output.extend(chunk);
+        }
+    }
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut next_exit = Instant::now();
     let status = loop {

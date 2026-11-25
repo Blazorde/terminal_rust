@@ -3,7 +3,8 @@ use sysinfo::System;
 use crate::{commands::dashboard::format_duration, render};
 
 pub fn uptime() -> std::io::Result<()> {
-    let uptime = System::uptime();
+    let uptime = System::uptime()
+        .map_err(|error| std::io::Error::other(format!("cannot read the uptime: {error}")))?;
     render::stdout_line(format_duration(uptime).to_string())
 }
 

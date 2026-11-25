@@ -2,7 +2,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use jiff::Zoned;
+use jiff::ZonedDateTime;
 
 use crate::commands::hostname;
 use crate::core::ExecutionStatus;
@@ -35,7 +35,7 @@ impl PromptContext {
             git,
             status,
             duration,
-            time: Zoned::now().strftime("%H:%M").to_string(),
+            time: ZonedDateTime::now().strftime("%H:%M").to_string(),
         }
     }
 }

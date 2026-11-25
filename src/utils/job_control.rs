@@ -27,6 +27,10 @@ pub(crate) const STOPPED_STATUS: i32 = 148;
 /// What a job that comes back to the foreground needs.
 pub(crate) struct Resume<'a> {
     /// How the program left the terminal, put back first.
+    #[cfg_attr(
+        not(unix),
+        expect(dead_code, reason = "only Unix has terminal modes to put back")
+    )]
     pub(crate) modes: Option<&'a Modes>,
 }
 
@@ -44,6 +48,10 @@ pub(crate) enum Waited {
     /// Every program is over, with its status, in the order of the group.
     Done(Vec<ExitStatus>),
     /// The group was stopped: it can be continued.
+    #[cfg_attr(
+        not(unix),
+        expect(dead_code, reason = "only Unix job control can stop a group")
+    )]
     Stopped(Stopped),
 }
 
@@ -342,7 +350,7 @@ mod other {
     use std::os::windows::process::ExitStatusExt;
     use std::process::{Child, Command, ExitStatus};
 
-    use super::{Modes, Resume, Waited};
+    use super::{Resume, Waited};
 
     pub(crate) fn init() -> bool {
         false

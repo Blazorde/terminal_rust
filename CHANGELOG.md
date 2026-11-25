@@ -10,6 +10,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 - Operators on the value of a variable (ADR-0030): `${f%.txt}`, `${path##*/}`, `${s/old/new}`, `${s//old/new}`,
   `${s:1:3}`, `${s: -3}`, `${s^^}`, `${s,,}`, and slices of arrays and parameters (`${arr[@]:1}`, `${@:2}`).
 
+### Fixed
+
+- Windows: a pattern after a path written with backslashes (`~/*.txt`, `$PWD/*.rs`) now expands, and a
+  backslash in a `case` or `[[ ]]` pattern is a path separator, as ADR-0012 says for file name patterns.
+
 ## [1.12.0] - 2026-11-22
 
 ### Added

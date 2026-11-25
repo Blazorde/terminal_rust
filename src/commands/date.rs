@@ -1,6 +1,6 @@
 use std::io;
 
-use jiff::Zoned;
+use jiff::ZonedDateTime;
 
 use crate::render;
 
@@ -11,7 +11,7 @@ pub fn date(args: &[String]) -> io::Result<()> {
         .map(|arg| &arg[1..])
         .unwrap_or("%a %b %e %T %Z %Y");
 
-    let date = Zoned::now().strftime(format).to_string();
+    let date = ZonedDateTime::now().strftime(format).to_string();
     render::stdout_line(date)
 }
 

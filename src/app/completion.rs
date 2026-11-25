@@ -710,6 +710,7 @@ mod tests {
         assert_eq!(names, ["TRS_COMPLETE_ME"]);
     }
 
+    #[cfg(unix)]
     fn program_directory(name: &str) -> std::path::PathBuf {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)

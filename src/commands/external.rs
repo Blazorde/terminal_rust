@@ -142,6 +142,7 @@ static INTERRUPTED: AtomicBool = AtomicBool::new(false);
 
 /// Record that the user asked to stop, when the interrupt went to a program and not to
 /// the shell (a foreground program has the terminal to itself under job control).
+#[cfg(unix)]
 pub(crate) fn request_interrupt() {
     INTERRUPTED.store(true, Ordering::SeqCst);
 }

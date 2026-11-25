@@ -2,7 +2,9 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+#[cfg(unix)]
+use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 struct TestDirectory {
     path: PathBuf,
@@ -1306,6 +1308,25 @@ fn a_quoted_bracket_in_a_pattern_word_is_not_a_wildcard() {
 }
 
 #[test]
+fn a_pattern_expands_after_a_directory_held_in_a_variable() {
+    // The directory is a native path: backslashes on Windows, brackets everywhere.
+    let directory = TestDirectory::new("glob [native]");
+    glob_fixture(&directory);
+    let home = directory.path().to_str().expect("UTF-8");
+
+    let (printed, errors) = shell_lines_with_env(
+        directory.path(),
+        &[("HOME", home), ("USERPROFILE", home)],
+        &["echo $PWD/?.txt", "echo ~/*.md"],
+    );
+
+    assert!(printed.contains("/b.txt\n"), "{printed}\n{errors}");
+    assert!(printed.contains("/c.md\n"), "{printed}\n{errors}");
+    assert!(!printed.contains("?.txt"), "{printed}");
+    assert!(!printed.contains("*.md"), "{printed}");
+}
+
+#[test]
 fn a_pattern_works_with_commands_and_pipes() {
     let directory = TestDirectory::new("glob commands");
     glob_fixture(&directory);
@@ -1809,7 +1830,8 @@ fn a_substitution_works_in_a_redirection_target_and_for_cd() {
     );
 
     assert!(printed.contains("written\n"), "{printed}\n{errors}");
-    assert!(printed.contains("/sub\n"), "{printed}");
+    let end_of_pwd = format!("{}sub\n", std::path::MAIN_SEPARATOR);
+    assert!(printed.contains(&end_of_pwd), "{printed}");
 }
 
 #[test]
@@ -2793,7 +2815,7 @@ fn pwd_is_the_real_directory_even_when_the_parent_left_a_stale_one() {
         .find_map(|line| {
             line.rsplit("> ")
                 .next()
-                .filter(|text| text.starts_with('/'))
+                .filter(|text| Path::new(text).is_absolute())
         })
         .unwrap_or_default();
     assert!(same_place(first, directory.path()), "{printed}\n{errors}");
@@ -2863,7 +2885,7 @@ fn cd_updates_pwd_and_oldpwd_and_cd_dash_says_where_it_went() {
         printed
             .lines()
             .filter_map(|line| line.rsplit("> ").next())
-            .any(|text| text.starts_with('/') && same_place(text, directory.path())),
+            .any(|text| Path::new(text).is_absolute() && same_place(text, directory.path())),
         "{printed}"
     );
     let back = value("back=").pop().expect("back printed");
@@ -2986,7 +3008,7 @@ fn pwd_accepts_the_logical_and_physical_options_and_refuses_others() {
     let lines: Vec<&str> = printed
         .lines()
         .filter_map(|line| line.rsplit("> ").next())
-        .filter(|text| text.starts_with('/'))
+        .filter(|text| Path::new(text).is_absolute())
         .collect();
     assert!(
         lines
@@ -3550,7 +3572,7 @@ fn a_block_can_write_to_a_file_and_append() {
             "if true; then echo from-if; fi > cond.txt",
             "cat cond.txt",
             "last=none",
-            "for i in 1 2 3; do last=$i; done > /dev/null",
+            "for i in 1 2 3; do last=$i; done > loop.txt",
             "echo last=$last",
             "{ echo out-line; ls terminal-rust-no-such-dir; } > both.txt 2>&1",
             "cat both.txt",
@@ -4728,7 +4750,14 @@ fn pushd_popd_and_dirs_keep_a_stack_of_directories() {
     let directory = TestDirectory::new("dirs stack");
     fs::create_dir(directory.path().join("alpha")).expect("fixture");
     fs::create_dir(directory.path().join("beta")).expect("fixture");
-    let base = directory.path().display().to_string();
+    // The shell shows the directory the system resolved (`/private/var/...` where
+    // the temporary directory is a link), so the base is asked from the shell and
+    // the separator comes from the platform.
+    let base = PathBuf::from(stdout(&run_cli(directory.path(), &["pwd"])).trim());
+    assert!(base.is_absolute(), "pwd printed {base:?}");
+    let base_line = base.display().to_string();
+    let alpha = base.join("alpha").display().to_string();
+    let beta = base.join("beta").display().to_string();
 
     let (printed, errors) = shell_lines(
         &directory,
@@ -4749,10 +4778,10 @@ fn pushd_popd_and_dirs_keep_a_stack_of_directories() {
 
     // Each line shows the current directory, then the ones that were set aside.
     for expected in [
-        format!("{base}/alpha {base}\n"),
-        format!("{base}/beta {base}/alpha {base}\n"),
-        format!("{base} {base}/alpha\n"),
-        format!("{base}/alpha\n"),
+        format!("{alpha} {base_line}\n"),
+        format!("{beta} {alpha} {base_line}\n"),
+        format!("{base_line} {alpha}\n"),
+        format!("{alpha}\n"),
     ] {
         assert!(
             printed.contains(&expected),
@@ -4761,7 +4790,7 @@ fn pushd_popd_and_dirs_keep_a_stack_of_directories() {
     }
     assert_eq!(
         printed
-            .matches(&format!("{base}/beta {base}/alpha {base}\n"))
+            .matches(&format!("{beta} {alpha} {base_line}\n"))
             .count(),
         2,
         "{printed}"
@@ -4792,7 +4821,21 @@ fn time_shows_how_long_a_command_took_and_keeps_its_status() {
         ],
     );
 
-    assert!(errors.contains("real\t0m0.2"), "{errors}");
+    let first_real = errors
+        .lines()
+        .find_map(|line| line.strip_prefix("real\t"))
+        .unwrap_or_else(|| panic!("no real line in {errors}"));
+    let (minutes, seconds) = first_real
+        .trim_end_matches('s')
+        .split_once('m')
+        .unwrap_or_else(|| panic!("unexpected duration {first_real:?}"));
+    let elapsed = minutes.parse::<f64>().expect("minutes should be a number") * 60.0
+        + seconds.parse::<f64>().expect("seconds should be a number");
+    // A loaded machine can stretch the sleep, so only the bounds are checked.
+    assert!(
+        (0.2..30.0).contains(&elapsed),
+        "time sleep 0.2 reported {elapsed}s in {errors}"
+    );
     assert_eq!(errors.matches("real\t").count(), 3, "{errors}");
     assert!(printed.contains("status=3\n"), "{printed}\n{errors}");
 }
