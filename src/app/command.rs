@@ -1133,6 +1133,16 @@ fn execute_user_command(
             expanded_args.insert(0, command.target);
             execute(&expanded_args, state)
         }
+        // Collected output can only come from the pipeline code.
+        UserCommandKind::Process if render::programs_captured() => pipeline::run_program(
+            name,
+            invocation_args,
+            StageKind::Program {
+                program: command.target,
+                args: expanded_args,
+            },
+            state,
+        ),
         UserCommandKind::Process => {
             map_display_error(user::run_process(name, &command, invocation_args))
         }
@@ -1150,11 +1160,8 @@ fn execute_plugin_command(
         }
         let launched = state.launch_program.as_ref();
         let program = launched.filter(|(launched, _)| launched == name);
-        return execute_external(
-            name,
-            invocation_args,
-            program.map(|(_, path)| path.as_path()),
-        );
+        let program = program.map(|(_, path)| path.clone());
+        return execute_external(name, invocation_args, program.as_deref(), state);
     };
     if !invocation_args.is_empty() {
         return CommandResult::Error(format!(
@@ -1165,11 +1172,27 @@ fn execute_plugin_command(
     map_prefixed_error(name, render::stdout(printable_multiline(&command.response)))
 }
 
-fn execute_external(name: &str, args: &[String], program: Option<&Path>) -> CommandResult {
+fn execute_external(
+    name: &str,
+    args: &[String],
+    program: Option<&Path>,
+    state: &mut ShellState,
+) -> CommandResult {
+    if render::programs_captured() {
+        let kind = StageKind::Program {
+            program: program.map_or_else(|| name.into(), |path| path.to_string_lossy().into()),
+            args: args.to_vec(),
+        };
+        return pipeline::run_program(name, args, kind, state);
+    }
     let outcome = match program {
         Some(program) => external::run_at(program, name, args),
         None => external::run(name, args),
     };
+    finish_external(name, outcome)
+}
+
+fn finish_external(name: &str, outcome: Result<(), external::RunError>) -> CommandResult {
     match outcome {
         Ok(()) => CommandResult::Continue,
         Err(external::RunError::NotFound) => {
@@ -2027,7 +2050,7 @@ fn run_kill(args: &[String], state: &mut ShellState) -> CommandResult {
             Ok(()) => CommandResult::Continue,
             Err(error) => CommandResult::Error(format!("kill: {error}")),
         },
-        _ => execute_external("kill", args, None),
+        _ => execute_external("kill", args, None, state),
     }
 }
 

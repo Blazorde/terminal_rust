@@ -10,7 +10,8 @@ use std::process::{Child, Stdio};
 use std::thread::{self, JoinHandle};
 
 use super::{
-    CommandError, CommandResult, ShellState, StageKind, classify, execute, flow, split_env_prefix,
+    CommandError, CommandResult, ShellState, StageKind, classify, execute, find_command, flow,
+    split_env_prefix,
 };
 use crate::app::parser::{Redirect, Stage, parse_args, parse_with};
 use crate::commands::external::{self, RunError};
@@ -85,6 +86,45 @@ pub(super) fn run(
         }
     }
 
+    execute_plans(plans, state, background, compound, &|| {
+        pipeline_text(stages)
+    })
+}
+
+/// Run one program the way a stage of a pipeline does, so that what it writes is
+/// collected when the shell collects the output of programs. `kind` says what to
+/// start; `name` and `args` are what was typed.
+pub(super) fn run_program(
+    name: &str,
+    args: &[String],
+    kind: StageKind,
+    state: &mut ShellState,
+) -> CommandResult {
+    let mut words = vec![name.to_string()];
+    words.extend_from_slice(args);
+    let text = words.join(" ");
+    let plan = Plan {
+        args: words,
+        env: Vec::new(),
+        kind,
+        stdin: None,
+        here_text: None,
+        out: Sink::Default,
+        err: Sink::Default,
+        files: Vec::new(),
+    };
+    execute_plans(vec![plan], state, None, None, &|| text.clone())
+}
+
+/// Start the expanded stages and wait for them. `title` names the job if the
+/// pipeline is stopped.
+fn execute_plans(
+    plans: Vec<Plan>,
+    state: &mut ShellState,
+    background: Option<&str>,
+    compound: Option<&flow::Node>,
+    title: &dyn Fn() -> String,
+) -> CommandResult {
     let count = plans.len();
     // A background program must not compete with the shell for the terminal.
     let mut input = if background.is_some() {
@@ -207,7 +247,7 @@ pub(super) fn run(
         // `Ctrl+Z`: the pipeline is a stopped job now, and says so itself. Whatever
         // still feeds or collects its streams is left to finish on its own.
         job_control::Waited::Stopped(stopped) => {
-            job_control::set_aside(stopped, &pipeline_text(stages));
+            job_control::set_aside(stopped, &title());
             external::note_exit_code(job_control::STOPPED_STATUS);
             return CommandResult::Error(String::new());
         }
@@ -395,14 +435,21 @@ fn run_in_process(
     // The input is the stage's own for the duration of the command, and what the
     // command left unread is not for the next one. A first stage with no input of
     // its own shares the one of the loop it may be inside.
+    let redirected = !is_last || plan.out != Sink::Default;
+    let collects_programs = redirected && may_start_programs(&plan.args, state);
     let (result, captured) = pipe_input::scoped(stdin, || match (&plan.kind, compound) {
         // A compound command also collects the programs it starts.
         (StageKind::Compound, Some(node)) => {
             render::capture_substitution(|| flow::run_node(node, state))
         }
-        _ => render::capture_stage(|| {
-            shell_env::with_temporary(&plan.env, || execute(&plan.args, state))
-        }),
+        _ => {
+            let run = || shell_env::with_temporary(&plan.env, || execute(&plan.args, state));
+            if collects_programs {
+                render::capture_substitution(run)
+            } else {
+                render::capture_stage(run)
+            }
+        }
     });
     let mut stdout_text = captured.stdout;
     let mut stderr_text = captured.stderr;
@@ -470,6 +517,18 @@ fn run_in_process(
         }
     }
     (result, next_input)
+}
+
+/// Whether an in-process command can start a program. The other built-ins are left
+/// alone: collecting would also hide the questions they ask on the terminal.
+fn may_start_programs(args: &[String], state: &ShellState) -> bool {
+    let name = args.first().map(String::as_str).unwrap_or_default();
+    state.functions.contains_key(name)
+        || find_command(name).is_none()
+        || matches!(
+            name,
+            "time" | "command" | "exec" | "eval" | "source" | "." | "kill"
+        )
 }
 
 /// What an in-process command can read: a redirected file, or everything the
