@@ -23,6 +23,14 @@ pub fn expand(line: &str, history: &[String]) -> Result<Option<String>, String> 
                 quote = None;
                 output.push(character);
             }
+            // `\"` does not close double quotes.
+            (Some('"'), '\\') => {
+                output.push(character);
+                if let Some(&escaped) = characters.get(position + 1) {
+                    output.push(escaped);
+                    position += 1;
+                }
+            }
             (Some(_), _) => output.push(character),
             (None, '\'' | '"') => {
                 quote = Some(character);
@@ -291,6 +299,16 @@ mod tests {
         assert_eq!(run("echo $!ls", &entries), Ok(None));
         // After a closed quote the next one is active again.
         assert_eq!(run("echo '!!' !!", &entries), some("echo '!!' ls"));
+    }
+
+    #[test]
+    fn an_escaped_quote_does_not_close_double_quotes() {
+        let entries = ["ls"];
+        assert_eq!(run(r#"cat "a\"!!""#, &entries), Ok(None));
+        assert_eq!(run(r#"cat "a\" !! b""#, &entries), Ok(None));
+        // An escaped backslash leaves the quote after it free to close.
+        assert_eq!(run(r#"cat "a\\" !!"#, &entries), some(r#"cat "a\\" ls"#));
+        assert_eq!(run(r#"cat "a\"#, &entries), Ok(None));
     }
 
     #[test]

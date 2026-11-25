@@ -45,6 +45,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   where the output of the command goes instead of the terminal.
 - The question of `rm` and the prompt of `read -p` are written to the standard error of the shell before the
   answer is read, instead of ending up in a redirected file or appearing after the answer.
+- History expansion no longer takes `\"` for the end of double quotes, so a `!` that follows it inside the
+  quotes stays as typed.
 - Windows: a pattern after a path written with backslashes (`~/*.txt`, `$PWD/*.rs`) now expands, and a
   backslash in a `case` or `[[ ]]` pattern is a path separator, as ADR-0012 says for file name patterns.
 

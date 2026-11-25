@@ -108,6 +108,7 @@ mod tests {
     use super::super::matching::CASES;
     use super::*;
     use crate::ShellEngine;
+    use crate::app::history;
     use crate::app::parser::{parse_words, split_chain};
     use crate::utils::path::temp_path;
 
@@ -256,6 +257,23 @@ mod tests {
                     assert_eq!(result.stdout.lines().count(), 1, "{line}");
                     let printed = result.stdout.trim_end();
                     assert!(printed.ends_with(name), "{line} printed {printed}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_completed_name_is_never_expanded_by_the_history() {
+        let history = ["echo INJ".to_string()];
+        for windows in [false, true] {
+            for word in ["", "'", "\"", "dir/", "'dir/", "\"dir/"] {
+                for name in ["a!!", "!!", "a\"!!", "a'!!", "a b!$", "$!!", "\"'!1"] {
+                    let path = split_path(word, windows);
+                    let pair = candidate(&path, name.to_string(), false, '/', windows);
+                    let pair = pair.expect("a name without a backquote is offered");
+                    let line = format!("cat {}{}", &word[..path.start], pair.replacement);
+
+                    assert_eq!(history::expand(&line, &history), Ok(None), "{line}");
                 }
             }
         }
