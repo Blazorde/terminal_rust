@@ -1308,6 +1308,25 @@ fn a_quoted_bracket_in_a_pattern_word_is_not_a_wildcard() {
 }
 
 #[test]
+fn a_pattern_expands_after_a_directory_held_in_a_variable() {
+    // The directory is a native path: backslashes on Windows, brackets everywhere.
+    let directory = TestDirectory::new("glob [native]");
+    glob_fixture(&directory);
+    let home = directory.path().to_str().expect("UTF-8");
+
+    let (printed, errors) = shell_lines_with_env(
+        directory.path(),
+        &[("HOME", home), ("USERPROFILE", home)],
+        &["echo $PWD/?.txt", "echo ~/*.md"],
+    );
+
+    assert!(printed.contains("/b.txt\n"), "{printed}\n{errors}");
+    assert!(printed.contains("/c.md\n"), "{printed}\n{errors}");
+    assert!(!printed.contains("?.txt"), "{printed}");
+    assert!(!printed.contains("*.md"), "{printed}");
+}
+
+#[test]
 fn a_pattern_works_with_commands_and_pipes() {
     let directory = TestDirectory::new("glob commands");
     glob_fixture(&directory);

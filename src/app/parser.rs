@@ -29,7 +29,7 @@ fn pattern_text(text: &str, wildcards: &[usize]) -> String {
     let mut pattern = String::with_capacity(text.len() + 2);
     for (offset, character) in text.char_indices() {
         let literal_wildcard = matches!(character, '*' | '?' | '[') && !wildcards.contains(&offset);
-        if literal_wildcard || (character == '\\' && !cfg!(windows)) {
+        if literal_wildcard || character == '\\' {
             pattern.push('\\');
         }
         pattern.push(character);
@@ -2158,6 +2158,13 @@ mod tests {
         assert_eq!(patterns("echo $X"), [None, None]);
         // The variable's own `*` is literal even when the word has a real one.
         assert_eq!(patterns("echo $X*"), [None, Some("\\*.rs*".into())]);
+    }
+
+    #[test]
+    fn the_backslashes_of_a_windows_path_stay_literal_in_a_pattern() {
+        let words = parse_words("ls $DIR/*.txt", &|_| Some("C:\\Users\\me".into()))
+            .expect("the line should parse");
+        assert_eq!(words[1].pattern, Some("C:\\\\Users\\\\me/*.txt".into()));
     }
 
     #[test]
