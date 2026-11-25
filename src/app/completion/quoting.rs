@@ -97,7 +97,9 @@ pub(super) fn split_path(word: &str, windows: bool) -> PathWord<'_> {
     PathWord {
         start,
         kept: &word[start..name_start],
-        home: word[path_start..].starts_with('~') && !value.is_empty(),
+        // Only `~` followed by a separator is the home, as for the parser.
+        home: word[path_start..].starts_with('~')
+            && (value.starts_with("~/") || (windows && value.starts_with("~\\"))),
         directory: value,
         name,
         quote: name_quote,
@@ -206,6 +208,7 @@ mod tests {
         );
         assert!(split_path("~/fi", false).home);
         assert!(!split_path("~fi", false).home);
+        assert!(!split_path("~fi/x", false).home);
         assert!(!split_path("\"~/fi", false).home);
     }
 

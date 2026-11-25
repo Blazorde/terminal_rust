@@ -35,11 +35,28 @@ pub(super) fn complete(
     folders: &Folders<'_>,
 ) -> (usize, Vec<Pair>) {
     let path = split_path(word, cfg!(windows));
-    let Ok(entries) = fs::read_dir(folders.locate(&path)) else {
-        return (path.start, Vec::new());
+    let candidates = in_directory(&path, case, directories_only, folders);
+    // `@file` names a file for `curl` and others.
+    if candidates.is_empty()
+        && let Some(rest) = word.strip_prefix('@')
+    {
+        let (start, candidates) = complete(rest, case, directories_only, folders);
+        return (start + 1, candidates);
+    }
+    (path.start, candidates)
+}
+
+fn in_directory(
+    path: &PathWord<'_>,
+    case: Case,
+    directories_only: bool,
+    folders: &Folders<'_>,
+) -> Vec<Pair> {
+    let Ok(entries) = fs::read_dir(folders.locate(path)) else {
+        return Vec::new();
     };
     let separator = path.separator.unwrap_or(MAIN_SEPARATOR);
-    let candidates = entries
+    entries
         .flatten()
         .filter_map(|entry| {
             let name = entry.file_name().into_string().ok()?;
@@ -52,10 +69,9 @@ pub(super) fn complete(
             if directories_only && !is_directory {
                 return None;
             }
-            candidate(&path, name, is_directory, separator)
+            candidate(path, name, is_directory, separator)
         })
-        .collect();
-    (path.start, candidates)
+        .collect()
 }
 
 fn candidate(
@@ -110,6 +126,22 @@ mod tests {
         let mut names: Vec<String> = found.into_iter().map(|pair| pair.replacement).collect();
         names.sort();
         names
+    }
+
+    #[test]
+    fn a_file_named_after_an_at_sign_completes() {
+        let root = fixture("at", &["payload.json", "@types/"]);
+        let separator = MAIN_SEPARATOR;
+        let folders = Folders {
+            current: &root,
+            home: None,
+        };
+        let (start, found) = complete("@pay", Case::Exact, false, &folders);
+
+        assert_eq!((start, found[0].replacement.as_str()), (1, "payload.json"));
+        // A name that does start with `@` comes first.
+        assert_eq!(paths_in(&root, "@ty"), [format!("@types{separator}")]);
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
