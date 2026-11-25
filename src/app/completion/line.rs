@@ -32,6 +32,8 @@ pub(super) struct LineContext<'a> {
     pub(super) word: &'a str,
     /// Whether a command name goes here.
     pub(super) command_position: bool,
+    /// Whether the word is the file of a redirection.
+    pub(super) redirect: bool,
     /// The words of the current command before this one, its name first, without
     /// the keywords and wrappers that precede it.
     pub(super) command: Vec<&'a str>,
@@ -233,6 +235,7 @@ pub(super) fn analyze(before_cursor: &str) -> LineContext<'_> {
         start,
         word: &before_cursor[start..],
         command_position,
+        redirect,
         command: words,
     }
 }

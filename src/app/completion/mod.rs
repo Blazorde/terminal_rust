@@ -89,12 +89,16 @@ impl ShellHelper {
             current: &current,
             home: home.as_deref(),
         };
+        // The file of a redirection is not an argument of the command.
+        let command: &[&str] = if at.redirect { &[] } else { &at.command };
+        let directories_only = matches!(command.first(), Some(&("cd" | "pushd" | "rmdir")));
         for case in CASES {
             // `git ch<Tab>` and `git checkout fe<Tab>`: subcommands and references.
-            if let Some(candidates) = git::complete(&at.command, current_word, &current, case) {
+            if let Some(candidates) = git::complete(command, current_word, &current, case) {
                 return (command_start, candidates);
             }
-            let (offset, candidates) = files::complete(current_word, case, &folders);
+            let (offset, candidates) =
+                files::complete(current_word, case, directories_only, &folders);
             if !candidates.is_empty() {
                 return (command_start + offset, candidates);
             }

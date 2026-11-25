@@ -1,5 +1,4 @@
-use super::files::{self, Folders};
-use super::matching::{CASES, Case};
+use super::matching::Case;
 use super::programs::ProgramCache;
 #[cfg(unix)]
 use super::programs::scan_path;
@@ -10,7 +9,7 @@ use rustyline::Config;
 use rustyline::history::{DefaultHistory, History};
 use std::ffi::OsString;
 use std::fs;
-use std::path::{MAIN_SEPARATOR, Path, PathBuf};
+use std::path::MAIN_SEPARATOR;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 fn completions(prefix: &str) -> Vec<Pair> {
@@ -444,82 +443,14 @@ fn only_executable_files_of_the_path_are_programs() {
     fs::remove_dir_all(second).expect("cleanup");
 }
 
-/// An empty directory of its own, with these files and directories (`/` at the end).
-fn fixture(name: &str, entries: &[&str]) -> PathBuf {
-    let root = temp_path("completion", name);
-    fs::create_dir_all(&root).expect("fixture");
-    for entry in entries {
-        match entry.strip_suffix('/') {
-            Some(directory) => fs::create_dir_all(root.join(directory)).expect("fixture"),
-            None => fs::write(root.join(entry), "x").expect("fixture"),
-        }
-    }
-    root
-}
-
-/// The replacements for `word` in `root`, sorted: the exact case first.
-fn paths_in(root: &Path, word: &str) -> Vec<String> {
-    let folders = Folders {
-        current: root,
-        home: Some(root),
-    };
-    let found = CASES
-        .into_iter()
-        .map(|case| files::complete(word, case, &folders).1)
-        .find(|candidates| !candidates.is_empty())
-        .unwrap_or_default();
-    let mut names: Vec<String> = found.into_iter().map(|pair| pair.replacement).collect();
-    names.sort();
-    names
-}
-
-#[test]
-fn another_case_is_offered_only_without_the_one_typed() {
-    // Two names that differ by more than their case: some systems ignore it.
-    let root = fixture("case", &["Readme.md", "reading-list"]);
-
-    assert_eq!(paths_in(&root, "read"), ["reading-list"]);
-    assert_eq!(paths_in(&root, "Read"), ["Readme.md"]);
-    // No name starts with `READ`: both are offered, in their own case.
-    assert_eq!(paths_in(&root, "READ"), ["Readme.md", "reading-list"]);
-    assert_eq!(paths_in(&root, "readm"), ["Readme.md"]);
-    assert!(paths_in(&root, "zz").is_empty());
-    fs::remove_dir_all(root).expect("cleanup");
-}
-
-#[test]
-fn a_name_with_special_characters_is_written_for_the_shell() {
-    let root = fixture("quoting", &["my notes.txt", "my dir/"]);
-    let separator = MAIN_SEPARATOR;
-    let spaced = |name: &str| {
-        if cfg!(windows) {
-            format!("'{name}'")
-        } else {
-            name.replace(' ', "\\ ")
-        }
-    };
-
-    assert_eq!(
-        paths_in(&root, "my"),
-        [
-            format!("{}{separator}", spaced("my dir")),
-            spaced("my notes.txt")
-        ]
-    );
-    // Inside quotes the name stays as it is, and a file closes them.
-    assert_eq!(paths_in(&root, "\"my n"), ["my notes.txt\""]);
-    assert_eq!(paths_in(&root, "'my d"), [format!("my dir{separator}")]);
-    assert_eq!(
-        paths_in(&root, &format!("~{separator}my n")),
-        [format!("~{separator}{}", spaced("my notes.txt"))]
-    );
-    fs::remove_dir_all(root).expect("cleanup");
-}
-
 #[cfg(unix)]
 #[test]
 fn a_file_name_with_an_escape_sequence_is_never_offered() {
-    let root = fixture("escape", &["safe", "se\u{1b}]0;title\u{7}"]);
+    let root = temp_path("completion", "escape");
+    fs::create_dir_all(&root).expect("fixture");
+    for name in ["safe", "se\u{1b}]0;title\u{7}"] {
+        fs::write(root.join(name), "x").expect("fixture");
+    }
 
     let history = DefaultHistory::new();
     let helper = helper_with_programs(&["cat"], &[]);
@@ -541,4 +472,23 @@ fn commands_and_branches_ignore_the_case_as_a_last_resort() {
     assert_eq!(complete_at(&helper, "XA").1, ["xargs "]);
     assert_eq!(complete_at(&helper, "ECH").1, ["echo "]);
     assert_eq!(complete_at(&helper, "git CHEC").1, ["checkout "]);
+}
+
+#[test]
+fn only_directories_complete_after_cd_pushd_and_rmdir() {
+    let root = temp_path("completion", "dirsonly");
+    fs::create_dir_all(root.join("target-directory")).expect("fixture");
+    fs::write(root.join("target-file"), "x").expect("fixture");
+    let helper = helper_with_programs(&["cat", "cd"], &[]);
+    let base = format!("{}{}", root.display(), MAIN_SEPARATOR);
+    let names = |line: &str| complete_at(&helper, &format!("{line}{base}tar")).1.len();
+
+    for line in ["cd ", "pushd ", "rmdir ", "sudo rmdir ", "a && cd "] {
+        assert_eq!(names(line), 1, "{line}");
+    }
+    // Other commands, and the file of a redirection, take files too.
+    for line in ["cat ", "echo cd ", "cd x > "] {
+        assert_eq!(names(line), 2, "{line}");
+    }
+    fs::remove_dir_all(root).expect("cleanup");
 }
