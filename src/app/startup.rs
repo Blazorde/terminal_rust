@@ -111,7 +111,9 @@ trap trs_emit EXIT
 trap 'exit 130' INT
 trap '' TSTP
 [ -r /etc/profile ] && . /etc/profile 3>&-
-[ -r "$HOME/.profile" ] && . "$HOME/.profile" 3>&-
+case ${HOME-} in
+/*) if [ -r "$HOME/.profile" ]; then . "$HOME/.profile" 3>&-; fi ;;
+esac
 trs_emit
 "#;
 

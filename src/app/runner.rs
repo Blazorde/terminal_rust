@@ -20,7 +20,7 @@ use crate::commands::external;
 use crate::config::{self, AppConfig};
 use crate::core::{ExecutionResult, ExecutionStatus, ShellEngine};
 use crate::render;
-use crate::utils::job_control;
+use crate::utils::{job_control, stdin_line};
 
 const HISTORY_FILE_ENV: &str = "TERMINAL_RUST_HISTORY_FILE";
 
@@ -271,9 +271,11 @@ fn plain_loop(engine: &mut ShellEngine, shell_prompt: &mut Prompt) -> ExitCode {
         }
 
         input.clear();
-        // Lock stdin only while reading a line: a command such as `rm` reads its
-        // confirmation from stdin itself, and the lock is not reentrant.
-        match read_plain_command(&mut io::stdin().lock(), &mut input) {
+        // The reader is dropped before the command runs: on a terminal it holds the
+        // lock of stdin, which `read` and `rm` take again and which is not reentrant.
+        let line =
+            stdin_line::reader().and_then(|mut reader| read_plain_command(&mut reader, &mut input));
+        match line {
             Ok(true) => {}
             Ok(false) => return ExitCode::from(engine.exit_code()),
             Err(error) => {

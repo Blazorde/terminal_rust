@@ -13,7 +13,7 @@ use crate::errors::command::CommandError;
 use crate::plugin::DeclarativeCommandRegistry;
 use crate::render;
 use crate::render::printable::printable_multiline;
-use crate::utils::shell_env;
+use crate::utils::{shell_env, stdin_line};
 
 mod aliases;
 mod arithmetic;
@@ -1525,7 +1525,9 @@ fn run_read(args: &[String], state: &mut ShellState) -> CommandResult {
     {
         let _ = render::stderr(prompt);
     }
-    let line = read_command::next_line(&mut std::io::stdin().lock());
+    // Like any read error, a standard input that cannot be opened ends the input.
+    let mut stdin = stdin_line::reader().unwrap_or_else(|_| Box::new(std::io::empty()));
+    let line = read_command::next_line(&mut stdin);
     let values = match &line {
         Some(line) => read_command::split_fields(line, &request.names),
         None => request

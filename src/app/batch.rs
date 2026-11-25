@@ -3,7 +3,7 @@
 //! they end; a command that fails does not stop the ones that follow.
 
 use std::fs;
-use std::io::{self, BufRead};
+use std::io;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -13,6 +13,7 @@ use crate::app::startup;
 use crate::core::{ExecutionStatus, ShellEngine};
 use crate::render;
 use crate::render::printable::printable;
+use crate::utils::stdin_line;
 
 // The statuses POSIX shells use for these failures.
 const INPUT_ERROR: u8 = 1;
@@ -76,11 +77,9 @@ fn batch_engine(
     Ok(engine)
 }
 
-/// Stdin is locked for one line only: `read`, `rm` and the programs that a command
-/// starts take their own input from it.
 fn read_stdin_line() -> Option<io::Result<String>> {
     let mut line = String::new();
-    match io::stdin().lock().read_line(&mut line) {
+    match stdin_line::read_line(&mut line) {
         Ok(0) => None,
         Ok(_) => Some(Ok(line.trim_end_matches(['\r', '\n']).to_string())),
         Err(error) => Some(Err(error)),

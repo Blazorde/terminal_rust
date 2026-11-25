@@ -304,3 +304,48 @@ fn a_script_with_a_shebang_line_runs_by_itself() {
 
     assert_run(&output, 0, "ran well\n");
 }
+
+// `sort` is a program of Linux, macOS and Windows that reads all of its input.
+#[test]
+fn a_program_gets_the_input_that_the_shell_has_not_read() {
+    let sandbox = Sandbox::new("launch shared input");
+
+    assert_run(
+        &sandbox.pipe(
+            &["-c", "read h\necho h=$h\nsort\necho end"],
+            "header\nb\na\n",
+        ),
+        0,
+        "h=header\na\nb\nend\n",
+    );
+    sandbox.write("doomed", "");
+    assert_run(
+        &sandbox.pipe(&["-c", "rm -i doomed\nsort"], "n\nb\na\n"),
+        0,
+        "rm: remove 'doomed'? [y/N] a\nb\n",
+    );
+}
+
+#[test]
+fn a_program_reads_the_rest_of_the_commands_sent_through_a_pipe() {
+    let sandbox = Sandbox::new("launch piped commands");
+
+    assert_run(
+        &sandbox.pipe(&[], "echo one\nsort\necho two\n"),
+        0,
+        "one\necho two\n",
+    );
+}
+
+#[test]
+fn an_interactive_shell_leaves_the_input_of_its_commands_in_the_pipe() {
+    let sandbox = Sandbox::new("launch interactive input");
+
+    let output = sandbox.pipe(&["-i"], "read h\nheader\necho h=$h\nsort\nb\na\n");
+
+    let text = stdout(&output);
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    assert!(text.contains("h=header\n"), "{text}");
+    assert!(text.contains("a\nb\n"), "{text}");
+    assert_eq!(stderr(&output), "");
+}

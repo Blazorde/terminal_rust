@@ -234,6 +234,21 @@ mod login {
     }
 
     #[test]
+    fn a_relative_home_does_not_choose_the_profile() {
+        let sandbox = Sandbox::new("login relative");
+        let home = sandbox.work().join("relative home");
+        fs::create_dir(&home).expect("the directory should be created");
+        fs::write(home.join(".profile"), "export TRS_PROFILE=read\n")
+            .expect("the profile should be written");
+        let mut command = sandbox.shell();
+        command
+            .env("HOME", "relative home")
+            .args(["-l", "-c", SHOW]);
+
+        assert_run(&common::finish(command, b""), 0, "[]\n");
+    }
+
+    #[test]
     fn the_rc_file_comes_after_the_profile() {
         let sandbox = Sandbox::new("login order");
         profile(&sandbox, "export TRS_PROFILE=read\n");
