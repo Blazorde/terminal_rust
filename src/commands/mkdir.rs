@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+use crate::commands::system_fallback;
 use crate::errors::mkdir::MkdirError;
 use crate::utils::path::required_path;
 
@@ -10,19 +11,18 @@ pub fn mkdir(target: Option<&str>) -> Result<(), MkdirError> {
     create_directory(&path)
 }
 
-/// Create every directory of `targets`, after an optional `-p`. With `-p` the
+/// Create every directory of `targets`. With `-p` or `--parents`, before `--`, the
 /// missing parents are created too and a directory that already exists is not an
 /// error. The others are tried even if one fails; the failures are returned.
-pub fn mkdir_all(targets: &[String]) -> Vec<MkdirError> {
-    let (parents, directories) = match targets.split_first() {
-        Some((first, rest)) if first == "-p" => (true, rest),
-        _ => (false, targets),
-    };
+pub fn mkdir_all(args: &[String]) -> Vec<MkdirError> {
+    // `-p` is the only option that reaches the built-in.
+    let parents = system_fallback::options(args).next().is_some();
+    let directories: Vec<&String> = system_fallback::operands(args).collect();
     if directories.is_empty() {
         return vec![MkdirError::MissingDirectoryName];
     }
     directories
-        .iter()
+        .into_iter()
         .filter_map(|target| {
             let result = if parents {
                 create_with_parents(target)

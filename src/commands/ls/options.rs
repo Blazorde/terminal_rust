@@ -117,6 +117,7 @@ fn apply_sort_mode(arg: &str, options: &mut LsOptions) -> Result<(), LsError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::system_fallback;
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| value.to_string()).collect()
@@ -165,6 +166,20 @@ mod tests {
         for option in ["--color=", "--color=blue", "--colour=auto"] {
             let error = parse_args(&args(&[option])).expect_err("bad color value should fail");
             assert!(matches!(error, LsError::UnknownOption(_)), "{option}");
+        }
+    }
+
+    #[test]
+    fn every_option_declared_as_handled_is_accepted() {
+        let handled = system_fallback::handled("ls").expect("ls should declare its options");
+        let short = handled.short.chars().map(|letter| format!("-{letter}"));
+        let long = handled.long.iter().map(ToString::to_string);
+
+        for option in short.chain(long) {
+            assert!(
+                parse_args(std::slice::from_ref(&option)).is_ok(),
+                "{option}"
+            );
         }
     }
 

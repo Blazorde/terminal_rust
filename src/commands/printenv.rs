@@ -1,14 +1,16 @@
 use std::io;
 
+use crate::commands::system_fallback;
 use crate::render;
 use crate::utils::shell_env;
 
 pub fn printenv(args: &[String]) -> io::Result<()> {
-    if args.is_empty() {
+    let names: Vec<String> = system_fallback::operands(args).cloned().collect();
+    if names.is_empty() {
         return render::stdout(format_all(shell_env::vars().into_iter()));
     }
 
-    let (output, missing) = format_selected(args, shell_env::value);
+    let (output, missing) = format_selected(&names, shell_env::value);
     render::stdout(output)?;
 
     if missing.is_empty() {

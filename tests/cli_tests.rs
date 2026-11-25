@@ -3950,8 +3950,11 @@ fn ls_accepts_the_color_option_of_the_usual_alias() {
     let directory = TestDirectory::new("ls color");
     fs::write(directory.path().join("visible.txt"), "x").expect("fixture");
 
-    let (printed, errors) = shell_lines(
-        &directory,
+    // An unknown color goes to the system `ls`, whose message differs by system:
+    // with no program to find, the built-in answers.
+    let (printed, errors) = shell_lines_with_env(
+        directory.path(),
+        &[("PATH", "")],
         &[
             "alias ls2=\"ls --color=auto\"",
             "ls2",

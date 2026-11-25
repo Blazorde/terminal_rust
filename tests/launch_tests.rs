@@ -452,7 +452,7 @@ fn a_program_gets_the_input_that_the_shell_has_not_read() {
     assert_run(
         &sandbox.pipe(&["-c", "rm -i doomed\nsort"], "n\nb\na\n"),
         0,
-        "rm: remove 'doomed'? [y/N] a\nb\n",
+        "a\nb\n",
     );
 }
 

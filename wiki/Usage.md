@@ -29,6 +29,36 @@ Run `help` inside Terminal Rust for the authoritative command list.
 Install [Blazorde's Neovim configuration](Neovim) to use the editor with the
 published CodeOpsHQ setup.
 
+## Options the built-ins do not have
+
+`ls`, `cat`, `mkdir`, `touch`, `date`, `printenv`, `whoami`, `arch`, `nproc`, `uptime`, `hostname`, `clear`
+and `rm` handle a small set of options. With anything else, the system program of the same name gets the
+whole command: `cat -n notes.txt`, `mkdir -m 700 private`, `date -u`. `ls -l` also goes to the system `ls`,
+which shows permissions, owners and dates.
+
+The program is looked up in the absolute entries of `PATH`. When there is none, as often on Windows, an
+unknown option is an error and nothing is created or removed; `ls -l` then uses the built-in long format.
+`--` ends the options: `touch -- -notes` creates a file named `-notes`. A function or an alias of the same
+name keeps its priority.
+
+| Built-in | Handled by the shell |
+| --- | --- |
+| `ls` | `-1aAdFhpRrSt` and the long forms such as `--all`, `--color`, `--sort=name\|size\|time` |
+| `cat` | file names and `-` |
+| `mkdir` | `-p`, `--parents` |
+| `rm` | `-d -f -i -r -R -v`, `--dir`, `--force`, `--interactive`, `--recursive`, `--verbose` |
+| `date` | one `+FORMAT` |
+| `printenv` | one variable name |
+| `touch` | file names |
+| `whoami`, `arch`, `nproc`, `uptime`, `hostname`, `clear` | no argument |
+
+On Windows `rm` is never handed to a system program, because the `rm` of Git or MSYS expands `*` and `@file`
+again: an option the shell does not handle is an error. On Linux and macOS, only `-I`, `--one-file-system`,
+`--preserve-root`, `--preserve-root=all`, `--interactive=never|once|always`, `--help` and `--version` are
+passed on. Before the system `rm` starts, `.`, `..` and the root directory are still refused, and the shell
+still asks before a recursive removal without `-f`, or about each name with `-i`, `--interactive` or
+`--interactive=always`. The system `rm` may then ask again.
+
 ## Running other programs
 
 A command that is not built in runs the program of that name found in your
@@ -461,7 +491,8 @@ echo done >> log.txt
 The file name is expanded like any argument (`> "my file.txt"`, `> $HOME/out`).
 The status of a pipeline is the status of its last command. Built-in commands
 work in a pipeline too: `ls | grep txt`, `echo hi > file`, `echo hi | cat`.
-`cat` without a file copies its input; other built-in commands ignore theirs.
+`cat` without a file copies its input; other built-in commands ignore theirs, unless they are
+[handed over to a system program](#options-the-built-ins-do-not-have).
 Unlike other shells, a built-in such as `cd` or `export` inside a pipeline takes
 effect in the shell itself. Here-documents (`<<`) and file descriptors above 2
 are not available.

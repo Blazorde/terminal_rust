@@ -2,6 +2,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::commands::system_fallback;
 use crate::errors::rm::RmError;
 use crate::render;
 use crate::utils::stdin_line;
@@ -18,6 +19,41 @@ struct RmOptions {
 pub fn rm(args: &[String]) -> Result<(), RmError> {
     let request = parse_args(args)?;
     remove_targets(&request.options, &request.targets, ask_confirmation)
+}
+
+/// The protections of the built-in, applied before the system `rm` gets the same
+/// arguments. `Ok(false)` when the user declines: nothing must run then.
+pub(crate) fn guard_system(args: &[String]) -> Result<bool, RmError> {
+    guard_with(args, ask_confirmation)
+}
+
+fn guard_with(args: &[String], confirm: fn(&str) -> io::Result<bool>) -> Result<bool, RmError> {
+    let targets: Vec<&String> = system_fallback::operands(args).collect();
+    for target in &targets {
+        ensure_not_protected(Path::new(target))?;
+        ensure_not_protected(Path::new(target.trim()))?;
+    }
+
+    let has = |longs: &[&str], letters: &[char]| {
+        system_fallback::options(args).any(|option| match system_fallback::short_group(option) {
+            Some(group) => group.contains(letters),
+            None => longs.contains(&option.as_str()),
+        })
+    };
+    let options = RmOptions {
+        force: has(&["--force"], &['f']),
+        recursive: has(&["--recursive"], &['r', 'R']),
+        // A later `-I` makes the system `rm` drop `-i`: the question stays here.
+        interactive: has(&["--interactive", "--interactive=always"], &['i']),
+        ..RmOptions::default()
+    };
+    for target in targets {
+        let path = Path::new(target);
+        if should_confirm(&options, path) && !confirm_removal(path, &options, confirm)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 struct RmRequest {
@@ -241,9 +277,7 @@ fn confirm_removal(
 }
 
 fn ask_confirmation(message: &str) -> io::Result<bool> {
-    render::stdout(message)?;
-    // The question is captured like any output; show it before waiting.
-    render::flush_captured();
+    render::question(message)?;
 
     let mut answer = String::new();
     stdin_line::read_line(&mut answer)?;
@@ -392,6 +426,59 @@ mod tests {
 
         assert!(path.exists());
         fs::remove_file(path).expect("test file should be removed");
+    }
+
+    // The guard removes nothing: these tests only ask it for its answer.
+    #[test]
+    fn the_guard_of_the_system_rm_refuses_protected_targets() {
+        let strings = |values: &[&str]| -> Vec<String> {
+            values.iter().map(|value| (*value).to_string()).collect()
+        };
+        for args in [
+            &["-I", "."][..],
+            &["-rI", "a", ".."],
+            &["-I", "--", "/"],
+            &["-I", " .. "],
+        ] {
+            let result = guard_with(&strings(args), confirm_unexpected);
+
+            assert!(matches!(result, Err(RmError::Refused { .. })), "{args:?}");
+        }
+    }
+
+    #[test]
+    fn the_guard_of_the_system_rm_asks_like_the_built_in() {
+        let directory = temp_path("rm", "guard-system");
+        fs::create_dir(&directory).expect("test directory should be created");
+        let target = directory.to_string_lossy().into_owned();
+        let args = |options: &[&str]| -> Vec<String> {
+            options
+                .iter()
+                .map(|value| (*value).to_string())
+                .chain([target.clone()])
+                .collect()
+        };
+
+        for options in [&["-r", "-I"][..], &["-RI"], &["--recursive", "-I"]] {
+            let declined = guard_with(&args(options), confirm_no);
+            assert!(matches!(declined, Ok(false)), "{options:?}");
+            let accepted = guard_with(&args(options), confirm_yes);
+            assert!(matches!(accepted, Ok(true)), "{options:?}");
+        }
+        for options in [&["-I"][..], &["-rfI"], &["-r", "--force", "-I"]] {
+            let result = guard_with(&args(options), confirm_unexpected);
+            assert!(matches!(result, Ok(true)), "{options:?}");
+        }
+        for options in [
+            &["-i", "-I"][..],
+            &["-iI"],
+            &["--interactive", "-I"],
+            &["--interactive=always", "-I"],
+        ] {
+            let declined = guard_with(&args(options), confirm_no);
+            assert!(matches!(declined, Ok(false)), "{options:?}");
+        }
+        fs::remove_dir(directory).expect("test directory should be removed");
     }
 
     #[test]

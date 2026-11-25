@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::app::help;
 use crate::app::parser::{Stage, parse_args, split_chain, split_stages};
+use crate::commands::system_fallback;
 use crate::commands::{
     appearance, arch, cat, cd, clear, dashboard, date, echo, editor, external, fastfetch,
     git_command, hostname, ls, man, mkdir, nproc, plugins, printenv, pwd, read_command, rm,
@@ -27,6 +28,7 @@ mod jobs;
 mod pipeline;
 mod scripts;
 mod substitution;
+mod system;
 
 pub(crate) use scripts::{CommandAssembler, MAX_SCRIPT_BYTES, check_syntax};
 
@@ -1010,6 +1012,12 @@ enum StageKind {
     InProcess,
     /// As a program, with its streams connected to the neighbours.
     Program { program: String, args: Vec<String> },
+    /// The system program that takes over from the built-in `name`.
+    System {
+        name: String,
+        program: PathBuf,
+        args: Vec<String>,
+    },
     /// The native Git, which has its own environment (the bundled runtime).
     Git { args: Vec<String> },
     /// A `for`, `while`, `if`, `case` or `{ }` that is a stage of a pipeline or has
@@ -1035,6 +1043,9 @@ fn classify(args: &[String], state: &ShellState) -> Result<StageKind, String> {
         return Ok(StageKind::Git {
             args: args[1..].to_vec(),
         });
+    }
+    if let Some(kind) = system::stage(name, &args[1..], state) {
+        return Ok(kind);
     }
     if find_command(name).is_some() {
         return Ok(StageKind::InProcess);
@@ -1096,7 +1107,15 @@ pub fn execute(args: &[String], state: &mut ShellState) -> CommandResult {
 
     if let Some(command) = find_command(command_name) {
         let command_args = &args[1..];
-        if let Err(error) = validate_arg_count(command, command_args.len()) {
+        if let Some(result) = system::dispatch(command_name, command_args, state) {
+            return result;
+        }
+        // For these built-ins `--` is not an argument that counts.
+        let count = match system_fallback::handled(command_name) {
+            Some(_) => system_fallback::operands(command_args).count(),
+            None => command_args.len(),
+        };
+        if let Err(error) = validate_arg_count(command, count) {
             return CommandResult::Error(error.to_string());
         }
         return (command.handler)(command_args, state);
@@ -1133,6 +1152,16 @@ fn execute_user_command(
             expanded_args.insert(0, command.target);
             execute(&expanded_args, state)
         }
+        // Collected output can only come from the pipeline code.
+        UserCommandKind::Process if render::programs_captured() => pipeline::run_program(
+            name,
+            invocation_args,
+            StageKind::Program {
+                program: command.target,
+                args: expanded_args,
+            },
+            state,
+        ),
         UserCommandKind::Process => {
             map_display_error(user::run_process(name, &command, invocation_args))
         }
@@ -1150,11 +1179,8 @@ fn execute_plugin_command(
         }
         let launched = state.launch_program.as_ref();
         let program = launched.filter(|(launched, _)| launched == name);
-        return execute_external(
-            name,
-            invocation_args,
-            program.map(|(_, path)| path.as_path()),
-        );
+        let program = program.map(|(_, path)| path.clone());
+        return execute_external(name, invocation_args, program.as_deref(), state);
     };
     if !invocation_args.is_empty() {
         return CommandResult::Error(format!(
@@ -1165,11 +1191,27 @@ fn execute_plugin_command(
     map_prefixed_error(name, render::stdout(printable_multiline(&command.response)))
 }
 
-fn execute_external(name: &str, args: &[String], program: Option<&Path>) -> CommandResult {
+fn execute_external(
+    name: &str,
+    args: &[String],
+    program: Option<&Path>,
+    state: &mut ShellState,
+) -> CommandResult {
+    if render::programs_captured() {
+        let kind = StageKind::Program {
+            program: program.map_or_else(|| name.into(), |path| path.to_string_lossy().into()),
+            args: args.to_vec(),
+        };
+        return pipeline::run_program(name, args, kind, state);
+    }
     let outcome = match program {
         Some(program) => external::run_at(program, name, args),
         None => external::run(name, args),
     };
+    finish_external(name, outcome)
+}
+
+fn finish_external(name: &str, outcome: Result<(), external::RunError>) -> CommandResult {
     match outcome {
         Ok(()) => CommandResult::Continue,
         Err(external::RunError::NotFound) => {
@@ -1536,7 +1578,7 @@ fn run_read(args: &[String], state: &mut ShellState) -> CommandResult {
     if let Some(prompt) = &request.prompt
         && !crate::utils::pipe_input::is_provided()
     {
-        let _ = render::stderr(prompt);
+        let _ = render::question(prompt);
     }
     // Like any read error, a standard input that cannot be opened ends the input.
     let mut stdin = stdin_line::reader().unwrap_or_else(|_| Box::new(std::io::empty()));
@@ -2027,7 +2069,7 @@ fn run_kill(args: &[String], state: &mut ShellState) -> CommandResult {
             Ok(()) => CommandResult::Continue,
             Err(error) => CommandResult::Error(format!("kill: {error}")),
         },
-        _ => execute_external("kill", args, None),
+        _ => execute_external("kill", args, None, state),
     }
 }
 
