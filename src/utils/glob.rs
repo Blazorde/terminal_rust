@@ -421,12 +421,18 @@ mod tests {
         assert!(!is_pattern("plain.txt"));
     }
 
-    fn fixture(name: &str) -> std::path::PathBuf {
+    /// A path for a new fixture. Its space and brackets make a test that puts it
+    /// in a pattern without escaping it fail on every platform.
+    fn fixture_root(name: &str) -> std::path::PathBuf {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("clock")
             .as_nanos();
-        let root = std::env::temp_dir().join(format!("terminal-rust-glob-{name}-{nonce}"));
+        std::env::temp_dir().join(format!("terminal-rust-glob [{name}] {nonce}"))
+    }
+
+    fn fixture(name: &str) -> std::path::PathBuf {
+        let root = fixture_root(name);
         fs::create_dir_all(root.join("src/sub")).expect("fixture");
         for file in [
             "a.rs",
@@ -443,7 +449,7 @@ mod tests {
 
     fn absolute(root: &Path, pattern: &str) -> Vec<String> {
         let prefix = format!("{}/", root.display());
-        expand(&format!("{prefix}{pattern}"))
+        expand(&format!("{}{pattern}", escape(&prefix)))
             .into_iter()
             .map(|path| path.strip_prefix(&prefix).unwrap_or(&path).to_string())
             .collect()
@@ -546,13 +552,7 @@ mod tests {
 
     #[test]
     fn a_double_star_stops_at_the_depth_limit() {
-        let root = std::env::temp_dir().join(format!(
-            "terminal-rust-glob-deep-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        ));
+        let root = fixture_root("deep");
         let mut deep = root.clone();
         for level in 0..(MAX_DEPTH + 6) {
             deep = deep.join(format!("d{level}"));
