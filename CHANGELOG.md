@@ -11,6 +11,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
   (also through `#!/usr/bin/env terminal_rust`), `-i`, `-l` / `--login` and `--`.
 - An interactive shell reads `~/.terminal_rust_rc`, the desktop app included.
 - On Unix, a login shell takes the environment of `/etc/profile` and `~/.profile`, run by `/bin/sh`.
+- A built-in that receives an option it does not handle hands the command to the system program of the same
+  name, found in an absolute entry of `PATH` (ADR-0035): `cat -n`, `mkdir -m`, `touch -d`, `date -u`. `rm`
+  passes only listed options on, after its own protections.
 - Operators on the value of a variable (ADR-0030): `${f%.txt}`, `${path##*/}`, `${s/old/new}`, `${s//old/new}`,
   `${s:1:3}`, `${s: -3}`, `${s^^}`, `${s,,}`, and slices of arrays and parameters (`${arr[@]:1}`, `${@:2}`).
 - `let` and `(( expression ))` with assignments, `+=`, `++`, `--` and the comma; the status is `0` for a non-zero
@@ -18,6 +21,9 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Changed
 
+- `ls -l` runs the system `ls` when there is one; the built-in long format answers otherwise.
+- Without a system program, `mkdir`, `touch` and `cat` refuse an unknown option instead of reading it as a
+  file name.
 - Piped input runs without a prompt and without the startup script; `-i` keeps both.
 - A first argument that is an existing file now runs as a script. A built-in or a program of an absolute
   entry of `PATH`, written without a path, keeps priority over a file of the same name, and that program is
@@ -26,6 +32,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Fixed
 
+- A program started by a redirected or piped function, or through `time`, `command` or an alias, now writes
+  where the output of the command goes instead of the terminal.
 - Windows: a pattern after a path written with backslashes (`~/*.txt`, `$PWD/*.rs`) now expands, and a
   backslash in a `case` or `[[ ]]` pattern is a path separator, as ADR-0012 says for file name patterns.
 
