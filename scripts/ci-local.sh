@@ -88,9 +88,9 @@ step "check plugins"      cargo check -p terminal-rust-plugin-sdk -p terminal-ru
 step "clippy"             cargo clippy --all-targets --all-features --locked -- -D warnings
 step "clippy desktop"     cargo clippy -p terminal-rust-desktop --all-targets --all-features --locked -- -D warnings
 step "clippy plugins"     cargo clippy -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features --locked -- -D warnings
-step "tests"              cargo test --all-targets --all-features --locked
-step "tests desktop"      cargo test -p terminal-rust-desktop --all-targets --all-features --locked
-step "tests plugins"      cargo test -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features --locked
+step "tests"              cargo test --all-targets --all-features --locked --no-fail-fast
+step "tests desktop"      cargo test -p terminal-rust-desktop --all-targets --all-features --locked --no-fail-fast
+step "tests plugins"      cargo test -p terminal-rust-plugin-sdk -p terminal-rust-example-plugin --all-targets --all-features --locked --no-fail-fast
 step "install.sh syntax"  sh -n scripts/install.sh
 if [ "$RUN_DENY" = 1 ]; then
     command -v cargo-deny >/dev/null 2>&1 || step "install cargo-deny" cargo install cargo-deny --locked
