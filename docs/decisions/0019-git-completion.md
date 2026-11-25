@@ -2,6 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-11-21
+- Partly replaced: options (points 4 and 6) are completed since
+  [ADR-0036](0036-smarter-completion.md)
 - Decision makers: Terminal Rust team
 
 ## Context

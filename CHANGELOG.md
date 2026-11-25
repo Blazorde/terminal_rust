@@ -7,6 +7,10 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Added
 
+- `Tab` completes a command after `sudo`, `env`, `time`, `nohup`, `xargs`, `exec`, `command`, `$(`, a
+  backquote, `(`, `{` and the keywords of the shell, and the options of built-ins and of common Git
+  subcommands. `cd`, `pushd` and `rmdir` are offered directories only (ADR-0036).
+- Without a match in the case typed, completion offers the names that match in another case.
 - The shell can be started like other shells (ADR-0034): `-c 'string' [name args...]`, `terminal_rust file args...`
   (also through `#!/usr/bin/env terminal_rust`), `-i`, `-l` / `--login` and `--`.
 - An interactive shell reads `~/.terminal_rust_rc`, the desktop app included.
@@ -21,6 +25,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 ### Changed
 
+- `Tab` completes the common prefix and a second `Tab` lists the candidates, as in bash. It no longer
+  cycles through them, and `Shift+Tab` no longer selects the previous one.
+- A completed name is quoted or escaped for the shell, a completed file closes the quote it was typed in,
+  and a name with a control character is not offered.
+- The usage lines of `echo` and `unset` list `-e`, `-E` and `-f`, which they already handled.
 - `ls -l` runs the system `ls` when there is one; the built-in long format answers otherwise.
 - Without a system program, `mkdir`, `touch` and `cat` refuse an unknown option instead of reading it as a
   file name.
