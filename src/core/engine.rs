@@ -114,6 +114,16 @@ impl ShellEngine {
         }
     }
 
+    /// Give `$0`, `$1`, ... to what the shell is about to run.
+    pub(crate) fn set_arguments(&mut self, name: Option<&str>, arguments: &[String]) {
+        self.state.set_arguments(name, arguments);
+    }
+
+    /// The lines that follow come from a script, not from someone typing.
+    pub(crate) fn enter_script(&mut self) {
+        self.state.enter_script();
+    }
+
     /// The lines typed at the prompt, oldest first.
     pub(crate) fn history(&self) -> &[String] {
         self.state.history()

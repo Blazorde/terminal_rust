@@ -28,6 +28,8 @@ mod pipeline;
 mod scripts;
 mod substitution;
 
+pub(crate) use scripts::{CommandAssembler, MAX_SCRIPT_BYTES, check_syntax};
+
 /// The state a subshell restores when it ends.
 struct SubshellSnapshot {
     variables: HashMap<String, String>,
@@ -48,6 +50,8 @@ pub struct ShellState {
     user_commands: user::UserCommandRegistry,
     startup_script: Option<String>,
     script_depth: usize,
+    /// `$0` when a script or `-c` names it.
+    script_name: Option<String>,
     variables: HashMap<String, String>,
     /// The arrays, `name=(a b c)`: `${name[1]}`, `${name[@]}` (ADR-0029).
     arrays: HashMap<String, Vec<String>>,
@@ -104,6 +108,7 @@ impl ShellState {
             user_commands,
             startup_script,
             script_depth: 0,
+            script_name: None,
             variables: HashMap::new(),
             arrays: HashMap::new(),
             last_status: 0,
@@ -199,7 +204,10 @@ impl ShellState {
             "@" => {
                 return Some(positional.join(&crate::app::parser::PARAMETER_SEPARATOR.to_string()));
             }
-            "0" => return Some("terminal_rust".to_string()),
+            "0" => {
+                let name = self.script_name.as_deref().unwrap_or("terminal_rust");
+                return Some(name.to_string());
+            }
             digits if digits.bytes().all(|byte| byte.is_ascii_digit()) && !digits.is_empty() => {
                 return digits
                     .parse::<usize>()

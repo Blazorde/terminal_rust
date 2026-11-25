@@ -1,6 +1,6 @@
 use std::env;
 use std::io::{self, BufRead, IsTerminal};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
@@ -8,9 +8,11 @@ use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use rustyline::{Cmd, ColorMode, CompletionType, Config, Editor, KeyEvent};
 
+use crate::app::batch;
 use crate::app::command::input_is_incomplete;
 use crate::app::completion::ShellHelper;
 use crate::app::history;
+use crate::app::launch::{self, Action, Invocation, UsageError};
 use crate::app::parser::{continuation_prefix, normalize_multiline_input};
 use crate::app::prompt::{GUI_PROMPT_ENV, Prompt};
 use crate::commands::external;
@@ -23,13 +25,35 @@ const HISTORY_FILE_ENV: &str = "TERMINAL_RUST_HISTORY_FILE";
 
 pub fn run() -> ExitCode {
     render::stream_before_children(true);
-    let args: Vec<String> = env::args().skip(1).collect();
+    let invocation = match read_invocation() {
+        Ok(invocation) => invocation,
+        Err(error) => {
+            let _ = render::stderr_line(format_args!("terminal_rust: {error}"));
+            return ExitCode::from(2);
+        }
+    };
 
-    if args.is_empty() {
-        run_interactive()
-    } else {
-        run_once(&args)
+    match invocation.action {
+        Action::Shell if invocation.interactive || io::stdin().is_terminal() => run_interactive(),
+        Action::Shell => batch::run_stdin(),
+        Action::CommandString {
+            command,
+            name,
+            args,
+        } => batch::run_command_string(&command, name.as_deref(), &args),
+        Action::Script { path, args } => batch::run_script(&path, &args),
+        Action::OneLine(args) => run_once(&args),
     }
+}
+
+fn read_invocation() -> Result<Invocation, UsageError> {
+    let mut arguments = env::args_os();
+    let argv0 = arguments
+        .next()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let arguments = launch::decode(arguments)?;
+    launch::parse(&argv0, &arguments, |path| Path::new(path).is_file())
 }
 
 fn read_editor_command<P: rustyline::Prompt + ?Sized>(
@@ -332,7 +356,7 @@ fn handle_input(input: &str, engine: &mut ShellEngine, prompt: &mut Prompt) -> E
     result.status
 }
 
-fn emit_result(result: &ExecutionResult) {
+pub(super) fn emit_result(result: &ExecutionResult) {
     if !result.stdout.is_empty() {
         let _ = render::stdout(&result.stdout);
     }
@@ -344,7 +368,7 @@ fn emit_result(result: &ExecutionResult) {
     }
 }
 
-fn load_config() -> AppConfig {
+pub(super) fn load_config() -> AppConfig {
     let mut app_config = match config::load_user_config() {
         Ok(config) => config,
         Err(error) => {
@@ -366,7 +390,7 @@ fn load_config() -> AppConfig {
     app_config
 }
 
-fn load_engine(config: &AppConfig) -> ShellEngine {
+pub(super) fn load_engine(config: &AppConfig) -> ShellEngine {
     match ShellEngine::from_config(config) {
         Ok(engine) => engine,
         Err(error) => {

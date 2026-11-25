@@ -1,9 +1,11 @@
 use std::path::{Path, PathBuf};
 
 use super::{CommandResult, ShellState, map_prefixed_error};
-use crate::app::parser::continuation_prefix;
+use crate::app::parser::{continuation_prefix, split_chain};
 use crate::config;
 use crate::render;
+
+pub(crate) const MAX_SCRIPT_BYTES: u64 = 1_048_576;
 
 pub(super) fn run(args: &[String], state: &mut ShellState) -> CommandResult {
     let Some(action) = args.first().map(String::as_str) else {
@@ -104,7 +106,6 @@ pub(super) fn run_file(
     scripts_only: bool,
 ) -> CommandResult {
     const MAX_SCRIPT_DEPTH: usize = 16;
-    const MAX_SCRIPT_BYTES: u64 = 1_048_576;
     if state.script_depth >= MAX_SCRIPT_DEPTH {
         return CommandResult::Error(format!("{command}: maximum nesting depth exceeded"));
     }
@@ -146,58 +147,97 @@ fn execute_contents(
     script_path: &Path,
     state: &mut ShellState,
 ) -> CommandResult {
-    let mut pending = String::new();
-    for (index, raw_line) in content.lines().enumerate() {
-        let line_number = index + 1;
-        if pending.ends_with('\n') && super::heredoc_is_open(&pending) {
-            // The body of a here-document is kept as it is: blanks, `#` and all.
-            pending.push_str(raw_line);
-            if super::heredoc_is_open(&pending) {
-                pending.push('\n');
-                continue;
-            }
-            // The delimiter line came: the block counting below applies as usual.
-            if super::input_is_incomplete(&pending) {
-                pending.push('\n');
-                continue;
-            }
-        } else {
-            let line = raw_line.trim();
-            if line.starts_with('#') || line.is_empty() {
-                continue;
-            }
-            if let Some(prefix) = continuation_prefix(line) {
-                pending.push_str(prefix);
-                pending.push(' ');
-                continue;
-            }
-            pending.push_str(line);
-            // A block or a here-document that is not closed goes on over the next line.
-            if super::input_is_incomplete(&pending) {
-                pending.push('\n');
-                continue;
-            }
-        }
-        let result = super::run_line(&pending, state);
-        pending.clear();
-        match result {
+    let mut assembler = CommandAssembler::default();
+    for (index, line) in content.lines().enumerate() {
+        let Some(complete) = assembler.push_line(line) else {
+            continue;
+        };
+        match super::run_line(&complete, state) {
             CommandResult::Continue => {}
             CommandResult::Exit => return CommandResult::Exit,
             CommandResult::Error(error) => {
                 return CommandResult::Error(format!(
-                    "{command}: {}:{line_number}: {error}",
-                    script_path.display()
+                    "{command}: {}:{}: {error}",
+                    script_path.display(),
+                    index + 1
                 ));
             }
         }
     }
-    if !pending.is_empty() {
+    if assembler.is_unfinished() {
         return CommandResult::Error(format!(
             "{command}: {} ends inside an unfinished command",
             script_path.display()
         ));
     }
     CommandResult::Continue
+}
+
+/// Groups the lines of a script into complete commands: comments and blank lines are
+/// left out, continued lines are joined, and a block or a here-document is kept until
+/// it is closed.
+#[derive(Default)]
+pub(crate) struct CommandAssembler {
+    pending: String,
+    started: bool,
+}
+
+impl CommandAssembler {
+    /// Add a line, without its line ending, and give back the command it completes.
+    pub(crate) fn push_line(&mut self, raw_line: &str) -> Option<String> {
+        // Some editors, and PowerShell pipes, start the text with a byte order mark.
+        let raw_line = if std::mem::replace(&mut self.started, true) {
+            raw_line
+        } else {
+            raw_line.strip_prefix('\u{feff}').unwrap_or(raw_line)
+        };
+        if self.pending.ends_with('\n') && super::heredoc_is_open(&self.pending) {
+            // The body of a here-document is kept as it is: blanks, `#` and all.
+            self.pending.push_str(raw_line);
+        } else {
+            let line = raw_line.trim();
+            if line.starts_with('#') || line.is_empty() {
+                return None;
+            }
+            if let Some(prefix) = continuation_prefix(line) {
+                self.pending.push_str(prefix);
+                self.pending.push(' ');
+                return None;
+            }
+            self.pending.push_str(line);
+        }
+        // A block or a here-document that is not closed goes on over the next line.
+        if super::input_is_incomplete(&self.pending) {
+            self.pending.push('\n');
+            return None;
+        }
+        Some(std::mem::take(&mut self.pending))
+    }
+
+    /// Whether lines are still waiting for the end of their command.
+    pub(crate) fn is_unfinished(&self) -> bool {
+        !self.pending.is_empty()
+    }
+}
+
+/// Whether the complete command `input` can be parsed; nothing runs.
+pub(crate) fn check_syntax(input: &str) -> Result<(), String> {
+    let rewritten = super::heredoc::rewrite(input)?;
+    super::flow::parse(split_chain(&rewritten)?).map(drop)
+}
+
+impl ShellState {
+    /// `$0` and `$1`, `$2`, ... of a script or of `-c`.
+    pub(crate) fn set_arguments(&mut self, name: Option<&str>, arguments: &[String]) {
+        self.script_name = name.map(str::to_string);
+        self.frames = vec![super::functions::Frame::for_file(arguments)];
+    }
+
+    /// What runs comes from a script, not from someone typing: as in a sourced file,
+    /// `alias` does not confirm.
+    pub(crate) fn enter_script(&mut self) {
+        self.script_depth += 1;
+    }
 }
 
 fn set_startup(path: &str, state: &mut ShellState) -> CommandResult {
