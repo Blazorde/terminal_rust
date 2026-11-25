@@ -5,6 +5,7 @@ mod git;
 mod line;
 mod listing;
 mod matching;
+mod options;
 mod programs;
 mod quoting;
 #[cfg(test)]
@@ -92,6 +93,9 @@ impl ShellHelper {
         // The file of a redirection is not an argument of the command.
         let command: &[&str] = if at.redirect { &[] } else { &at.command };
         let directories_only = matches!(command.first(), Some(&("cd" | "pushd" | "rmdir")));
+        if let Some(candidates) = options::complete(command, current_word) {
+            return (command_start, candidates);
+        }
         for case in CASES {
             // `git ch<Tab>` and `git checkout fe<Tab>`: subcommands and references.
             if let Some(candidates) = git::complete(command, current_word, &current, case) {

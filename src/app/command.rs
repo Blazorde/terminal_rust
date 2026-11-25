@@ -526,7 +526,7 @@ const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "echo",
-        usage: "echo [-n] [text...]",
+        usage: "echo [-n] [-e|-E] [text...]",
         summary: "print text to the terminal",
         max_args: None,
         handler: run_echo,
@@ -813,7 +813,7 @@ const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "unset",
-        usage: "unset NAME...",
+        usage: "unset [-f] NAME...",
         summary: "remove variables, including inherited ones",
         max_args: None,
         handler: run_unset,
@@ -843,6 +843,11 @@ const COMMANDS: &[CommandSpec] = &[
 
 pub fn command_names() -> impl Iterator<Item = &'static str> {
     COMMANDS.iter().map(|command| command.name)
+}
+
+/// The usage line of the built-in `name`.
+pub(crate) fn command_usage(name: &str) -> Option<&'static str> {
+    find_command(name).map(|command| command.usage)
 }
 
 pub(crate) fn command_help() -> impl Iterator<Item = (&'static str, &'static str)> {
