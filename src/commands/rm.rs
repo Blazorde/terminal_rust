@@ -34,17 +34,17 @@ fn guard_with(args: &[String], confirm: fn(&str) -> io::Result<bool>) -> Result<
         ensure_not_protected(Path::new(target.trim()))?;
     }
 
-    let has = |long: &str, letters: &[char]| {
+    let has = |longs: &[&str], letters: &[char]| {
         system_fallback::options(args).any(|option| match system_fallback::short_group(option) {
             Some(group) => group.contains(letters),
-            None => option == long,
+            None => longs.contains(&option.as_str()),
         })
     };
     let options = RmOptions {
-        force: has("--force", &['f']),
-        recursive: has("--recursive", &['r', 'R']),
+        force: has(&["--force"], &['f']),
+        recursive: has(&["--recursive"], &['r', 'R']),
         // A later `-I` makes the system `rm` drop `-i`: the question stays here.
-        interactive: has("--interactive", &['i']),
+        interactive: has(&["--interactive", "--interactive=always"], &['i']),
         ..RmOptions::default()
     };
     for target in targets {
@@ -469,7 +469,12 @@ mod tests {
             let result = guard_with(&args(options), confirm_unexpected);
             assert!(matches!(result, Ok(true)), "{options:?}");
         }
-        for options in [&["-i", "-I"][..], &["-iI"], &["--interactive", "-I"]] {
+        for options in [
+            &["-i", "-I"][..],
+            &["-iI"],
+            &["--interactive", "-I"],
+            &["--interactive=always", "-I"],
+        ] {
             let declined = guard_with(&args(options), confirm_no);
             assert!(matches!(declined, Ok(false)), "{options:?}");
         }

@@ -31,7 +31,8 @@ they make the shell usable on Windows, where most of these programs do not exist
    `--interactive=always`, `--help`, `--version`, along with the options of the built-in. Anything else,
    such as `--no-preserve-root` or an abbreviated long option, is an error. Before the program starts, the
    shell applies the protections of the built-in to every operand: `.`, `..` and the root directory are
-   refused, and it asks before a recursive removal without `-f`, or for each operand with `-i`.
+   refused, and it asks before a recursive removal without `-f`, or for each operand with `-i`,
+   `--interactive` or `--interactive=always`.
 
 ## Options considered
 

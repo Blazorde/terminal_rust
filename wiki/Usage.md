@@ -55,7 +55,8 @@ name keeps its priority.
 For `rm`, only `-I`, `--one-file-system`, `--preserve-root`, `--preserve-root=all`,
 `--interactive=never|once|always`, `--help` and `--version` are passed on. Before the system `rm` starts,
 `.`, `..` and the root directory are still refused, and the shell still asks before a recursive removal
-without `-f`, or about each name with `-i`. The system `rm` may then ask again.
+without `-f`, or about each name with `-i`, `--interactive` or `--interactive=always`. The system `rm` may
+then ask again.
 
 ## Running other programs
 
