@@ -69,7 +69,7 @@ fn in_directory(
             if directories_only && !is_directory {
                 return None;
             }
-            candidate(path, name, is_directory, separator)
+            candidate(path, name, is_directory, separator, cfg!(windows))
         })
         .collect()
 }
@@ -79,8 +79,18 @@ fn candidate(
     mut name: String,
     is_directory: bool,
     separator: char,
+    windows: bool,
 ) -> Option<Pair> {
-    let mut replacement = format!("{}{}", path.kept, quoted(&name, path.quote, cfg!(windows))?);
+    let written = quoted(&name, path.quote, windows)?;
+    let mut replacement = path.kept.to_string();
+    // A last `\` would escape a quote or a `\` that starts the name, and what the name
+    // says would then run. Windows reads `/` as a separator too.
+    if path.quote != Some('\'') && written.starts_with(['\'', '\\']) && replacement.ends_with('\\')
+    {
+        replacement.pop();
+        replacement.push('/');
+    }
+    replacement.push_str(&written);
     if is_directory {
         replacement.push(separator);
         name.push(MAIN_SEPARATOR);
@@ -97,6 +107,8 @@ fn candidate(
 mod tests {
     use super::super::matching::CASES;
     use super::*;
+    use crate::ShellEngine;
+    use crate::app::parser::{parse_words, split_chain};
     use crate::utils::path::temp_path;
 
     /// An empty directory of its own, with these files and directories (`/` at the end).
@@ -180,10 +192,72 @@ mod tests {
         // Inside quotes the name stays as it is, and a file closes them.
         assert_eq!(paths_in(&root, "\"my n"), ["my notes.txt\""]);
         assert_eq!(paths_in(&root, "'my d"), [format!("my dir{separator}")]);
+        // On Windows the name opens a quote, which a `\` in front would escape.
         assert_eq!(
             paths_in(&root, &format!("~{separator}my n")),
-            [format!("~{separator}{}", spaced("my notes.txt"))]
+            [format!("~/{}", spaced("my notes.txt"))]
         );
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    /// The line `echo <word>` once the Windows completion has put `name` in `word`.
+    /// `None` when the name is not offered there.
+    fn windows_line(word: &str, name: &str) -> Option<String> {
+        let path = split_path(word, true);
+        let pair = candidate(&path, name.to_string(), false, '\\', true)?;
+        Some(format!("echo {}{}", &word[..path.start], pair.replacement))
+    }
+
+    #[test]
+    fn a_windows_path_never_lets_a_name_act_on_the_line() {
+        let names = [
+            "$(echo INJ)",
+            "$x",
+            ";echo INJ;'",
+            "'; echo INJ",
+            "a b",
+            "`echo INJ`",
+            "a!b",
+            "a&echo INJ",
+            "plain.txt",
+        ];
+        let lookup = |name: &str| (name == "HOME").then(|| "HOMEDIR".to_string());
+        let mut engine = ShellEngine::new();
+
+        for directory in ["dir\\", "~\\", "a\\dir\\", "'a b'\\"] {
+            for quote in ["", "\""] {
+                // A quote after a quoted directory is another word shape.
+                if quote == "\"" && directory.starts_with('\'') {
+                    continue;
+                }
+                for name in names {
+                    let word = format!("{quote}{directory}");
+                    let Some(line) = windows_line(&word, name) else {
+                        assert!(quote == "\"" && name.contains('`'), "{word} {name}");
+                        continue;
+                    };
+                    let typed = directory.replace('\'', "").replace('\\', "/");
+                    let expected = match typed.strip_prefix('~') {
+                        Some(rest) if quote.is_empty() => format!("HOMEDIR{rest}{name}"),
+                        _ => format!("{typed}{name}"),
+                    };
+
+                    let segments = split_chain(&line).expect(&line);
+                    assert_eq!(segments.len(), 1, "{line}");
+                    assert!(!segments[0].background, "{line}");
+                    let words = parse_words(&segments[0].text, &lookup).expect(&line);
+                    assert_eq!(words.len(), 2, "{line}");
+                    assert_eq!(words[1].pattern, None, "{line}");
+                    let read = words[1].text.replace('\\', "/");
+                    assert_eq!(read, expected, "{line}");
+
+                    // The parser alone does not run substitutions: the shell does.
+                    let result = engine.execute_line(&line);
+                    assert_eq!(result.stdout.lines().count(), 1, "{line}");
+                    let printed = result.stdout.trim_end();
+                    assert!(printed.ends_with(name), "{line} printed {printed}");
+                }
+            }
+        }
     }
 }

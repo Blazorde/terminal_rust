@@ -33,7 +33,9 @@ follows what the line means.
    case counts for options.
 6. File names are completed by the shell and no longer by the completer of the
    line editor, which cannot fall back to another case. Names are quoted by the
-   rules of the parser. A name with a control character is not offered.
+   rules of the parser. A name with a control character is not offered. On Windows
+   the last `\` typed becomes `/` when the written name starts with a quote or a
+   `\`, which it would otherwise escape.
 7. No process is started. At most 2,000 candidates are offered, keeping what the
    whole list shares: the line editor fails above 65,535.
 8. Not included: remotes, modified files for `git add` and `restore`, stash
