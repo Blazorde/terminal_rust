@@ -12,6 +12,11 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 - `let` and `(( expression ))` with assignments, `+=`, `++`, `--` and the comma; the status is `0` for a non-zero
   value and `1` otherwise (ADR-0033).
 
+### Fixed
+
+- Windows: a pattern after a path written with backslashes (`~/*.txt`, `$PWD/*.rs`) now expands, and a
+  backslash in a `case` or `[[ ]]` pattern is a path separator, as ADR-0012 says for file name patterns.
+
 ## [1.12.0] - 2026-11-22
 
 ### Added

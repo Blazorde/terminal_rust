@@ -6,6 +6,7 @@ pub fn hostname() -> std::io::Result<()> {
 
 pub(crate) fn current_hostname() -> Option<String> {
     sysinfo::System::host_name()
+        .ok()
         .filter(|value| !value.trim().is_empty())
         .or_else(|| first_non_empty_env(&["HOSTNAME", "COMPUTERNAME"]))
 }

@@ -165,7 +165,7 @@ impl Jobs {
         self.list.iter().any(|job| job.stopped)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(super) fn is_empty(&self) -> bool {
         self.list.is_empty()
     }

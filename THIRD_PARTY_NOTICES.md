@@ -18,36 +18,42 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 
 | Ecosystem | Package | Version | Declared license | Source |
 | --- | --- | --- | --- | --- |
+| npm | @emnapi/core | 2.0.0-beta.2 | MIT | https://www.npmjs.com/package/@emnapi/core |
+| npm | @emnapi/runtime | 2.0.0-beta.2 | MIT | https://www.npmjs.com/package/@emnapi/runtime |
+| npm | @emnapi/wasi-threads | 2.2.0 | MIT | https://www.npmjs.com/package/@emnapi/wasi-threads |
+| npm | @napi-rs/wasm-runtime | 1.2.6 | MIT | https://www.npmjs.com/package/@napi-rs/wasm-runtime |
 | npm | @oxc-project/types | 0.156.0 | MIT | https://www.npmjs.com/package/@oxc-project/types |
-| npm | @rolldown/binding-android-arm-eabi | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-android-arm-eabi |
-| npm | @rolldown/binding-android-arm64 | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-android-arm64 |
-| npm | @rolldown/binding-darwin-arm64 | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-darwin-arm64 |
-| npm | @rolldown/binding-darwin-x64 | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-darwin-x64 |
-| npm | @rolldown/binding-freebsd-x64 | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-freebsd-x64 |
-| npm | @rolldown/binding-linux-arm-gnueabihf | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm-gnueabihf |
-| npm | @rolldown/binding-linux-arm64-gnu | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm64-gnu |
-| npm | @rolldown/binding-linux-arm64-musl | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm64-musl |
-| npm | @rolldown/binding-linux-ppc64-gnu | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-ppc64-gnu |
-| npm | @rolldown/binding-linux-s390x-gnu | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-s390x-gnu |
-| npm | @rolldown/binding-linux-x64-gnu | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-x64-gnu |
-| npm | @rolldown/binding-linux-x64-musl | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-x64-musl |
-| npm | @rolldown/binding-openharmony-arm64 | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-openharmony-arm64 |
-| npm | @rolldown/binding-win32-arm64-msvc | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-win32-arm64-msvc |
-| npm | @rolldown/binding-win32-x64-msvc | 1.2.16 | MIT | https://www.npmjs.com/package/@rolldown/binding-win32-x64-msvc |
+| npm | @rolldown/binding-android-arm-eabi | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-android-arm-eabi |
+| npm | @rolldown/binding-android-arm64 | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-android-arm64 |
+| npm | @rolldown/binding-darwin-arm64 | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-darwin-arm64 |
+| npm | @rolldown/binding-darwin-x64 | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-darwin-x64 |
+| npm | @rolldown/binding-freebsd-x64 | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-freebsd-x64 |
+| npm | @rolldown/binding-linux-arm-gnueabihf | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm-gnueabihf |
+| npm | @rolldown/binding-linux-arm64-gnu | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm64-gnu |
+| npm | @rolldown/binding-linux-arm64-musl | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-arm64-musl |
+| npm | @rolldown/binding-linux-ppc64-gnu | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-ppc64-gnu |
+| npm | @rolldown/binding-linux-s390x-gnu | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-s390x-gnu |
+| npm | @rolldown/binding-linux-x64-gnu | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-x64-gnu |
+| npm | @rolldown/binding-linux-x64-musl | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-linux-x64-musl |
+| npm | @rolldown/binding-openharmony-arm64 | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-openharmony-arm64 |
+| npm | @rolldown/binding-wasm32-wasi | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-wasm32-wasi |
+| npm | @rolldown/binding-win32-arm64-msvc | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-win32-arm64-msvc |
+| npm | @rolldown/binding-win32-x64-msvc | 1.2.19 | MIT | https://www.npmjs.com/package/@rolldown/binding-win32-x64-msvc |
 | npm | @rolldown/pluginutils | 1.0.1 | MIT | https://www.npmjs.com/package/@rolldown/pluginutils |
-| npm | @tauri-apps/api | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/api |
-| npm | @tauri-apps/cli-darwin-arm64 | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-darwin-arm64 |
-| npm | @tauri-apps/cli-darwin-x64 | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-darwin-x64 |
-| npm | @tauri-apps/cli-linux-arm-gnueabihf | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm-gnueabihf |
-| npm | @tauri-apps/cli-linux-arm64-gnu | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm64-gnu |
-| npm | @tauri-apps/cli-linux-arm64-musl | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm64-musl |
-| npm | @tauri-apps/cli-linux-riscv64-gnu | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-riscv64-gnu |
-| npm | @tauri-apps/cli-linux-x64-gnu | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-x64-gnu |
-| npm | @tauri-apps/cli-linux-x64-musl | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-x64-musl |
-| npm | @tauri-apps/cli-win32-arm64-msvc | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-arm64-msvc |
-| npm | @tauri-apps/cli-win32-ia32-msvc | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-ia32-msvc |
-| npm | @tauri-apps/cli-win32-x64-msvc | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-x64-msvc |
-| npm | @tauri-apps/cli | 2.12.4 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli |
+| npm | @tauri-apps/api | 2.12.5 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/api |
+| npm | @tauri-apps/cli-darwin-arm64 | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-darwin-arm64 |
+| npm | @tauri-apps/cli-darwin-x64 | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-darwin-x64 |
+| npm | @tauri-apps/cli-linux-arm-gnueabihf | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm-gnueabihf |
+| npm | @tauri-apps/cli-linux-arm64-gnu | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm64-gnu |
+| npm | @tauri-apps/cli-linux-arm64-musl | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-arm64-musl |
+| npm | @tauri-apps/cli-linux-riscv64-gnu | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-riscv64-gnu |
+| npm | @tauri-apps/cli-linux-x64-gnu | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-x64-gnu |
+| npm | @tauri-apps/cli-linux-x64-musl | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-linux-x64-musl |
+| npm | @tauri-apps/cli-win32-arm64-msvc | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-arm64-msvc |
+| npm | @tauri-apps/cli-win32-ia32-msvc | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-ia32-msvc |
+| npm | @tauri-apps/cli-win32-x64-msvc | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli-win32-x64-msvc |
+| npm | @tauri-apps/cli | 2.12.6 | Apache-2.0 OR MIT | https://www.npmjs.com/package/@tauri-apps/cli |
+| npm | @tybys/wasm-util | 0.10.5 | MIT | https://www.npmjs.com/package/@tybys/wasm-util |
 | npm | @types/react-dom | 19.3.0 | MIT | https://www.npmjs.com/package/@types/react-dom |
 | npm | @types/react | 19.3.0 | MIT | https://www.npmjs.com/package/@types/react |
 | npm | @typescript/typescript-aix-ppc64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-aix-ppc64 |
@@ -70,7 +76,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | npm | @typescript/typescript-sunos-x64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-sunos-x64 |
 | npm | @typescript/typescript-win32-arm64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-win32-arm64 |
 | npm | @typescript/typescript-win32-x64 | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/@typescript/typescript-win32-x64 |
-| npm | @vitejs/plugin-react | 6.2.1 | MIT | https://www.npmjs.com/package/@vitejs/plugin-react |
+| npm | @vitejs/plugin-react | 6.3.0 | MIT | https://www.npmjs.com/package/@vitejs/plugin-react |
 | npm | @xterm/addon-fit | 0.11.0 | MIT | https://www.npmjs.com/package/@xterm/addon-fit |
 | npm | @xterm/xterm | 6.0.0 | MIT | https://www.npmjs.com/package/@xterm/xterm |
 | npm | csstype | 3.2.3 | MIT | https://www.npmjs.com/package/csstype |
@@ -95,12 +101,13 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | npm | postcss | 8.5.32 | MIT | https://www.npmjs.com/package/postcss |
 | npm | react-dom | 19.3.1 | MIT | https://www.npmjs.com/package/react-dom |
 | npm | react | 19.3.1 | MIT | https://www.npmjs.com/package/react |
-| npm | rolldown | 1.2.16 | MIT | https://www.npmjs.com/package/rolldown |
+| npm | rolldown | 1.2.19 | MIT | https://www.npmjs.com/package/rolldown |
 | npm | scheduler | 0.28.0 | MIT | https://www.npmjs.com/package/scheduler |
 | npm | source-map-js | 1.2.2 | BSD-3-Clause | https://www.npmjs.com/package/source-map-js |
 | npm | tinyglobby | 0.2.17 | MIT | https://www.npmjs.com/package/tinyglobby |
+| npm | tslib | 2.9.1 | 0BSD | https://www.npmjs.com/package/tslib |
 | npm | typescript | 7.0.2 | Apache-2.0 | https://www.npmjs.com/package/typescript |
-| npm | vite | 8.3.6 | MIT | https://www.npmjs.com/package/vite |
+| npm | vite | 8.3.8 | MIT | https://www.npmjs.com/package/vite |
 | Rust | accesskit | 0.24.1 | MIT OR Apache-2.0 | https://github.com/AccessKit/accesskit |
 | Rust | accesskit | 0.25.2 | MIT OR Apache-2.0 | https://github.com/AccessKit/accesskit |
 | Rust | adler2 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | https://github.com/oyvindln/adler2 |
@@ -337,10 +344,15 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | javascriptcore-rs-sys | 1.1.1 | MIT | https://github.com/tauri-apps/javascriptcore-rs |
 | Rust | javascriptcore-rs | 1.1.2 | MIT | https://github.com/tauri-apps/javascriptcore-rs |
 | Rust | jiff-core | 0.1.8 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
-| Rust | jiff-static | 0.2.43 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
+| Rust | jiff-core | 1.0.1 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
+| Rust | jiff-static | 0.2.46 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
+| Rust | jiff-static | 1.0.1 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
 | Rust | jiff-tzdb-platform | 0.1.3 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
+| Rust | jiff-tzdb-platform | 1.0.0 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
 | Rust | jiff-tzdb | 0.1.9 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
-| Rust | jiff | 0.2.43 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
+| Rust | jiff-tzdb | 1.0.0 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
+| Rust | jiff | 0.2.46 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
+| Rust | jiff | 1.0.1 | Unlicense OR MIT | https://github.com/BurntSushi/jiff |
 | Rust | jni-macros | 0.22.4 | MIT OR Apache-2.0 | https://github.com/jni-rs/jni-rs |
 | Rust | jni-sys-macros | 0.4.1 | MIT OR Apache-2.0 | https://github.com/jni-rs/jni-sys |
 | Rust | jni-sys | 0.3.1 | MIT OR Apache-2.0 | https://github.com/jni-rs/jni-sys |
@@ -357,7 +369,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | lazy_static | 1.5.1 | MIT OR Apache-2.0 | https://github.com/rust-lang-nursery/lazy-static.rs |
 | Rust | libappindicator-sys | 0.9.0 | Apache-2.0 OR MIT | crates.io |
 | Rust | libappindicator | 0.9.0 | Apache-2.0 OR MIT | crates.io |
-| Rust | libc | 0.2.186 | MIT OR Apache-2.0 | https://github.com/rust-lang/libc |
+| Rust | libc | 0.2.191 | MIT OR Apache-2.0 | https://github.com/rust-lang/libc |
 | Rust | libdbus-sys | 0.2.7 | Apache-2.0/MIT | https://github.com/diwic/dbus-rs |
 | Rust | libghostty-vt-sys | 0.2.2 | MIT OR Apache-2.0 | https://github.com/uzaaft/libghostty-rs |
 | Rust | libghostty-vt | 0.2.2 | MIT OR Apache-2.0 | https://github.com/uzaaft/libghostty-rs |
@@ -487,9 +499,9 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | redox_users | 0.5.3 | MIT | https://gitlab.redox-os.org/redox-os/users |
 | Rust | ref-cast-impl | 1.0.27 | MIT OR Apache-2.0 | https://github.com/dtolnay/ref-cast |
 | Rust | ref-cast | 1.0.27 | MIT OR Apache-2.0 | https://github.com/dtolnay/ref-cast |
-| Rust | regex-automata | 0.4.18 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
-| Rust | regex-syntax | 0.8.11 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
-| Rust | regex | 1.13.1 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
+| Rust | regex-automata | 0.4.19 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
+| Rust | regex-syntax | 0.8.12 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
+| Rust | regex | 1.13.2 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
 | Rust | renderdoc-sys | 1.1.0 | MIT OR Apache-2.0 | https://github.com/ebkalderon/renderdoc-rs |
 | Rust | reqwest | 0.13.5 | MIT OR Apache-2.0 | https://github.com/seanmonstar/reqwest |
 | Rust | rustc_version | 0.4.1 | MIT OR Apache-2.0 | https://github.com/djc/rustc-version-rs |
@@ -516,7 +528,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | serde_json | 1.0.154 | MIT OR Apache-2.0 | https://github.com/serde-rs/json |
 | Rust | serde_repr | 0.1.21 | MIT OR Apache-2.0 | https://github.com/dtolnay/serde-repr |
 | Rust | serde_spanned | 0.6.9 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
-| Rust | serde_spanned | 1.1.2 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
+| Rust | serde_spanned | 1.1.3 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | serde_with_macros | 3.24.0 | MIT OR Apache-2.0 | https://github.com/jonasbb/serde_with/ |
 | Rust | serde_with | 3.24.0 | MIT OR Apache-2.0 | https://github.com/jonasbb/serde_with/ |
 | Rust | serde-untagged | 0.1.9 | MIT OR Apache-2.0 | https://github.com/dtolnay/serde-untagged |
@@ -533,6 +545,7 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | signal-hook-mio | 0.2.5 | MIT OR Apache-2.0 | https://github.com/vorner/signal-hook |
 | Rust | signal-hook-registry | 1.4.8 | MIT OR Apache-2.0 | https://github.com/vorner/signal-hook |
 | Rust | signal-hook | 0.3.18 | Apache-2.0/MIT | https://github.com/vorner/signal-hook |
+| Rust | signal-hook | 0.4.6 | MIT OR Apache-2.0 | https://github.com/vorner/signal-hook |
 | Rust | simd_cesu8 | 1.2.0 | Apache-2.0 OR MIT | https://github.com/seancroach/simd_cesu8 |
 | Rust | simd-adler32 | 0.3.10 | MIT | https://github.com/mcountryman/simd-adler32 |
 | Rust | simdutf8 | 0.1.5 | MIT OR Apache-2.0 | https://github.com/rusticstuff/simdutf8 |
@@ -559,20 +572,20 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | syn | 3.0.7 | MIT OR Apache-2.0 | https://github.com/dtolnay/syn |
 | Rust | sync_wrapper | 1.0.2 | Apache-2.0 | https://github.com/Actyx/sync_wrapper |
 | Rust | synstructure | 0.14.0 | MIT | https://github.com/mystor/synstructure |
-| Rust | sysinfo | 0.39.6 | MIT | https://github.com/GuillaumeGomez/sysinfo |
+| Rust | sysinfo | 0.40.4 | MIT | https://github.com/GuillaumeGomez/sysinfo |
 | Rust | system-deps | 6.2.2 | MIT OR Apache-2.0 | https://github.com/gdesmott/system-deps |
 | Rust | tao-macros | 0.1.4 | MIT OR Apache-2.0 | https://github.com/tauri-apps/tao |
 | Rust | tao | 0.37.1 | Apache-2.0 | https://github.com/tauri-apps/tao |
 | Rust | tar | 0.4.46 | MIT OR Apache-2.0 | https://github.com/composefs/tar-rs |
 | Rust | target-lexicon | 0.12.16 | Apache-2.0 WITH LLVM-exception | https://github.com/bytecodealliance/target-lexicon |
-| Rust | tauri-build | 2.7.4 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
-| Rust | tauri-codegen | 2.7.4 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
-| Rust | tauri-macros | 2.7.4 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
-| Rust | tauri-runtime-wry | 2.12.3 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
-| Rust | tauri-runtime | 2.12.2 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
-| Rust | tauri-utils | 2.10.2 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri-build | 2.7.6 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri-codegen | 2.7.6 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri-macros | 2.7.6 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri-runtime-wry | 2.12.5 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri-runtime | 2.12.4 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri-utils | 2.10.4 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
 | Rust | tauri-winres | 0.3.6 | MIT | https://github.com/tauri-apps/winres |
-| Rust | tauri | 2.12.5 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
+| Rust | tauri | 2.12.7 | Apache-2.0 OR MIT | https://github.com/tauri-apps/tauri |
 | Rust | tendril | 0.5.1 | MIT OR Apache-2.0 | https://github.com/servo/html5ever |
 | Rust | thiserror-impl | 1.0.69 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
 | Rust | thiserror-impl | 2.0.21 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
@@ -587,14 +600,14 @@ CI rejects a stale inventory with `npm run notices:check --prefix desktop`.
 | Rust | tokio-util | 0.7.20 | MIT | https://github.com/tokio-rs/tokio |
 | Rust | tokio | 1.53.2 | MIT | https://github.com/tokio-rs/tokio |
 | Rust | toml_datetime | 0.6.3 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
-| Rust | toml_datetime | 1.1.2+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
+| Rust | toml_datetime | 1.1.3+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | toml_edit | 0.19.15 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | toml_edit | 0.20.2 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | toml_edit | 0.25.17+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | toml_parser | 1.1.5+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | toml_writer | 1.2.0+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | toml | 0.8.2 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
-| Rust | toml | 1.2.0+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
+| Rust | toml | 1.2.1+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | Rust | tower-http | 0.6.11 | MIT | https://github.com/tower-rs/tower-http |
 | Rust | tower-layer | 0.3.3 | MIT | https://github.com/tower-rs/tower |
 | Rust | tower-service | 0.3.3 | MIT | https://github.com/tower-rs/tower |
