@@ -13,7 +13,7 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 - On Unix, a login shell takes the environment of `/etc/profile` and `~/.profile`, run by `/bin/sh`.
 - A built-in that receives an option it does not handle hands the command to the system program of the same
   name, found in an absolute entry of `PATH` (ADR-0035): `cat -n`, `mkdir -m`, `touch -d`, `date -u`. `rm`
-  passes only listed options on, after its own protections.
+  passes only listed options on, after its own protections, and never on Windows.
 - Operators on the value of a variable (ADR-0030): `${f%.txt}`, `${path##*/}`, `${s/old/new}`, `${s//old/new}`,
   `${s:1:3}`, `${s: -3}`, `${s^^}`, `${s,,}`, and slices of arrays and parameters (`${arr[@]:1}`, `${@:2}`).
 - `let` and `(( expression ))` with assignments, `+=`, `++`, `--` and the comma; the status is `0` for a non-zero

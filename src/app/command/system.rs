@@ -11,7 +11,7 @@ use crate::render;
 use crate::utils::pipe_input;
 
 fn decide(name: &str, args: &[String]) -> Decision {
-    system_fallback::decide(name, args, external::locate_absolute)
+    system_fallback::decide(name, args, cfg!(windows), external::locate_absolute)
 }
 
 /// Run `name args` in the place of the built-in, or `None` when the built-in does it.

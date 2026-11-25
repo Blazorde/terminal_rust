@@ -26,13 +26,15 @@ they make the shell usable on Windows, where most of these programs do not exist
 6. Functions and aliases keep their priority. An alias of a built-in and `command name` reach the same rule.
 7. The system program is started like any other program: redirections, pipelines, command substitution,
    exit status, `set -e`, jobs and `Ctrl+C` follow. A system `cat` receives the input the shell holds.
-8. `rm` is delegated under two conditions. Only listed options are handed over: `-I`, `--one-file-system`,
-   `--preserve-root`, `--preserve-root=all`, `--interactive=never`, `--interactive=once`,
-   `--interactive=always`, `--help`, `--version`, along with the options of the built-in. Anything else,
-   such as `--no-preserve-root` or an abbreviated long option, is an error. Before the program starts, the
-   shell applies the protections of the built-in to every operand: `.`, `..` and the root directory are
-   refused, and it asks before a recursive removal without `-f`, or for each operand with `-i`,
-   `--interactive` or `--interactive=always`.
+8. `rm` is never delegated on Windows: the `rm` of Git or MSYS expands `*` and `@file` in its arguments
+   again, so it could remove more than what the shell has checked. An option of the system program is an
+   error there. Elsewhere `rm` is delegated under two conditions. Only listed options are handed over: `-I`,
+   `--one-file-system`, `--preserve-root`, `--preserve-root=all`, `--interactive=never`,
+   `--interactive=once`, `--interactive=always`, `--help`, `--version`, along with the options of the
+   built-in. Anything else, such as `--no-preserve-root` or an abbreviated long option, is an error. Before
+   the program starts, the shell applies the protections of the built-in to every operand: `.`, `..` and the
+   root directory are refused, and it asks before a recursive removal without `-f`, or for each operand with
+   `-i`, `--interactive` or `--interactive=always`.
 
 ## Options considered
 
@@ -51,6 +53,7 @@ they make the shell usable on Windows, where most of these programs do not exist
 ### Negative
 
 - Output and messages of a delegated command depend on the system (GNU, BSD or none).
+- On Windows, `rm -I` and `rm --one-file-system` are unavailable, even with Git or MSYS installed.
 - A system `rm` may ask again after the shell has asked.
 - The question of the shell goes to its own standard error: no redirection or pipe of the command takes it.
 - The question of the shell before a delegated `rm` is answered on the input of the shell, not through a pipe

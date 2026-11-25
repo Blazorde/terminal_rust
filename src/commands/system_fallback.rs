@@ -33,6 +33,8 @@ pub struct Handled {
     pub hand_over: HandOver,
     /// Whether the program reads its input when it has no file operand.
     pub reads_input: bool,
+    /// Whether a program found on Windows may take over.
+    pub on_windows: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -49,6 +51,7 @@ const NOTHING: Handled = Handled {
     prefer_system: "",
     hand_over: HandOver::Any,
     reads_input: false,
+    on_windows: true,
 };
 
 const LS: Handled = Handled {
@@ -131,6 +134,9 @@ const RM: Handled = Handled {
         "--help",
         "--version",
     ]),
+    // The `rm` of Git or MSYS expands `*` and `@file` in its arguments again, so
+    // it could remove more than what the shell has checked.
+    on_windows: false,
     ..NOTHING
 };
 
@@ -149,10 +155,21 @@ pub fn handled(name: &str) -> Option<&'static Handled> {
     }
 }
 
-/// Who runs `name args`. `locate` finds the system program of a name.
-pub fn decide(name: &str, args: &[String], locate: impl Fn(&str) -> Option<PathBuf>) -> Decision {
+/// Who runs `name args` on Windows or elsewhere. `locate` finds the system
+/// program of a name.
+pub fn decide(
+    name: &str,
+    args: &[String],
+    windows: bool,
+    locate: impl Fn(&str) -> Option<PathBuf>,
+) -> Decision {
     let Some(handled) = handled(name) else {
         return Decision::Builtin;
+    };
+    let locate = |name: &str| {
+        (handled.on_windows || !windows)
+            .then(|| locate(name))
+            .flatten()
     };
     let unknown: Vec<&String> = options(args)
         .filter(|option| !handled.knows(option))
@@ -267,11 +284,11 @@ mod tests {
     }
 
     fn with_program(name: &str, args: &[&str]) -> Decision {
-        decide(name, &strings(args), found)
+        decide(name, &strings(args), false, found)
     }
 
     fn without_program(name: &str, args: &[&str]) -> Decision {
-        decide(name, &strings(args), missing)
+        decide(name, &strings(args), false, missing)
     }
 
     fn system(name: &str) -> Decision {
@@ -377,6 +394,30 @@ mod tests {
                 "{option}"
             );
         }
+    }
+
+    #[test]
+    fn rm_is_never_handed_over_on_windows() {
+        for option in [
+            "-I",
+            "-rI",
+            "--one-file-system",
+            "--interactive=always",
+            "--help",
+        ] {
+            let args = strings(&[option, "*"]);
+            assert_eq!(
+                decide("rm", &args, true, found),
+                reject(&format!("rm: unknown option: {option}")),
+                "{option}"
+            );
+            assert_eq!(decide("rm", &args, false, found), system("rm"), "{option}");
+        }
+        assert_eq!(
+            decide("rm", &strings(&["-rf", "x"]), true, found),
+            Decision::Builtin
+        );
+        assert_eq!(decide("cat", &strings(&["-n"]), true, found), system("cat"));
     }
 
     #[test]

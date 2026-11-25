@@ -52,11 +52,12 @@ name keeps its priority.
 | `touch` | file names |
 | `whoami`, `arch`, `nproc`, `uptime`, `hostname`, `clear` | no argument |
 
-For `rm`, only `-I`, `--one-file-system`, `--preserve-root`, `--preserve-root=all`,
-`--interactive=never|once|always`, `--help` and `--version` are passed on. Before the system `rm` starts,
-`.`, `..` and the root directory are still refused, and the shell still asks before a recursive removal
-without `-f`, or about each name with `-i`, `--interactive` or `--interactive=always`. The system `rm` may
-then ask again.
+On Windows `rm` is never handed to a system program, because the `rm` of Git or MSYS expands `*` and `@file`
+again: an option the shell does not handle is an error. On Linux and macOS, only `-I`, `--one-file-system`,
+`--preserve-root`, `--preserve-root=all`, `--interactive=never|once|always`, `--help` and `--version` are
+passed on. Before the system `rm` starts, `.`, `..` and the root directory are still refused, and the shell
+still asks before a recursive removal without `-f`, or about each name with `-i`, `--interactive` or
+`--interactive=always`. The system `rm` may then ask again.
 
 ## Running other programs
 

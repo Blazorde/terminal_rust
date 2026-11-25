@@ -275,6 +275,23 @@ fn the_protections_of_rm_hold_before_the_system_program() {
 }
 
 #[test]
+fn rm_goes_to_a_system_program_except_on_windows() {
+    let (sandbox, fakes) = setup("fallback rm platform");
+    sandbox.write("kept", "kept");
+
+    let output = fakes.run(&sandbox, "rm -I kept");
+
+    if cfg!(windows) {
+        assert_lines(&output, &[]);
+        assert!(stderr(&output).contains("rm: unknown option: -I"));
+    } else {
+        assert_lines(&output, &["rm -I kept"]);
+    }
+}
+
+// Windows never starts a system `rm`.
+#[cfg(unix)]
+#[test]
 fn the_system_rm_waits_for_the_confirmation_of_a_recursive_removal() {
     let (sandbox, fakes) = setup("fallback rm confirmation");
     fs::create_dir(sandbox.work().join("dir")).expect("fixture");

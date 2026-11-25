@@ -60,6 +60,8 @@ fn the_question_of_rm_is_never_redirected() {
     }
 }
 
+// Windows never starts a system `rm`.
+#[cfg(unix)]
 #[test]
 fn the_question_before_the_system_rm_is_never_redirected() {
     let sandbox = Sandbox::new("question system rm");
