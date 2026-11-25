@@ -16,9 +16,11 @@ on:
 permissions:
   contents: read
 
+# Only a pull request replaces its running checks. Every other run gets its own
+# group, so a push to main or develop is never cancelled nor left pending.
 concurrency:
-  group: security-${{ github.ref }}
-  cancel-in-progress: true
+  group: security-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   rust-dependencies:

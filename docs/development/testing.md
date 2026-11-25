@@ -55,8 +55,9 @@ fake `HOME` and run the suite.
 ## CI
 
 CI targets Ubuntu, Windows and macOS with formatting, compilation, Clippy, unit
-tests and CLI integration tests. A platform result counts only when its steps
-actually execute. Record native desktop evidence for every supported platform
+tests and CLI integration tests. A documentation-only change skips those jobs;
+see the [workflow guide](../workflows/README.md#workflows). A platform result
+counts only when its steps actually execute. Record native desktop evidence for every supported platform
 before publishing a release.
 
 ## Reproduce the Linux gate locally
@@ -64,7 +65,8 @@ before publishing a release.
 `scripts/ci-local.sh` replays the whole Linux gate, with the Security checks, in
 the pinned validation image and prints one `PASS` or `FAIL` line per step. It
 exits with a non-zero status when a step fails and shows the last lines of the
-failing log:
+failing log. One of those steps is the test of the workflow rules
+(`node --test scripts/check-branch-policy.test.mjs scripts/ci-scope.test.mjs`).
 
 ```bash
 scripts/ci-local.sh            # every step, including cargo-deny
