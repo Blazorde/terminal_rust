@@ -16,8 +16,33 @@
 `.github/workflows/ci.yml` runs formatting, all-target/all-feature checks,
 Clippy with warnings denied, workspace tests and platform installer parsing on
 Ubuntu, Windows and macOS. Plugin SDK, plugin template and desktop are workspace
-members and are validated explicitly. `CI / Required CI gate` succeeds only
-after the matrix passes.
+members and are validated explicitly.
+
+Each platform runs the quick checks first: formatting, installer parsing, then
+compilation and Clippy of the shell and plugin crates. The desktop crate follows,
+once its frontend and bundled runtime are built, and the tests come last. Tests
+use `--no-fail-fast`, and a failed test step does not skip the next ones, so one
+run reports every failing test.
+
+Compiled Cargo dependencies are cached with
+[`Swatinem/rust-cache`](https://github.com/Swatinem/rust-cache), one cache per
+platform; workspace crates are always rebuilt. npm downloads are cached by
+`actions/setup-node`. A pull request reads the caches of its base branch, so the
+runs on pushes to `develop` and `main` are the ones that keep them warm. Change
+the action's `prefix-key` input to discard a bad cache.
+
+The `Change scope and workflow tests` job runs the tests of the branch rules and
+of the scope script, then `scripts/ci-scope.mjs`. The platform jobs are skipped
+only when every changed file is documentation: Markdown or images under `docs/`
+and `wiki/`, issue templates, `README.md`, `CHANGELOG.md` and `SECURITY.md`.
+Any other file, or a diff that cannot be computed, runs everything. The workflow
+has no `paths-ignore` filter, which would leave the required check pending.
+
+`CI / Required CI gate` succeeds only when that job passed and the matrix either
+passed or was skipped for a documentation change.
+
+In both `ci.yml` and `security.yml`, a new push to a pull request cancels its
+previous run. Runs on `main` and `develop` are never cancelled.
 
 `.github/workflows/release.yml` builds, smoke-tests and packages optimized
 binaries. Manual runs retain artifacts for 14 days. Version tags create a
