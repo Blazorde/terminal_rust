@@ -475,6 +475,18 @@ fn commands_and_branches_ignore_the_case_as_a_last_resort() {
 }
 
 #[test]
+fn a_program_with_a_space_in_its_name_is_written_for_the_shell() {
+    let helper = helper_with_programs(&["echo"], &["my tool"]);
+    let expected = if cfg!(windows) {
+        "'my tool' "
+    } else {
+        "my\\ tool "
+    };
+
+    assert_eq!(complete_at(&helper, "my").1, [expected]);
+}
+
+#[test]
 fn only_directories_complete_after_cd_pushd_and_rmdir() {
     let root = temp_path("completion", "dirsonly");
     fs::create_dir_all(root.join("target-directory")).expect("fixture");

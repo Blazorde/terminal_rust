@@ -449,6 +449,15 @@ fn load_prompt(config: &AppConfig) -> Prompt {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_candidates_are_listed_and_not_cycled_through() {
+        for in_desktop_app in [false, true] {
+            let config = super::editor_config(in_desktop_app);
+
+            assert_eq!(config.completion_type(), rustyline::CompletionType::List);
+        }
+    }
+
     use super::{fastfetch_enabled, read_plain_command};
     use std::io::Cursor;
 
@@ -503,19 +512,5 @@ mod tests {
         assert!(read_plain_command(&mut reader, &mut command).expect("reads"));
         assert_eq!(command, "cat <<EOF\nonly a body");
         assert!(crate::app::command::input_is_incomplete(&command));
-    }
-}
-
-#[cfg(test)]
-mod editor_tests {
-    use super::*;
-
-    #[test]
-    fn the_candidates_are_listed_and_not_cycled_through() {
-        for in_desktop_app in [false, true] {
-            let config = editor_config(in_desktop_app);
-
-            assert_eq!(config.completion_type(), CompletionType::List);
-        }
     }
 }
