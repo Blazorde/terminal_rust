@@ -28,9 +28,10 @@ read (`if [ -d … ]; then`, `.`, `case` forms, parameter forms).
       be run;
    4. otherwise the operands are one command, as before.
 
-   `PATH` is the one of the process after the login profiles. A match through a relative entry of `PATH`
-   (empty, `.`, `bin`) does not count: a `#!` script reached that way receives its bare name and would start
-   itself without end.
+   `PATH` is the one of the process after the login profiles. Only its absolute entries are searched, and the
+   program found there is started by its absolute path. A relative entry (empty, `.`, `bin`) placed before
+   it would otherwise let a file of the current directory run instead, and a `#!` script reached that way
+   receives its bare name and would start itself without end.
 4. A missing script gives status `127`. A directory, a file that cannot be read, a file that is not text
    or one larger than 1 MiB gives `126`. A usage error gives `2`.
 
@@ -87,6 +88,8 @@ warning is shown and the environment stays as it was.
 - A script named like a command has to be given as a path (`terminal_rust ./test`).
 - Custom commands, plugin commands, functions and `PATH` changes of the rc file (`-i`) are known only once
   the engine is loaded, after this choice: a file with such a name runs as a script.
+- A function or a custom command of the rc file still comes before the program, but a `PATH` change of the
+  rc file does not replace the program already found for the one command.
 - A path to a program (`terminal_rust /usr/bin/ls`) is read as a script and gives `126`.
 - From the profiles, `umask`, `ulimit`, `cd`, aliases, functions, plain variables and removed variables are
   not taken. `~/.bash_profile` and `~/.bash_login` are not read.

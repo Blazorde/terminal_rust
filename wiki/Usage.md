@@ -547,9 +547,11 @@ fails; `set -e` stops at the first one. A syntax error stops them with status `2
 In a script, a line cannot end on `&&`, `||`, `|` or `\` (continue a line with a
 backtick), and a quoted string stays on one line.
 
-Custom commands, plugin commands and functions are not looked at here, and neither
-is a program reached only through a relative entry of `PATH`: a file with that name
-runs as a script. In a directory you do not trust, use `-c`.
+Custom commands, plugin commands and functions are not looked at here. Only the
+absolute entries of `PATH` are searched, and the program found there is the one that
+runs, even when a relative entry (`.`, empty, `bin`) comes first. A file whose name
+is reached only through a relative entry runs as a script. In a directory you do not
+trust, use `-c`.
 
 ```text
 terminal_rust -c 'echo "$0: $# arguments"' demo one two

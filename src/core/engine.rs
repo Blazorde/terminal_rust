@@ -153,6 +153,19 @@ impl ShellEngine {
         self.run_captured(|state| command::run_line(input, state))
     }
 
+    /// Run the command given on the command line. If it is a program and `program` is
+    /// known, that file starts, whatever `PATH` says by then.
+    pub(crate) fn execute_launch_args(
+        &mut self,
+        args: &[String],
+        program: Option<PathBuf>,
+    ) -> ExecutionResult {
+        self.state.launch_program = args.first().cloned().zip(program);
+        let result = self.execute_args(args);
+        self.state.launch_program = None;
+        result
+    }
+
     pub fn execute_args(&mut self, args: &[String]) -> ExecutionResult {
         self.run_captured(|state| {
             let result = command::execute(args, state);

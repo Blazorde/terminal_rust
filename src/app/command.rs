@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::app::help;
 use crate::app::parser::{Stage, parse_args, split_chain, split_stages};
@@ -82,6 +82,8 @@ pub struct ShellState {
     options: ShellOptions,
     /// How many conditions (`if`, `while`, `!`) are running: `set -e` does not leave in them.
     errexit_guard: u32,
+    /// The name given on the command line and the file chosen for it at launch.
+    pub(crate) launch_program: Option<(String, PathBuf)>,
 }
 
 /// The options that `set` turns on and off.
@@ -125,6 +127,7 @@ impl ShellState {
             exit_trap: None,
             options: ShellOptions::default(),
             errexit_guard: 0,
+            launch_program: None,
         }
     }
 
@@ -1145,7 +1148,13 @@ fn execute_plugin_command(
         if let Some(reason) = state.plugin_commands.blocked_reason(name) {
             return CommandResult::Error(reason.to_string());
         }
-        return execute_external(name, invocation_args);
+        let launched = state.launch_program.as_ref();
+        let program = launched.filter(|(launched, _)| launched == name);
+        return execute_external(
+            name,
+            invocation_args,
+            program.map(|(_, path)| path.as_path()),
+        );
     };
     if !invocation_args.is_empty() {
         return CommandResult::Error(format!(
@@ -1156,8 +1165,12 @@ fn execute_plugin_command(
     map_prefixed_error(name, render::stdout(printable_multiline(&command.response)))
 }
 
-fn execute_external(name: &str, args: &[String]) -> CommandResult {
-    match external::run(name, args) {
+fn execute_external(name: &str, args: &[String], program: Option<&Path>) -> CommandResult {
+    let outcome = match program {
+        Some(program) => external::run_at(program, name, args),
+        None => external::run(name, args),
+    };
+    match outcome {
         Ok(()) => CommandResult::Continue,
         Err(external::RunError::NotFound) => {
             external::note_exit_code(external::COMMAND_NOT_FOUND);
@@ -2014,7 +2027,7 @@ fn run_kill(args: &[String], state: &mut ShellState) -> CommandResult {
             Ok(()) => CommandResult::Continue,
             Err(error) => CommandResult::Error(format!("kill: {error}")),
         },
-        _ => execute_external("kill", args),
+        _ => execute_external("kill", args, None),
     }
 }
 

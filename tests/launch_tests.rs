@@ -238,18 +238,67 @@ fn a_built_in_wins_over_a_file_of_its_name() {
 #[test]
 fn a_program_of_the_search_path_wins_over_a_file_of_its_name() {
     let sandbox = Sandbox::new("launch program");
-    let programs = installed_program(&sandbox, "git");
-    sandbox.write("git", "echo from the file\n");
+    let programs = installed_program(&sandbox, "tool");
+    sandbox.write("tool", "echo from the file\n");
     let run = |args: &[&str]| {
         let mut command = sandbox.shell();
         command.args(args).env("PATH", &programs);
         common::finish(command, b"")
     };
-    let local = format!(".{}git", std::path::MAIN_SEPARATOR);
+    let local = format!(".{}tool", std::path::MAIN_SEPARATOR);
 
-    assert_run(&run(&["git", "echo", "installed"]), 0, "installed\n");
-    assert_run(&run(&["--", "git", "echo", "installed"]), 0, "installed\n");
+    assert_run(&run(&["tool", "echo", "installed"]), 0, "installed\n");
+    assert_run(&run(&["--", "tool", "echo", "installed"]), 0, "installed\n");
     assert_run(&run(&[&local]), 0, "from the file\n");
+}
+
+// The file in the current directory is both the operand and, through `.`, a program.
+#[test]
+fn a_relative_entry_placed_first_does_not_take_the_place_of_a_program() {
+    let sandbox = Sandbox::new("launch hijack");
+    let programs = installed_program(&sandbox, "tool");
+    std::fs::create_dir(sandbox.work().join("bin")).expect("the folder should be created");
+    let program = format!("tool{}", std::env::consts::EXE_SUFFIX);
+    for local in ["tool", &program, &format!("bin/{program}")] {
+        let file = sandbox.write(local, "echo HIJACKED\n");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755))
+                .expect("the file should be made executable");
+        }
+        #[cfg(not(unix))]
+        let _ = file;
+    }
+    std::fs::write(
+        sandbox.home().join(".terminal_rust_rc"),
+        "PATH=.\nexport PATH\n",
+    )
+    .expect("the rc file should be written");
+
+    for relative in [".", "", "bin"] {
+        let path = std::env::join_paths([std::path::Path::new(relative), &programs])
+            .expect("the search path should be valid");
+        for options in [&[][..], &["-i"][..]] {
+            let mut command = sandbox.shell();
+            command
+                .args(options)
+                .args(["tool", "echo", "installed"])
+                .env("PATH", &path);
+
+            assert_run(&common::finish(command, b""), 0, "installed\n");
+        }
+    }
+
+    // A function of the rc file still comes before the program.
+    std::fs::write(
+        sandbox.home().join(".terminal_rust_rc"),
+        "tool() { echo function; }\n",
+    )
+    .expect("the rc file should be written");
+    let mut command = sandbox.shell();
+    command.args(["-i", "tool"]).env("PATH", &programs);
+    assert_run(&common::finish(command, b""), 0, "function\n");
 }
 
 #[cfg(unix)]

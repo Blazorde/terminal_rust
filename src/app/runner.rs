@@ -72,11 +72,11 @@ fn read_invocation() -> Result<Invocation, UsageError> {
     launch::parse(&argv0, &arguments)
 }
 
-/// A built-in, or a program of the search path. A match through a relative entry of the
-/// path does not count: a `#!` script found that way would start itself without end.
+/// A built-in, or a program of an absolute entry of the search path. Relative entries do
+/// not count: a file of the current directory would take the place of a program, and a
+/// `#!` script of this shell found that way would start itself without end.
 fn is_command(name: &str) -> bool {
-    command_names().any(|built_in| built_in == name)
-        || external::locate(name).is_some_and(|program| program.has_root())
+    command_names().any(|built_in| built_in == name) || external::locate_absolute(name).is_some()
 }
 
 fn read_editor_command<P: rustyline::Prompt + ?Sized>(
@@ -102,12 +102,16 @@ fn read_editor_command<P: rustyline::Prompt + ?Sized>(
 }
 
 fn run_once(args: &[String], interactive: bool) -> ExitCode {
+    // Taken from the `PATH` that `is_command` read, before the rc file can change it.
+    let program = args
+        .first()
+        .and_then(|name| external::locate_absolute(name));
     let app_config = load_config();
     let mut engine = load_engine(&app_config);
     if interactive && let Some(status) = startup::run_rc(&mut engine) {
         return status;
     }
-    let result = engine.execute_args(args);
+    let result = engine.execute_launch_args(args, program);
     emit_result(&result);
 
     // The exact code of the program or command that ran, 1 for a failure inside
