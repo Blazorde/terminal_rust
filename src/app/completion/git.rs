@@ -152,7 +152,8 @@ fn references(directory: &Path) -> Vec<String> {
     }
     names
         .into_iter()
-        .filter(|name| name != "HEAD" && !name.ends_with("/HEAD"))
+        // Git would read a name that starts with `-` as an option.
+        .filter(|name| name != "HEAD" && !name.ends_with("/HEAD") && !name.starts_with('-'))
         .take(MAX_REFERENCES)
         .collect()
 }
@@ -350,6 +351,18 @@ mod tests {
         let all = displays(complete("git checkout ", "", &root));
         assert!(!all.iter().any(|name| name.ends_with("HEAD")), "{all:?}");
         assert!(!all.iter().any(|name| name.contains("ignored")), "{all:?}");
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_reference_that_reads_as_an_option_is_not_offered() {
+        let root = repository("dash");
+        let git = root.join(".git");
+        fs::write(git.join("refs/heads/-D"), "0\n").expect("fixture");
+        fs::write(git.join("packed-refs"), "1 refs/tags/--force\n").expect("fixture");
+        let all = displays(complete("git checkout ", "", &root));
+        assert!(all.contains(&"main".to_string()), "{all:?}");
+        assert!(!all.iter().any(|name| name.starts_with('-')), "{all:?}");
         fs::remove_dir_all(root).expect("cleanup");
     }
 
