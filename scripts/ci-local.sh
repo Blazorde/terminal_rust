@@ -76,6 +76,7 @@ step() {
     fi
 }
 
+step "workflow tests"     node --test scripts/check-branch-policy.test.mjs scripts/ci-scope.test.mjs
 step "npm ci"             npm ci --prefix desktop --silent
 step "frontend build"     npm run build --prefix desktop
 step "frontend tests"     npm test --prefix desktop
