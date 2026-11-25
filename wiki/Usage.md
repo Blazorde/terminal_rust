@@ -375,6 +375,38 @@ an error and the command does not run. There is no assignment inside the
 expression (`i=$((i+1))` is an ordinary assignment), no bit operators and no
 `$(...)` inside it.
 
+### let and (( ))
+
+`let` and `(( expression ))` evaluate the same expressions but may assign, so a counter no longer needs `$(( ))`:
+
+```text
+(( n = 0 ))
+while (( n < 3 )); do echo n=$n; (( n++ )); done    # n=0, n=1, n=2
+if (( x > 2 )); then echo big; fi
+let a=1+2 b=a*2                                      # a is 3, b is 6
+(( x = 5, y = x*2 ))                                 # x is 5, y is 10
+let "x = 2 * 3"                                      # x is 6
+```
+
+A statement is `name = expr`, `name += expr` (also `-= *= /= %=`), `name++`, `++name`, `name--`, `--name` or a plain
+expression, and statements are separated by commas. The status is `0` when the last value is not `0` and `1` when it
+is `0`, so `(( n < 3 ))` works as a condition; an error (division by zero, a bad number) also gives `1` and prints a
+message. `let` takes one statement per argument, and an argument is an ordinary word: quote any that holds spaces, `*`,
+`<` or `>`. `$(...)` and `$name` in the body are expanded before it is evaluated.
+
+A compound assignment is a name followed by exactly one of `+ - * / %` and `=`, with nothing between them: `**=`, `+-=`
+and `%*=` are syntax errors that leave the variable as it was. A chain such as `a = b = c = 1` may go 64 levels deep;
+a longer one gives `arithmetic: expression nested too deeply` and changes nothing.
+
+In a script run by `source`, the shell stops at the first top-level command whose status is not `0`, as it does for
+`false`. `(( n++ ))` alone on a line with `n` at `0` has the value `0`, so its status is `1` and the script stops
+(`source: post.sh:2: ` on standard error), although `n` is now `1`. Write `(( ++n ))` or `n=$((n+1))` instead.
+
+Not supported: the bit operators (`& | ^ ~ << >>`), the ternary `?:`, arrays in an expression, bases other than
+decimal and `0x` (`010` is 10), a `++` or `--` inside a larger expression (`i++ < 3`; write `(( i++ ))` on its own) and
+`for (( i=0; i<3; i++ ))`. Run in a pipe or in the background, a `(( ))` still changes the variables of the current
+shell. See [ADR-0033](../docs/decisions/0033-let-and-arithmetic-command.md).
+
 ## File name patterns
 
 `*`, `?` and `[...]` in an argument are replaced by the sorted names they match:

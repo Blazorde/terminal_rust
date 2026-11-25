@@ -26,6 +26,134 @@ pub(super) fn evaluate(expression: &str, lookup: Lookup) -> Result<i64, String> 
     }
 }
 
+/// The statements of `(( … ))` and `let`: expressions separated by commas, where each may be an
+/// assignment (`i=3`, `n+=2`, `x*=4`) or an increment (`i++`, `--i`) of a variable. The value
+/// is the one of the last statement. An assignment is the top of a statement, or the right side of
+/// another one (`a = b = 3`), never inside parentheses or an operator (ADR-0033).
+pub(super) fn statements(text: &str, state: &mut super::ShellState) -> Result<i64, String> {
+    // Bash ignores double quotes here, and a command substitution is expanded already quoted.
+    let text = text.replace('"', "");
+    let mut value = 0;
+    for statement in split_statements(&text) {
+        let statement = statement.trim();
+        if statement.is_empty() {
+            continue;
+        }
+        value = statement_value(statement, state, 0)?;
+    }
+    Ok(value)
+}
+
+/// Split at the commas that are not inside parentheses.
+fn split_statements(text: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0_usize;
+    let mut start = 0;
+    for (index, character) in text.char_indices() {
+        match character {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(&text[start..index]);
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&text[start..]);
+    parts
+}
+
+fn statement_value(
+    statement: &str,
+    state: &mut super::ShellState,
+    depth: usize,
+) -> Result<i64, String> {
+    // The chain `a=b=c=…` recurses once per `=`; assignments happen on the way back, so a refused
+    // chain changes no variable.
+    if depth > MAX_DEPTH {
+        return Err("arithmetic: expression nested too deeply".to_string());
+    }
+    let read = |state: &super::ShellState, expression: &str| {
+        evaluate(expression, &|name| state.variable(name))
+    };
+    // `i++`, `i--`, `++i`, `--i`.
+    for (suffix, delta) in [("++", 1_i64), ("--", -1)] {
+        if let Some(name) = statement
+            .strip_suffix(suffix)
+            .or_else(|| statement.strip_prefix(suffix))
+            && shell_env::is_valid_name(name.trim())
+        {
+            let name = name.trim();
+            let before = read(state, name)?;
+            let after = before.checked_add(delta).ok_or_else(overflow)?;
+            super::assign_variable(name, &after.to_string(), state);
+            // `i++` is the old value, `++i` the new one.
+            return Ok(if statement.ends_with(suffix) {
+                before
+            } else {
+                after
+            });
+        }
+    }
+    // `name = expr`, `name += expr`, … (not `==`, `<=`, `>=`, `!=`).
+    if let Some((left, right)) = statement.split_once('=') {
+        // Exactly one operator character, glued to `=`: `**=`, `+-=` leave a name that is not valid.
+        let operator = left
+            .chars()
+            .last()
+            .filter(|c| matches!(c, '+' | '-' | '*' | '/' | '%'));
+        let name = match operator {
+            Some(operator) => left.strip_suffix(operator).unwrap_or(left),
+            None => left,
+        }
+        .trim();
+        let comparison = right.starts_with('=');
+        if !comparison && shell_env::is_valid_name(name) {
+            let right = statement_value(right.trim(), state, depth + 1)?;
+            let value = match operator {
+                None => right,
+                Some(operator) => {
+                    let current = read(state, name)?;
+                    match operator {
+                        '+' => current.checked_add(right),
+                        '-' => current.checked_sub(right),
+                        '*' => current.checked_mul(right),
+                        '/' if right == 0 => return Err("arithmetic: division by 0".to_string()),
+                        '/' => current.checked_div(right),
+                        _ if right == 0 => return Err("arithmetic: division by 0".to_string()),
+                        _ => current.checked_rem(right),
+                    }
+                    .ok_or_else(overflow)?
+                }
+            };
+            super::assign_variable(name, &value.to_string(), state);
+            return Ok(value);
+        }
+    }
+    if has_embedded_increment(statement) {
+        return Err("arithmetic: ++ and -- must stand alone as a statement".to_string());
+    }
+    read(state, statement)
+}
+
+/// Whether `++` or `--` is glued to an identifier. The evaluator has no mutable state, so inside
+/// a larger expression it would silently read them as signs; it is refused instead. A numeric
+/// double sign (`--5`, `3 - -2`) is not an increment.
+fn has_embedded_increment(statement: &str) -> bool {
+    let characters: Vec<char> = statement.chars().collect();
+    characters.windows(2).enumerate().any(|(index, pair)| {
+        let doubled = pair == ['+', '+'] || pair == ['-', '-'];
+        let before = index
+            .checked_sub(1)
+            .and_then(|before| characters.get(before));
+        let after = characters.get(index + 2);
+        doubled
+            && (before.is_some_and(|c| c.is_ascii_alphanumeric() || *c == '_')
+                || after.is_some_and(|c| c.is_ascii_alphabetic() || matches!(c, '_' | '$')))
+    })
+}
+
 /// Parentheses nested deeper than this are refused instead of overflowing the
 /// stack on a hostile expression.
 const MAX_DEPTH: usize = 64;
@@ -500,6 +628,21 @@ mod tests {
                 let _ = calc(&text);
             });
             assert!(outcome.is_ok(), "the evaluator panicked on {text:?}");
+        }
+    }
+
+    #[test]
+    fn an_increment_glued_to_an_identifier_is_detected() {
+        for text in [
+            "i-- - 1", "i++ < 3", "x + ++i", "a - --b", "--$i + 1", "--${i}", "5--", "1 --_b",
+            "1 ++_b", "x_++ + 1",
+        ] {
+            assert!(has_embedded_increment(text), "{text:?}");
+        }
+        for text in [
+            "--5", "3 - -2", "3 --2", "a - -b", "a + +b", "i = 3", "-(-i)",
+        ] {
+            assert!(!has_embedded_increment(text), "{text:?}");
         }
     }
 }

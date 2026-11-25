@@ -17,6 +17,7 @@ use crate::utils::shell_env;
 
 mod aliases;
 mod arithmetic;
+mod arithmetic_command;
 mod braces;
 mod double_bracket;
 mod flow;
@@ -630,6 +631,13 @@ const COMMANDS: &[CommandSpec] = &[
         handler: run_type,
     },
     CommandSpec {
+        name: "let",
+        usage: "let expression...",
+        summary: "calculate integers and assign variables: let n=n+1",
+        max_args: None,
+        handler: arithmetic_command::run_let,
+    },
+    CommandSpec {
         name: "pushd",
         usage: "pushd [dir]",
         summary: "go to a directory and remember the one that was left",
@@ -926,6 +934,14 @@ fn run_segment(
     if let Some(result) = array_assignment(text, background, state) {
         return result;
     }
+    // `(( expression ))` is arithmetic; with redirections or in a pipeline it goes through `let`.
+    if let [stage] = stages
+        && stage.redirects.is_empty()
+        && !background
+        && let Some(body) = arithmetic_command::body(&stage.text)
+    {
+        return arithmetic_command::run_expression(body, state);
+    }
     // `[[ expression ]]` reads its own words: no braces, no splitting, no patterns.
     if let Some(body) = double_bracket::body(text) {
         return match body {
@@ -958,6 +974,9 @@ fn run_expanded(
     background: bool,
     state: &mut ShellState,
 ) -> CommandResult {
+    if let Some(stages) = arithmetic_command::as_let_stages(stages) {
+        return pipeline::run(&stages, state, background.then_some(text), None);
+    }
     // Inside a substitution the output of programs is collected: only the
     // pipeline code does that.
     if let [stage] = stages

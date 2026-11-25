@@ -9,6 +9,8 @@ All notable changes to Terminal Rust are documented in this file. Versions use
 
 - Operators on the value of a variable (ADR-0030): `${f%.txt}`, `${path##*/}`, `${s/old/new}`, `${s//old/new}`,
   `${s:1:3}`, `${s: -3}`, `${s^^}`, `${s,,}`, and slices of arrays and parameters (`${arr[@]:1}`, `${@:2}`).
+- `let` and `(( expression ))` with assignments, `+=`, `++`, `--` and the comma; the status is `0` for a non-zero
+  value and `1` otherwise (ADR-0033).
 
 ### Fixed
 

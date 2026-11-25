@@ -1,3 +1,7 @@
+mod arithmetic_word;
+
+pub(crate) use arithmetic_word::arithmetic_len;
+
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Quote {
     Single,
@@ -639,6 +643,16 @@ pub fn split_chain(input: &str) -> Result<Vec<Segment>, String> {
                 current.push(character);
                 current.extend(characters.next());
             }
+            // `(( expression ))` is one word, up to its `))`: its `<`, `>`, `&` and `|` are
+            // operators of the expression.
+            (None, '(')
+                if starts_command(&current)
+                    && let Some(length) =
+                        arithmetic_len(std::iter::once('(').chain(characters.clone())) =>
+            {
+                current.push(character);
+                current.extend(characters.by_ref().take(length - 1));
+            }
             // `( list )`: the `(` is a word of its own, and the `)` that closes it starts a
             // new command, so the flow parser reads them like `{` and `}`. The `()` of
             // `name()` and a `)` with no subshell open (a `case` pattern) are plain text.
@@ -902,6 +916,14 @@ pub fn split_stages(input: &str) -> Result<Vec<Stage>, String> {
                     text.push(*escaped);
                 }
                 position += 2;
+            }
+            (None, '(')
+                if text.trim().is_empty()
+                    && let Some(length) =
+                        arithmetic_len(characters[position..].iter().copied()) =>
+            {
+                text.extend(&characters[position..position + length]);
+                position += length;
             }
             (None, '|') => {
                 if text.trim().is_empty() {
