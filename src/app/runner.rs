@@ -152,7 +152,8 @@ fn run_interactive_editor() -> ExitCode {
         Ok(shell) => shell,
         Err(status) => return status,
     };
-    let mut config_builder = Config::builder().completion_type(CompletionType::Circular);
+    // As in bash: `Tab` completes what the candidates share, a second one lists them.
+    let mut config_builder = Config::builder().completion_type(CompletionType::List);
     if env::var_os(GUI_PROMPT_ENV).is_some() {
         config_builder = config_builder.color_mode(ColorMode::Forced);
     }

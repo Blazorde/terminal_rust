@@ -1,6 +1,7 @@
 //! `Tab` completion and history hints of the line editor.
 
 mod git;
+mod listing;
 mod programs;
 #[cfg(test)]
 mod tests;
@@ -13,8 +14,9 @@ use programs::Programs;
 use rustyline::completion::{Completer, FilenameCompleter, Pair};
 use rustyline::highlight::Highlighter;
 use rustyline::hint::{Hinter, HistoryHinter};
+use rustyline::line_buffer::LineBuffer;
 use rustyline::validate::Validator;
-use rustyline::{Context, Helper};
+use rustyline::{Changeset, Context, Helper};
 use variables::{variable_completions, variable_reference};
 
 pub struct ShellHelper {
@@ -44,31 +46,13 @@ impl ShellHelper {
         self
     }
 
-    fn programs_starting_with(&self, prefix: &str) -> Vec<String> {
-        if !self.search_path {
-            return Vec::new();
-        }
-        self.programs.starting_with(prefix)
-    }
-}
-
-/// Whether the word that starts at `word_start` is where a command goes: at the
-/// start of the line, or after `;`, `|` or `&` (so after `&&` and `||` too).
-fn is_command_position(before_cursor: &str, word_start: usize) -> bool {
-    let before_word = before_cursor[..word_start].trim_end();
-    before_word.is_empty() || before_word.ends_with([';', '|', '&'])
-}
-
-impl Completer for ShellHelper {
-    type Candidate = Pair;
-
-    fn complete(
+    /// Every candidate for the word before `pos`, and where that word starts.
+    fn candidates(
         &self,
         line: &str,
         pos: usize,
         context: &Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Pair>)> {
-        let pos = floor_char_boundary(line, pos);
         let before_cursor = &line[..pos];
         let command_start = word_start(before_cursor);
         let current_word = &before_cursor[command_start..];
@@ -99,7 +83,6 @@ impl Completer for ShellHelper {
                     }
                 }
             }
-            candidates.sort_by(|left, right| left.display.cmp(&right.display));
             return Ok((command_start, candidates));
         }
 
@@ -121,6 +104,43 @@ impl Completer for ShellHelper {
             candidates.retain(|candidate| !candidate.display.starts_with('.'));
         }
         Ok((start, candidates))
+    }
+
+    fn programs_starting_with(&self, prefix: &str) -> Vec<String> {
+        if !self.search_path {
+            return Vec::new();
+        }
+        self.programs.starting_with(prefix)
+    }
+}
+
+/// Whether the word that starts at `word_start` is where a command goes: at the
+/// start of the line, or after `;`, `|` or `&` (so after `&&` and `||` too).
+fn is_command_position(before_cursor: &str, word_start: usize) -> bool {
+    let before_word = before_cursor[..word_start].trim_end();
+    before_word.is_empty() || before_word.ends_with([';', '|', '&'])
+}
+
+impl Completer for ShellHelper {
+    type Candidate = Pair;
+
+    fn complete(
+        &self,
+        line: &str,
+        pos: usize,
+        context: &Context<'_>,
+    ) -> rustyline::Result<(usize, Vec<Pair>)> {
+        let (start, candidates) = self.candidates(line, floor_char_boundary(line, pos), context)?;
+        Ok((start, listing::finish(candidates)))
+    }
+
+    fn update(&self, line: &mut LineBuffer, start: usize, elected: &str, changes: &mut Changeset) {
+        let end = line.pos();
+        line.replace(
+            start..end,
+            listing::without_dangling_escape(elected),
+            changes,
+        );
     }
 }
 
