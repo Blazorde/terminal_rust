@@ -1830,7 +1830,8 @@ fn a_substitution_works_in_a_redirection_target_and_for_cd() {
     );
 
     assert!(printed.contains("written\n"), "{printed}\n{errors}");
-    assert!(printed.contains("/sub\n"), "{printed}");
+    let end_of_pwd = format!("{}sub\n", std::path::MAIN_SEPARATOR);
+    assert!(printed.contains(&end_of_pwd), "{printed}");
 }
 
 #[test]
@@ -2814,7 +2815,7 @@ fn pwd_is_the_real_directory_even_when_the_parent_left_a_stale_one() {
         .find_map(|line| {
             line.rsplit("> ")
                 .next()
-                .filter(|text| text.starts_with('/'))
+                .filter(|text| Path::new(text).is_absolute())
         })
         .unwrap_or_default();
     assert!(same_place(first, directory.path()), "{printed}\n{errors}");
@@ -2884,7 +2885,7 @@ fn cd_updates_pwd_and_oldpwd_and_cd_dash_says_where_it_went() {
         printed
             .lines()
             .filter_map(|line| line.rsplit("> ").next())
-            .any(|text| text.starts_with('/') && same_place(text, directory.path())),
+            .any(|text| Path::new(text).is_absolute() && same_place(text, directory.path())),
         "{printed}"
     );
     let back = value("back=").pop().expect("back printed");
@@ -3007,7 +3008,7 @@ fn pwd_accepts_the_logical_and_physical_options_and_refuses_others() {
     let lines: Vec<&str> = printed
         .lines()
         .filter_map(|line| line.rsplit("> ").next())
-        .filter(|text| text.starts_with('/'))
+        .filter(|text| Path::new(text).is_absolute())
         .collect();
     assert!(
         lines
@@ -3571,7 +3572,7 @@ fn a_block_can_write_to_a_file_and_append() {
             "if true; then echo from-if; fi > cond.txt",
             "cat cond.txt",
             "last=none",
-            "for i in 1 2 3; do last=$i; done > /dev/null",
+            "for i in 1 2 3; do last=$i; done > loop.txt",
             "echo last=$last",
             "{ echo out-line; ls terminal-rust-no-such-dir; } > both.txt 2>&1",
             "cat both.txt",
