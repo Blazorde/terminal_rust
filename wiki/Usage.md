@@ -517,6 +517,52 @@ inside quotes, after a backslash or `$`, at the end of a line and before a blank
 only apply when you type at the prompt: scripts and piped input never expand
 them. `!!:1`, `^a^b`, `!?text?` and `history -c` are not available.
 
+## Starting the shell
+
+| Command | Effect |
+| --- | --- |
+| `terminal_rust` | Interactive shell, or the commands of standard input when it is not a terminal |
+| `terminal_rust -c 'STRING' [NAME [ARGS...]]` | Run `STRING`; `NAME` is `$0`, then `$1`, `$2`, ... |
+| `terminal_rust FILE [ARGS...]` | Run a script with its arguments |
+| `terminal_rust COMMAND [ARGS...]` | Run one command |
+| `-i` | Interactive: prompt on piped input, and the rc file is read |
+| `-l`, `--login` | Login shell (Unix) |
+| `--` | End of the options |
+
+The first word after the options is a script when a file has that name, even if a
+command has it too. A word with a `/` (or `\` on Windows), or ending in `.sh` or
+`.trs`, is also taken as a script. Anything else runs as one command. A missing
+script gives the status `127`, and one that cannot be run gives `126`.
+
+A script can start with `#!/usr/bin/env terminal_rust` when `terminal_rust` is on
+`PATH`. Unlike `source`, a script, `-c` and piped input go on after a command that
+fails; `set -e` stops at the first one. A syntax error stops them with status `2`.
+In a script, a line cannot end on `&&`, `||` or `|`, and a quoted string stays on
+one line.
+
+```text
+terminal_rust -c 'echo "$0: $# arguments"' demo one two
+terminal_rust ./deploy.sh production
+echo "echo hello" | terminal_rust
+```
+
+### Startup files
+
+An interactive shell, the desktop app included, runs `~/.terminal_rust_rc` before
+its first prompt. Put aliases, functions, variables and `PATH` changes there. An
+error names the file and the line, and does not prevent reaching the prompt.
+
+```text
+alias ll="ls -l"
+export EDITOR=nano
+```
+
+On Unix, a login shell (`-l`, or a program name starting with `-`) first takes the
+environment set by `/etc/profile` and `~/.profile`. `/bin/sh` runs those two files,
+so they keep their usual syntax. Only exported variables are taken: aliases,
+functions, `umask` and `ulimit` are not, and `~/.bash_profile` is not read. On
+Windows `-l` has no effect.
+
 ## Running a file and reading input
 
 `source file` (or `. file`) runs the commands of a file in the current shell, so
@@ -558,7 +604,7 @@ echo done
 
 Each line runs on its own, so a line that fails is reported and the next lines
 still run. To stop at the first failure, join the commands with `&&` on one
-line (`make && echo done`), or put them in a script, which stops at the first
+line (`make && echo done`), or run them with `source`, which stops at the first
 failing command.
 
 ## Paths containing spaces
