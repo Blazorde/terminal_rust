@@ -42,9 +42,9 @@ read (`if [ -d … ]; then`, `.`, `case` forms, parameter forms).
    An error names the file and the line and the file goes on; a syntax error stops reading it; `exit` ends
    the shell. It runs before the script set by `script startup`. A relative home directory is ignored, so
    that no file of the current directory is run.
-7. A login shell on Unix does not interpret `/etc/profile` and `~/.profile` itself. `/bin/sh` runs them,
-   then prints its environment with `/usr/bin/env -0` between two markers, and the shell imports the
-   variables that are new or changed. Windows ignores `-l`.
+7. A login shell on Unix does not interpret `/etc/profile` and `~/.profile` itself. `/bin/sh` runs them
+   (`~/.profile` only under an absolute home directory), then prints its environment with `/usr/bin/env -0`
+   between two markers, and the shell imports the variables that are new or changed. Windows ignores `-l`.
 
 The script given to `/bin/sh` is a constant: no outside text is added to it. What the profiles print goes
 to standard error, and the environment travels on a separate descriptor that they do not get. Reading
@@ -76,15 +76,19 @@ warning is shown and the environment stays as it was.
 ### Negative
 
 - Piped input no longer prints a prompt (`-i` restores it).
-- A file in the current directory named like a command wins over the command.
+- A file in the current directory named like a command wins over the command. In a directory someone else
+  filled (a cloned repository), `terminal_rust ls` or `terminal_rust git status` runs that file.
 - A path to a program (`terminal_rust /usr/bin/ls`) is read as a script and gives `126`.
 - From the profiles, `umask`, `ulimit`, `cd`, aliases, functions, plain variables and removed variables are
   not taken. `~/.bash_profile` and `~/.bash_login` are not read.
 - `HOME`, `XDG_CONFIG_HOME`, `TERMINAL_RUST_CONFIG`, `TERM` or `NO_COLOR` exported by a profile or the rc
   file reach the programs, but the settings of the shell itself still come from its process environment.
 - Programs started by a profile inherit an ignored `TSTP`.
-- In a script, a command cannot go on after a trailing `&&`, `||` or `|`, and a quoted string cannot span
-  lines. `Ctrl+C` ends a script without running the `EXIT` trap.
+- In a script, a command cannot go on after a trailing `&&`, `||`, `|` or `\` (the continuation character is
+  the backtick), and a quoted string cannot span lines. `Ctrl+C` ends a script without running the `EXIT` trap.
+- A script has to be a regular file: `/dev/stdin` and process substitutions give `126`.
+- When standard input is not a terminal, lines are read one byte at a time, so that `read` and the programs
+  that follow get the rest of the input.
 
 ## Validation
 

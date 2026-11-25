@@ -537,8 +537,11 @@ script gives the status `127`, and one that cannot be run gives `126`.
 A script can start with `#!/usr/bin/env terminal_rust` when `terminal_rust` is on
 `PATH`. Unlike `source`, a script, `-c` and piped input go on after a command that
 fails; `set -e` stops at the first one. A syntax error stops them with status `2`.
-In a script, a line cannot end on `&&`, `||` or `|`, and a quoted string stays on
-one line.
+In a script, a line cannot end on `&&`, `||`, `|` or `\` (continue a line with a
+backtick), and a quoted string stays on one line.
+
+Because an existing file wins over a command of the same name, do not use the
+one-command form in a directory you do not trust; use `-c` there.
 
 ```text
 terminal_rust -c 'echo "$0: $# arguments"' demo one two
