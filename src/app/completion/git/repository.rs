@@ -59,8 +59,8 @@ pub(super) fn text_lines(bytes: &[u8]) -> impl Iterator<Item = &str> {
         .flat_map(str::lines)
 }
 
-/// The text of a `.git` or `commondir` file.
-fn read_pointer(path: &Path) -> Option<String> {
+/// The text of a file that holds a single path or ref: `.git`, `commondir`, `HEAD`.
+pub(super) fn read_pointer(path: &Path) -> Option<String> {
     String::from_utf8(read_head(path, MAX_POINTER_BYTES)?).ok()
 }
 
@@ -117,9 +117,9 @@ pub(super) fn enter(from: &Path, value: &str) -> Option<PathBuf> {
     target.ok().filter(|target| target.is_dir())
 }
 
-/// The directory that holds the `refs` of the repository around `directory`: its
-/// `.git`, or for a linked worktree the shared directory named by `commondir`.
-pub(super) fn locate(directory: &Path) -> Option<PathBuf> {
+/// The Git directory of the working tree around `directory`, the one that holds its
+/// `HEAD`: its `.git`, or for a linked worktree and a submodule the one it names.
+pub(super) fn locate_worktree(directory: &Path) -> Option<PathBuf> {
     let mut current = Some(directory);
     while let Some(candidate) = current {
         let dot_git = candidate.join(".git");
@@ -127,16 +127,22 @@ pub(super) fn locate(directory: &Path) -> Option<PathBuf> {
             return Some(dot_git);
         }
         if dot_git.is_file() {
-            // A worktree or a submodule: `gitdir: <path>`.
+            // `gitdir: <path>`.
             let text = read_pointer(&dot_git)?;
             let target = text.trim().strip_prefix("gitdir:")?.trim();
-            let git_dir = candidate.join(target);
-            return Some(
-                read_pointer(&git_dir.join("commondir"))
-                    .map_or_else(|| git_dir.clone(), |relative| git_dir.join(relative.trim())),
-            );
+            return Some(candidate.join(target));
         }
         current = candidate.parent();
     }
     None
+}
+
+/// The directory that holds the `refs` of the repository around `directory`: its
+/// Git directory, or for a linked worktree the shared directory named by `commondir`.
+pub(super) fn locate(directory: &Path) -> Option<PathBuf> {
+    let git_dir = locate_worktree(directory)?;
+    Some(
+        read_pointer(&git_dir.join("commondir"))
+            .map_or_else(|| git_dir.clone(), |relative| git_dir.join(relative.trim())),
+    )
 }

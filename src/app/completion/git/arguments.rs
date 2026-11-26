@@ -95,6 +95,21 @@ const STASH_ACTIONS: [(&str, &[&str]); 4] = [
 /// The actions of `git remote` whose first argument is a remote.
 const REMOTE_ACTIONS: [&str; 6] = ["get-url", "prune", "remove", "rename", "set-url", "show"];
 
+/// The options of `git branch` that take the next word as their value.
+const BRANCH_VALUED: [&str; 11] = [
+    "-u",
+    "--contains",
+    "--delete-merged",
+    "--forked",
+    "--format",
+    "--merged",
+    "--no-contains",
+    "--no-merged",
+    "--points-at",
+    "--set-upstream-to",
+    "--sort",
+];
+
 /// A kind of argument Git completion knows how to offer.
 pub(super) enum Argument {
     /// The value of `-C`.
@@ -106,6 +121,10 @@ pub(super) enum Argument {
     Remote,
     /// An entry of the stash.
     Stash,
+    /// A local branch to delete.
+    LocalBranch,
+    /// A remote branch to delete.
+    RemoteBranch,
 }
 
 /// The words of a command, the `-C <dir>` pairs of `git` set aside.
@@ -216,6 +235,44 @@ fn takes_a_stash_entry(command: &[&str]) -> bool {
         .any(|(name, valued)| name == action && only_options(rest, valued))
 }
 
+/// The kind of branch `git branch` deletes with these words. `None` when they ask
+/// for no deletion.
+fn deleted_branches(words: &[&str]) -> Option<Argument> {
+    // `--no-delete` takes back `-d` and `--delete`, never `-D`.
+    let (mut delete, mut force_delete, mut remotes) = (false, false, false);
+    let mut words = words.iter();
+    while let Some(&word) = words.next() {
+        match word {
+            "--" => break,
+            "--delete" => delete = true,
+            "--no-delete" => delete = false,
+            "--remotes" => remotes = true,
+            _ if BRANCH_VALUED.contains(&word) => {
+                words.next();
+            }
+            _ if word.starts_with("--") => {}
+            // Short options, alone or grouped as in `-dr`.
+            _ => {
+                for letter in word.strip_prefix('-').unwrap_or_default().chars() {
+                    match letter {
+                        'd' => delete = true,
+                        'D' => force_delete = true,
+                        'r' => remotes = true,
+                        // The rest of the group is their value.
+                        'u' | 't' => break,
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    (delete || force_delete).then_some(if remotes {
+        Argument::RemoteBranch
+    } else {
+        Argument::LocalBranch
+    })
+}
+
 /// The argument expected for `word`, which follows `words` in its command.
 /// `None` when this is not a `git` command or there is nothing to offer there.
 pub(super) fn at_cursor(words: &Words<'_>, word: &str) -> Option<Argument> {
@@ -229,6 +286,7 @@ pub(super) fn at_cursor(words: &Words<'_>, word: &str) -> Option<Argument> {
         ["git"] => Some(Argument::Subcommand),
         command if takes_a_remote(command) => Some(Argument::Remote),
         command if takes_a_stash_entry(command) => Some(Argument::Stash),
+        ["git", "branch", rest @ ..] => Some(deleted_branches(rest).unwrap_or(Argument::Reference)),
         ["git", subcommand, ..] if REFERENCE_SUBCOMMANDS.contains(subcommand) => {
             Some(Argument::Reference)
         }

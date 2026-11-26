@@ -1,14 +1,18 @@
 //! Tab completion for `git` (see ADR-0019): the subcommands, then for the
 //! commands that take one the branches, remote branches and tags of the
-//! repository, the names of its remotes or the entries of its stash.
+//! repository, the names of its remotes or the entries of its stash. When `git
+//! branch` is asked to delete, only the branches of the kind it deletes.
 //!
-//! They are read from the repository files (`refs/`, `packed-refs`, `config`
-//! and the log of the stash), so completing never starts Git and stays instant.
+//! They are read from the repository files (`refs/`, `packed-refs`, `HEAD`,
+//! `config` and the log of the stash), so completing never starts Git and stays
+//! instant.
 //!
 //! After `git -C <dir>` everything that depends on a directory is read from that
 //! one, and from none when it cannot be known before the line runs.
 
 mod arguments;
+#[cfg(test)]
+mod branch_tests;
 #[cfg(test)]
 mod directory_tests;
 #[cfg(test)]
@@ -148,6 +152,15 @@ impl<'line, 'folders> Invocation<'line, 'folders> {
             // none is a file name for the normal completion.
             Argument::Reference => {
                 let names = references::list(self.directory.as_deref()?);
+                (0, matching_names(names, word, case))
+            }
+            // `git branch -d <TAB>`: only what can be deleted.
+            Argument::LocalBranch => {
+                let names = references::local_branches(self.directory.as_deref()?);
+                (0, matching_names(names, word, case))
+            }
+            Argument::RemoteBranch => {
+                let names = references::remote_branches(self.directory.as_deref()?);
                 (0, matching_names(names, word, case))
             }
             // `git push <TAB>`: the remotes. A path is a repository too, left to
