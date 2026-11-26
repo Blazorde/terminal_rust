@@ -1,9 +1,9 @@
 //! Tab completion for `git` (see ADR-0019): the subcommands, then for the
 //! commands that take one the branches, remote branches and tags of the
-//! repository, or the names of its remotes.
+//! repository, the names of its remotes or the entries of its stash.
 //!
-//! They are read from the repository files (`refs/`, `packed-refs` and
-//! `config`), so completing never starts Git and stays instant.
+//! They are read from the repository files (`refs/`, `packed-refs`, `config`
+//! and the log of the stash), so completing never starts Git and stays instant.
 //!
 //! After `git -C <dir>` everything that depends on a directory is read from that
 //! one, and from none when it cannot be known before the line runs.
@@ -18,6 +18,9 @@ mod references;
 mod remote_tests;
 mod remotes;
 mod repository;
+mod stash;
+#[cfg(test)]
+mod stash_tests;
 #[cfg(test)]
 mod test_repository;
 #[cfg(test)]
@@ -152,6 +155,11 @@ impl<'line, 'folders> Invocation<'line, 'folders> {
             Argument::Remote => {
                 let names = remotes::list(self.directory.as_deref()?);
                 (0, matching_names(names, word, case))
+            }
+            // `git stash pop <TAB>`: the entries.
+            Argument::Stash => {
+                let names = stash::list(self.directory.as_deref()?);
+                (0, stash::matching(names, word, case))
             }
         };
         (!matches.is_empty()).then_some((start, matches))

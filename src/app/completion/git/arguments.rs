@@ -82,6 +82,16 @@ const REPOSITORY_SUBCOMMANDS: [(&str, &[&str]); 3] = [
     ),
 ];
 
+/// The actions of `git stash` that take an entry, each with the options that take
+/// the next word as their value. `show` has none: it reads any word that does not
+/// start with `-` as an entry.
+const STASH_ACTIONS: [(&str, &[&str]); 4] = [
+    ("apply", &["--label-base", "--label-ours", "--label-theirs"]),
+    ("drop", &[]),
+    ("pop", &[]),
+    ("show", &[]),
+];
+
 /// The actions of `git remote` whose first argument is a remote.
 const REMOTE_ACTIONS: [&str; 6] = ["get-url", "prune", "remove", "rename", "set-url", "show"];
 
@@ -94,6 +104,8 @@ pub(super) enum Argument {
     Reference,
     /// The name of a remote.
     Remote,
+    /// An entry of the stash.
+    Stash,
 }
 
 /// The words of a command, the `-C <dir>` pairs of `git` set aside.
@@ -194,6 +206,16 @@ fn takes_a_remote(command: &[&str]) -> bool {
     }
 }
 
+/// Whether the one entry `git stash` accepts comes after `command`.
+fn takes_a_stash_entry(command: &[&str]) -> bool {
+    let ["git", "stash", action, rest @ ..] = command else {
+        return false;
+    };
+    STASH_ACTIONS
+        .iter()
+        .any(|(name, valued)| name == action && only_options(rest, valued))
+}
+
 /// The argument expected for `word`, which follows `words` in its command.
 /// `None` when this is not a `git` command or there is nothing to offer there.
 pub(super) fn at_cursor(words: &Words<'_>, word: &str) -> Option<Argument> {
@@ -206,6 +228,7 @@ pub(super) fn at_cursor(words: &Words<'_>, word: &str) -> Option<Argument> {
     match words.command.as_slice() {
         ["git"] => Some(Argument::Subcommand),
         command if takes_a_remote(command) => Some(Argument::Remote),
+        command if takes_a_stash_entry(command) => Some(Argument::Stash),
         ["git", subcommand, ..] if REFERENCE_SUBCOMMANDS.contains(subcommand) => {
             Some(Argument::Reference)
         }

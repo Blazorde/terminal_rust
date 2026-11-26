@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 use std::fs::{self, File};
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 /// The most bytes read from a file that holds a single path.
@@ -29,6 +29,24 @@ pub(super) fn read_head(path: &Path, limit: usize) -> Option<Vec<u8>> {
     if bytes.len() > limit {
         let end = bytes[..limit].iter().rposition(|&byte| byte == b'\n');
         bytes.truncate(end.map_or(0, |at| at + 1));
+    }
+    Some(bytes)
+}
+
+/// The last `limit` bytes of a regular file. When the file is longer, the line
+/// that the limit cuts is left out.
+pub(super) fn read_tail(path: &Path, limit: usize) -> Option<Vec<u8>> {
+    let mut file = open_regular(path)?;
+    let length = file.metadata().ok()?.len();
+    // One byte before the limit tells a cut line from one that starts right there.
+    let window = (limit as u64).saturating_add(1);
+    let from = length.saturating_sub(window);
+    file.seek(SeekFrom::Start(from)).ok()?;
+    let mut bytes = Vec::new();
+    file.take(window).read_to_end(&mut bytes).ok()?;
+    if length > limit as u64 {
+        let cut = bytes.iter().position(|&byte| byte == b'\n');
+        bytes.drain(..cut.map_or(bytes.len(), |at| at + 1));
     }
     Some(bytes)
 }
