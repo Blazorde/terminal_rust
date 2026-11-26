@@ -1,8 +1,50 @@
 //! Finding the repository around a directory and reading its files.
 
 use std::collections::BTreeSet;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
+
+/// The most bytes read from a file that holds a single path.
+const MAX_POINTER_BYTES: usize = 64 * 1024;
+
+/// The file at `path` when it is a regular one, links followed. Anything else is
+/// not even opened: opening a FIFO waits for a writer.
+fn open_regular(path: &Path) -> Option<File> {
+    if !fs::metadata(path).ok()?.is_file() {
+        return None;
+    }
+    File::open(path).ok()
+}
+
+/// The first `limit` bytes of a regular file. When the file is longer, the line
+/// that the limit cuts is left out, so that no partial name or value is read.
+pub(super) fn read_head(path: &Path, limit: usize) -> Option<Vec<u8>> {
+    let mut bytes = Vec::new();
+    // One byte more than the limit tells a longer file from one that just fits.
+    open_regular(path)?
+        .take((limit as u64).saturating_add(1))
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if bytes.len() > limit {
+        let end = bytes[..limit].iter().rposition(|&byte| byte == b'\n');
+        bytes.truncate(end.map_or(0, |at| at + 1));
+    }
+    Some(bytes)
+}
+
+/// The lines of `bytes` that are UTF-8. The others are skipped, never altered.
+pub(super) fn text_lines(bytes: &[u8]) -> impl Iterator<Item = &str> {
+    bytes
+        .split_inclusive(|&byte| byte == b'\n')
+        .filter_map(|line| std::str::from_utf8(line).ok())
+        .flat_map(str::lines)
+}
+
+/// The text of a `.git` or `commondir` file.
+fn read_pointer(path: &Path) -> Option<String> {
+    String::from_utf8(read_head(path, MAX_POINTER_BYTES)?).ok()
+}
 
 /// Add the files under `directory`, named relative to it (`feature/x`), reading
 /// at most `limit` of them.
@@ -68,12 +110,11 @@ pub(super) fn locate(directory: &Path) -> Option<PathBuf> {
         }
         if dot_git.is_file() {
             // A worktree or a submodule: `gitdir: <path>`.
-            let text = fs::read_to_string(&dot_git).ok()?;
+            let text = read_pointer(&dot_git)?;
             let target = text.trim().strip_prefix("gitdir:")?.trim();
             let git_dir = candidate.join(target);
             return Some(
-                fs::read_to_string(git_dir.join("commondir"))
-                    .ok()
+                read_pointer(&git_dir.join("commondir"))
                     .map_or_else(|| git_dir.clone(), |relative| git_dir.join(relative.trim())),
             );
         }

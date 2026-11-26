@@ -10,6 +10,8 @@
 mod arguments;
 #[cfg(test)]
 mod directory_tests;
+#[cfg(test)]
+mod file_reading_tests;
 mod references;
 mod repository;
 #[cfg(test)]
