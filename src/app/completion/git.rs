@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 
 use rustyline::completion::Pair;
 
+use super::matching::Case;
+use super::quoting::quoted;
+
 /// The everyday subcommands, offered after `git `.
 const SUBCOMMANDS: [&str; 41] = [
     "add",
@@ -80,14 +83,14 @@ const MAX_REFERENCES: usize = 5_000;
 /// Candidates for the word being typed, when the line is a `git` command and
 /// there is something to offer. `None` leaves the completion to the file names.
 ///
-/// `before_word` is the text before the word, `word` the word itself, and
+/// `words` are those of the command before the word, `word` the word itself, and
 /// `directory` where the repository is looked for.
-pub fn complete(before_word: &str, word: &str, directory: &Path) -> Option<Vec<Pair>> {
-    let segment = before_word
-        .rsplit([';', '|', '&'])
-        .next()
-        .unwrap_or(before_word);
-    let words: Vec<&str> = segment.split_whitespace().collect();
+pub(super) fn complete(
+    words: &[&str],
+    word: &str,
+    directory: &Path,
+    case: Case,
+) -> Option<Vec<Pair>> {
     if words.first() != Some(&"git") || word.starts_with('-') {
         return None;
     }
@@ -96,7 +99,7 @@ pub fn complete(before_word: &str, word: &str, directory: &Path) -> Option<Vec<P
     if words.len() == 1 {
         let matches: Vec<Pair> = SUBCOMMANDS
             .iter()
-            .filter(|name| name.starts_with(word))
+            .filter(|name| case.starts_with(name, word))
             .map(|name| Pair {
                 display: (*name).to_string(),
                 replacement: format!("{name} "),
@@ -113,10 +116,13 @@ pub fn complete(before_word: &str, word: &str, directory: &Path) -> Option<Vec<P
     }
     let matches: Vec<Pair> = references(directory)
         .into_iter()
-        .filter(|name| name.starts_with(word))
-        .map(|name| Pair {
-            display: name.clone(),
-            replacement: format!("{name} "),
+        .filter(|name| case.starts_with(name, word))
+        .filter_map(|name| {
+            let written = quoted(&name, None, cfg!(windows))?;
+            Some(Pair {
+                replacement: format!("{written} "),
+                display: name,
+            })
         })
         .collect();
     (!matches.is_empty()).then_some(matches)
@@ -146,7 +152,8 @@ fn references(directory: &Path) -> Vec<String> {
     }
     names
         .into_iter()
-        .filter(|name| name != "HEAD" && !name.ends_with("/HEAD"))
+        // Git would read a name that starts with `-` as an option.
+        .filter(|name| name != "HEAD" && !name.ends_with("/HEAD") && !name.starts_with('-'))
         .take(MAX_REFERENCES)
         .collect()
 }
@@ -214,6 +221,12 @@ fn locate(directory: &Path) -> Option<PathBuf> {
 mod tests {
     use super::*;
     use crate::utils::path::temp_path;
+
+    /// Complete `word` typed after `before_word`.
+    fn complete(before_word: &str, word: &str, directory: &Path) -> Option<Vec<Pair>> {
+        let at = crate::app::completion::line::analyze(before_word);
+        super::complete(&at.command, word, directory, Case::Exact)
+    }
 
     fn displays(pairs: Option<Vec<Pair>>) -> Vec<String> {
         pairs
@@ -338,6 +351,18 @@ mod tests {
         let all = displays(complete("git checkout ", "", &root));
         assert!(!all.iter().any(|name| name.ends_with("HEAD")), "{all:?}");
         assert!(!all.iter().any(|name| name.contains("ignored")), "{all:?}");
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_reference_that_reads_as_an_option_is_not_offered() {
+        let root = repository("dash");
+        let git = root.join(".git");
+        fs::write(git.join("refs/heads/-D"), "0\n").expect("fixture");
+        fs::write(git.join("packed-refs"), "1 refs/tags/--force\n").expect("fixture");
+        let all = displays(complete("git checkout ", "", &root));
+        assert!(all.contains(&"main".to_string()), "{all:?}");
+        assert!(!all.iter().any(|name| name.starts_with('-')), "{all:?}");
         fs::remove_dir_all(root).expect("cleanup");
     }
 

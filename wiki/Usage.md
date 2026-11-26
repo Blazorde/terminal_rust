@@ -671,8 +671,13 @@ The dashboard refreshes once per second. Press `q`, `Escape` or `Ctrl+C` to
 leave it. Redirected output and limited terminals receive a stable text
 snapshot.
 
-`Tab` and `Shift+Tab` cycle completions. Accept a dim history suggestion with
-`Right Arrow` and hide it with `Left Arrow`.
+`Tab` completes what every candidate shares, and a second `Tab` lists them, as in
+bash. Without a match in the case typed, another case is accepted (`cat read<Tab>`
+finds `README.md`). Commands are completed after `sudo`, `env`, `xargs`, `$(`,
+`&&`, `then` and the like, `cd`, `pushd` and `rmdir` get directories only, and a
+word that starts with `-` gets the options of built-ins and of common Git
+subcommands. Accept a dim history suggestion with `Right Arrow` and hide it with
+`Left Arrow`.
 
 Plugins are declarative extensions described by local manifests. `plugins list`
 shows their status and requested permissions; `plugin` is an alias for

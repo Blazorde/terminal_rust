@@ -152,11 +152,7 @@ fn run_interactive_editor() -> ExitCode {
         Ok(shell) => shell,
         Err(status) => return status,
     };
-    let mut config_builder = Config::builder().completion_type(CompletionType::Circular);
-    if env::var_os(GUI_PROMPT_ENV).is_some() {
-        config_builder = config_builder.color_mode(ColorMode::Forced);
-    }
-    let config = config_builder.build();
+    let config = editor_config(env::var_os(GUI_PROMPT_ENV).is_some());
     let mut editor = match Editor::<ShellHelper, DefaultHistory>::with_config(config) {
         Ok(editor) => editor,
         Err(error) => {
@@ -245,6 +241,16 @@ fn run_interactive_editor() -> ExitCode {
     }
 
     exit_code
+}
+
+fn editor_config(in_desktop_app: bool) -> Config {
+    // As in bash: `Tab` completes what the candidates share, a second one lists them.
+    let builder = Config::builder().completion_type(CompletionType::List);
+    if in_desktop_app {
+        builder.color_mode(ColorMode::Forced).build()
+    } else {
+        builder.build()
+    }
 }
 
 fn history_path() -> Option<PathBuf> {
@@ -443,6 +449,15 @@ fn load_prompt(config: &AppConfig) -> Prompt {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_candidates_are_listed_and_not_cycled_through() {
+        for in_desktop_app in [false, true] {
+            let config = super::editor_config(in_desktop_app);
+
+            assert_eq!(config.completion_type(), rustyline::CompletionType::List);
+        }
+    }
+
     use super::{fastfetch_enabled, read_plain_command};
     use std::io::Cursor;
 
