@@ -2,6 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-11-25
+- Partly replaced: remotes and stash entries (point 8) are completed since
+  [ADR-0037](0037-git-completion-remotes-stash-and-directory.md)
 - Decision makers: Terminal Rust team
 
 Completes [ADR-0019](0019-git-completion.md). It replaces one part of it:

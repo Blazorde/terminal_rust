@@ -37,10 +37,13 @@ future work. It explains why the choice was made and which trade-offs follow.
 | [0028](0028-exit-trap-and-power.md) | Accepted | `trap … EXIT` and `**` in arithmetic |
 | [0029](0029-arrays.md) | Accepted | Indexed arrays |
 | [0030](0030-parameter-operators.md) | Accepted | Operators on the value of a parameter |
-| [0030](0030-parameter-operators.md) | Accepted | Operators on the value of a parameter |
+| [0031](0031-eval-and-set-options.md) | Accepted | `eval` and the options of `set` |
+| [0032](0032-directory-stack-time-and-c-quotes.md) | Accepted | `pushd`, `popd`, `dirs`, `time` and `$'…'` |
+| [0033](0033-let-and-arithmetic-command.md) | Accepted | let and the (( )) arithmetic command |
 | [0034](0034-shell-launch-and-startup-files.md) | Accepted | How the shell is launched and which files it reads |
 | [0035](0035-system-command-fallback.md) | Accepted | Hand a built-in over to the system program |
 | [0036](0036-smarter-completion.md) | Accepted | Smarter completion: list, context, case and options |
+| [0037](0037-git-completion-remotes-stash-and-directory.md) | Accepted | Git completion of remotes, stash entries and `git -C` |
 
 ## Lifecycle
 

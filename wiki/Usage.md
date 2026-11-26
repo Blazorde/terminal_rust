@@ -679,6 +679,11 @@ word that starts with `-` gets the options of built-ins and of common Git
 subcommands. Accept a dim history suggestion with `Right Arrow` and hide it with
 `Left Arrow`.
 
+For Git, the first argument of `fetch`, `pull` and `push` completes to the
+remotes, and `git stash pop`, `apply`, `drop` or `show` to the stash entries.
+`git branch -d` gets local branches other than the current one. After
+`git -C <dir>`, names and files come from `<dir>`.
+
 Plugins are declarative extensions described by local manifests. `plugins list`
 shows their status and requested permissions; `plugin` is an alias for
 `plugins`. Custom commands are shortcuts from the user configuration:

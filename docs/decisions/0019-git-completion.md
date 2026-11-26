@@ -4,6 +4,8 @@
 - Date: 2026-11-21
 - Partly replaced: options (points 4 and 6) are completed since
   [ADR-0036](0036-smarter-completion.md)
+- Partly replaced: remotes, stash entries and `git -C` (point 6), and parts of
+  points 2 and 4, by [ADR-0037](0037-git-completion-remotes-stash-and-directory.md)
 - Decision makers: Terminal Rust team
 
 ## Context
