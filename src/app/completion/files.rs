@@ -6,7 +6,7 @@ use std::path::{MAIN_SEPARATOR, Path, PathBuf};
 use rustyline::completion::Pair;
 
 use super::matching::Case;
-use super::quoting::{PathWord, quoted, split_path};
+use super::quoting::{PathWord, quoted, split_path, split_whole_path};
 
 /// Where relative paths and `~` start.
 pub(super) struct Folders<'a> {
@@ -44,6 +44,13 @@ pub(super) fn complete(
         return (start + 1, candidates);
     }
     (path.start, candidates)
+}
+
+/// The directories that can complete `word`, which is a path as a whole: neither
+/// a `=` nor a `@` introduces one in it.
+pub(super) fn directories(word: &str, case: Case, folders: &Folders<'_>) -> (usize, Vec<Pair>) {
+    let path = split_whole_path(word, cfg!(windows));
+    (path.start, in_directory(&path, case, true, folders))
 }
 
 fn in_directory(
@@ -201,10 +208,13 @@ mod tests {
         fs::remove_dir_all(root).expect("cleanup");
     }
 
+    /// `split_path` or `split_whole_path`.
+    type Split = fn(&str, bool) -> PathWord<'_>;
+
     /// The line `echo <word>` once the Windows completion has put `name` in `word`.
     /// `None` when the name is not offered there.
-    fn windows_line(word: &str, name: &str) -> Option<String> {
-        let path = split_path(word, true);
+    fn windows_line(split: Split, word: &str, name: &str) -> Option<String> {
+        let path = split(word, true);
         let pair = candidate(&path, name.to_string(), false, '\\', true)?;
         Some(format!("echo {}{}", &word[..path.start], pair.replacement))
     }
@@ -225,7 +235,12 @@ mod tests {
         let lookup = |name: &str| (name == "HOME").then(|| "HOMEDIR".to_string());
         let mut engine = ShellEngine::new();
 
-        for directory in ["dir\\", "~\\", "a\\dir\\", "'a b'\\"] {
+        let splits: [Split; 2] = [split_path, split_whole_path];
+        let directories = ["dir\\", "~\\", "a\\dir\\", "'a b'\\", "a=b\\"];
+        for (split, directory) in splits
+            .into_iter()
+            .flat_map(|split| directories.map(|directory| (split, directory)))
+        {
             for quote in ["", "\""] {
                 // A quote after a quoted directory is another word shape.
                 if quote == "\"" && directory.starts_with('\'') {
@@ -233,7 +248,7 @@ mod tests {
                 }
                 for name in names {
                     let word = format!("{quote}{directory}");
-                    let Some(line) = windows_line(&word, name) else {
+                    let Some(line) = windows_line(split, &word, name) else {
                         assert!(quote == "\"" && name.contains('`'), "{word} {name}");
                         continue;
                     };

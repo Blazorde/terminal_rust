@@ -7,7 +7,13 @@ use crate::utils::path::temp_path;
 /// Complete `word` typed after `before_word`.
 fn complete(before_word: &str, word: &str, directory: &Path) -> Option<Vec<Pair>> {
     let at = crate::app::completion::line::analyze(before_word);
-    super::complete(&at.command, word, directory, Case::Exact)
+    let folders = Folders {
+        current: directory,
+        home: None,
+    };
+    Invocation::read(&at.command, &folders)
+        .complete(word, Case::Exact)
+        .map(|(_, pairs)| pairs)
 }
 
 fn displays(pairs: Option<Vec<Pair>>) -> Vec<String> {

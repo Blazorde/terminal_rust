@@ -39,6 +39,24 @@ pub(super) fn collect_loose(directory: &Path, names: &mut BTreeSet<String>, limi
     walk(directory, directory, names, &mut budget);
 }
 
+/// The directory `git -C <value>` moves to when run in `from`. `None` when Git
+/// could not move there.
+pub(super) fn enter(from: &Path, value: &str) -> Option<PathBuf> {
+    if value.is_empty() {
+        return Some(from.to_path_buf());
+    }
+    let target = from.join(value);
+    // Git changes directory, so `..` after a link leaves the target of the link, and
+    // the walk up to the repository must start there too. Windows instead removes
+    // `..` from the text of a path.
+    let target = if cfg!(windows) {
+        std::path::absolute(target)
+    } else {
+        fs::canonicalize(target)
+    };
+    target.ok().filter(|target| target.is_dir())
+}
+
 /// The directory that holds the `refs` of the repository around `directory`: its
 /// `.git`, or for a linked worktree the shared directory named by `commondir`.
 pub(super) fn locate(directory: &Path) -> Option<PathBuf> {

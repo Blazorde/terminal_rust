@@ -43,6 +43,15 @@ fn is_escape(next: Option<char>, quote: Option<char>, windows: bool) -> bool {
 /// Split `word` into the directory typed and the start of a name. A path may
 /// follow a `=`, as in `--output=dir/fi`.
 pub(super) fn split_path(word: &str, windows: bool) -> PathWord<'_> {
+    split(word, windows, true)
+}
+
+/// As `split_path`, for a word that is a path as a whole: a `=` is part of a name.
+pub(super) fn split_whole_path(word: &str, windows: bool) -> PathWord<'_> {
+    split(word, windows, false)
+}
+
+fn split(word: &str, windows: bool, after_equals: bool) -> PathWord<'_> {
     let mut quote = None;
     let mut value = String::new();
     // Where the path, then its last name, start; the length of `value` before
@@ -67,7 +76,7 @@ pub(super) fn split_path(word: &str, windows: bool) -> PathWord<'_> {
                 quote = None;
                 continue;
             }
-            '=' if quote.is_none() => {
+            '=' if after_equals && quote.is_none() => {
                 value.clear();
                 path_start = at + 1;
                 (name_start, directory_length) = (at + 1, 0);
