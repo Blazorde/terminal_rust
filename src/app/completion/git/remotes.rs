@@ -140,7 +140,8 @@ fn variable(bytes: &mut impl Iterator<Item = u8>) -> Option<()> {
             _ if comment => {}
             // Also how a value goes on to the next line.
             b'\\' => {
-                if !matches!(next(), b'\n' | b't' | b'b' | b'n' | b'\\' | b'"') {
+                let escaped = next();
+                if !matches!(escaped, b'\n' | b't' | b'b' | b'n' | b'\\' | b'"') {
                     return None;
                 }
             }
