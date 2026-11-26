@@ -13,7 +13,7 @@ use super::*;
 use crate::app::completion::{ShellHelper, line};
 
 /// The replacements for the last word of `before_cursor`, typed in `current`.
-fn offered(before_cursor: &str, current: &Path, home: Option<&Path>) -> Vec<String> {
+pub(super) fn offered(before_cursor: &str, current: &Path, home: Option<&Path>) -> Vec<String> {
     let at = line::analyze(before_cursor);
     let folders = Folders { current, home };
     Invocation::read(&at.command, &folders)
@@ -24,7 +24,7 @@ fn offered(before_cursor: &str, current: &Path, home: Option<&Path>) -> Vec<Stri
 
 /// What `Tab` at the end of `line` offers through the line editor, typed in the
 /// project: no other test changes the current directory meanwhile.
-fn tab(line: &str) -> Vec<String> {
+pub(super) fn tab(line: &str) -> Vec<String> {
     let _guard = crate::test_support::cwd_lock()
         .lock()
         .unwrap_or_else(PoisonError::into_inner);

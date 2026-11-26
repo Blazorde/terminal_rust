@@ -1,8 +1,9 @@
-//! Tab completion for `git` (see ADR-0019): the subcommands, then the branches,
-//! remote branches and tags of the repository for the commands that take one.
+//! Tab completion for `git` (see ADR-0019): the subcommands, then for the
+//! commands that take one the branches, remote branches and tags of the
+//! repository, or the names of its remotes.
 //!
-//! The references are read from the repository files (`refs/` and
-//! `packed-refs`), so completing never starts Git and stays instant.
+//! They are read from the repository files (`refs/`, `packed-refs` and
+//! `config`), so completing never starts Git and stays instant.
 //!
 //! After `git -C <dir>` everything that depends on a directory is read from that
 //! one, and from none when it cannot be known before the line runs.
@@ -13,6 +14,9 @@ mod directory_tests;
 #[cfg(test)]
 mod file_reading_tests;
 mod references;
+#[cfg(test)]
+mod remote_tests;
+mod remotes;
 mod repository;
 #[cfg(test)]
 mod test_repository;
@@ -139,7 +143,16 @@ impl<'line, 'folders> Invocation<'line, 'folders> {
             Argument::Subcommand => (0, subcommands(word, case)),
             // `git checkout <TAB>`: the references that match. A word that matches
             // none is a file name for the normal completion.
-            Argument::Reference => (0, references(self.directory.as_deref()?, word, case)),
+            Argument::Reference => {
+                let names = references::list(self.directory.as_deref()?);
+                (0, matching_names(names, word, case))
+            }
+            // `git push <TAB>`: the remotes. A path is a repository too, left to
+            // the file names.
+            Argument::Remote => {
+                let names = remotes::list(self.directory.as_deref()?);
+                (0, matching_names(names, word, case))
+            }
         };
         (!matches.is_empty()).then_some((start, matches))
     }
@@ -156,8 +169,10 @@ fn subcommands(word: &str, case: Case) -> Vec<Pair> {
         .collect()
 }
 
-fn references(directory: &Path, word: &str, case: Case) -> Vec<Pair> {
-    references::list(directory)
+/// The names read from the repository that start with `word`, written for the
+/// shell.
+fn matching_names(names: Vec<String>, word: &str, case: Case) -> Vec<Pair> {
+    names
         .into_iter()
         .filter(|name| case.starts_with(name, word))
         .filter_map(|name| {

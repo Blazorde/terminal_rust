@@ -23,6 +23,68 @@ const REFERENCE_SUBCOMMANDS: [&str; 14] = [
     "fetch",
 ];
 
+/// The subcommands whose first argument is a repository, each with the options
+/// that take the next word as their value (`git <subcommand> -h`).
+const REPOSITORY_SUBCOMMANDS: [(&str, &[&str]); 3] = [
+    (
+        "fetch",
+        &[
+            "-j",
+            "-o",
+            "--deepen",
+            "--depth",
+            "--filter",
+            "--jobs",
+            "--negotiation-include",
+            "--negotiation-restrict",
+            "--negotiation-tip",
+            "--refmap",
+            "--server-option",
+            "--shallow-exclude",
+            "--shallow-since",
+            "--upload-pack",
+        ],
+    ),
+    (
+        "pull",
+        &[
+            // `pull` hands the next word to `fetch` as the value of `-j`.
+            "-j",
+            "-o",
+            "-s",
+            "-X",
+            "--cleanup",
+            "--deepen",
+            "--depth",
+            "--jobs",
+            "--negotiation-include",
+            "--negotiation-restrict",
+            "--negotiation-tip",
+            "--refmap",
+            "--server-option",
+            "--shallow-exclude",
+            "--shallow-since",
+            "--strategy",
+            "--strategy-option",
+            "--upload-pack",
+        ],
+    ),
+    (
+        "push",
+        &[
+            "-o",
+            "--exec",
+            "--push-option",
+            "--receive-pack",
+            "--recurse-submodules",
+            "--repo",
+        ],
+    ),
+];
+
+/// The actions of `git remote` whose first argument is a remote.
+const REMOTE_ACTIONS: [&str; 6] = ["get-url", "prune", "remove", "rename", "set-url", "show"];
+
 /// A kind of argument Git completion knows how to offer.
 pub(super) enum Argument {
     /// The value of `-C`.
@@ -30,6 +92,8 @@ pub(super) enum Argument {
     Subcommand,
     /// A branch, a remote branch or a tag.
     Reference,
+    /// The name of a remote.
+    Remote,
 }
 
 /// The words of a command, the `-C <dir>` pairs of `git` set aside.
@@ -98,6 +162,38 @@ pub(super) fn has_literal_directory(word: &str, home: Option<&str>, windows: boo
     literal(&typed, home).is_some()
 }
 
+/// Whether `words` are all options and their values, so that the word after them
+/// is the first argument.
+fn only_options(words: &[&str], valued: &[&str]) -> bool {
+    let mut words = words.iter();
+    while let Some(word) = words.next() {
+        if !word.starts_with('-') {
+            return false;
+        }
+        // With no word left for it, the value is the one being typed.
+        if valued.contains(word) && words.next().is_none() {
+            return false;
+        }
+    }
+    true
+}
+
+/// Whether the name of a remote comes after `command`.
+fn takes_a_remote(command: &[&str]) -> bool {
+    match command {
+        ["git", "remote", rest @ ..] => {
+            let mut rest = rest.iter().skip_while(|word| word.starts_with('-'));
+            rest.next()
+                .is_some_and(|action| REMOTE_ACTIONS.contains(action))
+                && rest.all(|word| word.starts_with('-'))
+        }
+        ["git", subcommand, rest @ ..] => REPOSITORY_SUBCOMMANDS
+            .iter()
+            .any(|(name, valued)| name == subcommand && only_options(rest, valued)),
+        _ => false,
+    }
+}
+
 /// The argument expected for `word`, which follows `words` in its command.
 /// `None` when this is not a `git` command or there is nothing to offer there.
 pub(super) fn at_cursor(words: &Words<'_>, word: &str) -> Option<Argument> {
@@ -109,6 +205,7 @@ pub(super) fn at_cursor(words: &Words<'_>, word: &str) -> Option<Argument> {
     }
     match words.command.as_slice() {
         ["git"] => Some(Argument::Subcommand),
+        command if takes_a_remote(command) => Some(Argument::Remote),
         ["git", subcommand, ..] if REFERENCE_SUBCOMMANDS.contains(subcommand) => {
             Some(Argument::Reference)
         }

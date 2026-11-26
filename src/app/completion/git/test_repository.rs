@@ -37,6 +37,11 @@ impl Sandbox {
 
     /// Run `git` in `directory`, which must succeed.
     pub(super) fn git(&self, directory: &Path, arguments: &[&str]) {
+        self.git_output(directory, arguments);
+    }
+
+    /// As `git`, giving what it printed.
+    pub(super) fn git_output(&self, directory: &Path, arguments: &[&str]) -> String {
         let mut command = Command::new("git");
         // A `GIT_DIR` inherited from a hook would reach a real repository.
         for (name, _) in std::env::vars_os() {
@@ -64,6 +69,7 @@ impl Sandbox {
             "git {arguments:?}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+        String::from_utf8_lossy(&output.stdout).into_owned()
     }
 
     /// A repository at `relative` with a commit on `main` and these branches.
