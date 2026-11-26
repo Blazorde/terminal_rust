@@ -143,8 +143,11 @@ pub(super) fn quoted(name: &str, quote: Option<char>, windows: bool) -> Option<S
         Some(_) => Some(name.replace('\'', "'\\''")),
         None => {
             let special = |character| needs_quotes(character, windows);
+            // A Windows `\` stays bare, but the parser still reads it as an escape before
+            // another one, or at the end where it would take the blank that follows.
+            let escaping = windows && (name.ends_with('\\') || name.contains("\\\\"));
             // `#` starts a comment and `~` is the home at the start of a word.
-            if !name.contains(special) && !name.starts_with(['#', '~']) {
+            if !escaping && !name.contains(special) && !name.starts_with(['#', '~']) {
                 return Some(name.to_string());
             }
             let escapes_are_enough = !windows
@@ -259,6 +262,17 @@ mod tests {
                 assert_eq!(read_back(&text), [name], "{text}");
             }
         }
+    }
+
+    #[test]
+    fn the_parser_reads_a_windows_name_with_backslashes_back() {
+        for name in ["a\\", "a\\\\b", "\\\\srv\\share", "a\\ b"] {
+            let written = quoted(name, None, true).expect("writable");
+            let text = format!("{written} next");
+
+            assert_eq!(read_back(&text), [name, "next"], "{text}");
+        }
+        assert_eq!(quoted("a\\b", None, true), Some(owned("a\\b")));
     }
 
     #[test]
